@@ -3,12 +3,17 @@ mod users;
 mod auth;
 mod audit;
 mod validation;
+mod assets;
+mod configurations;
+mod encryption;
 
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
 use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
 use audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
+use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
+use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, file_utils};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
@@ -501,6 +506,313 @@ async fn reactivate_user(
     }
 }
 
+// Asset Management Commands
+
+#[tauri::command]
+async fn create_asset(
+    token: String,
+    name: String,
+    description: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<AssetInfo, String> {
+    // Validate session and get user info
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let name = InputSanitizer::sanitize_string(&name);
+    let description = InputSanitizer::sanitize_string(&description);
+
+    if name.trim().is_empty() {
+        return Err("Asset name cannot be empty".to_string());
+    }
+    if name.len() < 2 {
+        return Err("Asset name must be at least 2 characters long".to_string());
+    }
+    if name.len() > 100 {
+        return Err("Asset name cannot exceed 100 characters".to_string());
+    }
+    if description.len() > 500 {
+        return Err("Description cannot exceed 500 characters".to_string());
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            
+            let request = CreateAssetRequest {
+                name,
+                description,
+                created_by: session.user_id,
+            };
+
+            match asset_repo.create_asset(request) {
+                Ok(asset) => {
+                    info!("Asset created by {}: {} (ID: {})", session.username, asset.name, asset.id);
+                    Ok(asset.into())
+                }
+                Err(e) => {
+                    error!("Failed to create asset: {}", e);
+                    Err(format!("Failed to create asset: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_dashboard_assets(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<AssetInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            
+            match asset_repo.get_assets_with_info() {
+                Ok(assets) => {
+                    info!("Dashboard assets accessed by: {}", session.username);
+                    Ok(assets)
+                }
+                Err(e) => {
+                    error!("Failed to get dashboard assets: {}", e);
+                    Err(format!("Failed to get dashboard assets: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_asset_details(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<AssetInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            
+            match asset_repo.get_asset_by_id(asset_id) {
+                Ok(Some(asset)) => {
+                    info!("Asset details accessed by {}: {} (ID: {})", session.username, asset.name, asset.id);
+                    Ok(asset.into())
+                }
+                Ok(None) => Err("Asset not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get asset details: {}", e);
+                    Err(format!("Failed to get asset details: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn import_configuration(
+    token: String,
+    asset_name: String,
+    file_path: String,
+    notes: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    rate_limiter: State<'_, RateLimiterState>,
+) -> Result<AssetInfo, String> {
+    // Check rate limiting
+    let rate_limiter_guard = rate_limiter.lock().unwrap();
+    if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("import_config_{}", token)) {
+        return Err(e);
+    }
+    drop(rate_limiter_guard);
+
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let asset_name = InputSanitizer::sanitize_string(&asset_name);
+    let notes = InputSanitizer::sanitize_string(&notes);
+
+    if asset_name.trim().is_empty() {
+        return Err("Asset name cannot be empty".to_string());
+    }
+    if asset_name.len() < 2 {
+        return Err("Asset name must be at least 2 characters long".to_string());
+    }
+    if asset_name.len() > 100 {
+        return Err("Asset name cannot exceed 100 characters".to_string());
+    }
+    if notes.len() > 1000 {
+        return Err("Notes cannot exceed 1000 characters".to_string());
+    }
+
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&asset_name) || InputSanitizer::is_potentially_malicious(&notes) {
+        error!("Potentially malicious input detected in import_configuration");
+        return Err("Invalid input detected".to_string());
+    }
+
+    // Read file content
+    let file_content = match file_utils::read_file_content(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            error!("Failed to read file {}: {}", file_path, e);
+            return Err(format!("Failed to read file: {}", e));
+        }
+    };
+
+    // Get file name from path
+    let file_name = std::path::Path::new(&file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Validate file type
+    match file_utils::validate_file_type(&file_path) {
+        Ok(false) => return Err("File type not supported".to_string()),
+        Err(e) => {
+            error!("File validation error: {}", e);
+            return Err("File validation failed".to_string());
+        }
+        Ok(true) => {}
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            // Create asset
+            let asset_request = CreateAssetRequest {
+                name: asset_name,
+                description: format!("Configuration asset - imported from {}", file_name),
+                created_by: session.user_id,
+            };
+
+            let asset = match asset_repo.create_asset(asset_request) {
+                Ok(asset) => asset,
+                Err(e) => {
+                    error!("Failed to create asset: {}", e);
+                    return Err(format!("Failed to create asset: {}", e));
+                }
+            };
+
+            // Store configuration
+            let config_request = CreateConfigurationRequest {
+                asset_id: asset.id,
+                file_name,
+                file_content,
+                author: session.user_id,
+                notes,
+            };
+
+            match config_repo.store_configuration(config_request) {
+                Ok(_) => {
+                    info!("Configuration imported by {}: {} (Asset ID: {})", session.username, asset.name, asset.id);
+                    Ok(asset.into())
+                }
+                Err(e) => {
+                    error!("Failed to store configuration: {}", e);
+                    // Clean up asset if configuration storage failed
+                    let _ = asset_repo.delete_asset(asset.id);
+                    Err(format!("Failed to store configuration: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_configuration_versions(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<ConfigurationVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_configuration_versions(asset_id) {
+                Ok(versions) => {
+                    info!("Configuration versions accessed by {}: Asset ID {}", session.username, asset_id);
+                    Ok(versions)
+                }
+                Err(e) => {
+                    error!("Failed to get configuration versions: {}", e);
+                    Err(format!("Failed to get configuration versions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -523,7 +835,12 @@ pub fn run() {
             create_engineer_user,
             list_users,
             deactivate_user,
-            reactivate_user
+            reactivate_user,
+            create_asset,
+            get_dashboard_assets,
+            get_asset_details,
+            import_configuration,
+            get_configuration_versions
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

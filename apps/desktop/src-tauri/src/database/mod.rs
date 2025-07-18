@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use tracing::info;
 use crate::users::SqliteUserRepository;
 use crate::audit::{SqliteAuditRepository, AuditRepository};
+use crate::assets::SqliteAssetRepository;
+use crate::configurations::SqliteConfigurationRepository;
 
 pub struct Database {
     conn: Connection,
@@ -60,6 +62,14 @@ impl Database {
         // Initialize audit schema
         let audit_repo = SqliteAuditRepository::new(&self.conn);
         audit_repo.initialize_schema()?;
+
+        // Initialize asset schema
+        let asset_repo = SqliteAssetRepository::new(&self.conn);
+        asset_repo.initialize_schema()?;
+
+        // Initialize configuration schema
+        let config_repo = SqliteConfigurationRepository::new(&self.conn);
+        config_repo.initialize_schema()?;
 
         info!("Database schema initialized");
         Ok(())

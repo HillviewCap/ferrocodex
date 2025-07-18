@@ -990,6 +990,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcrypt",
+ "flate2",
  "rusqlite",
  "serde",
  "serde_json",

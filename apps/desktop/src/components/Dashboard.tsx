@@ -8,10 +8,13 @@ import {
   KeyOutlined,
   LockOutlined,
   SafetyOutlined,
-  TeamOutlined
+  TeamOutlined,
+  DatabaseOutlined,
+  ImportOutlined
 } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
 import UserManagement from './UserManagement';
+import AssetManagement from './AssetManagement';
 import { canAccessUserManagement } from '../utils/roleUtils';
 
 const { Header, Sider, Content } = Layout;
@@ -56,6 +59,11 @@ const Dashboard: React.FC = () => {
       key: 'dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
+    },
+    {
+      key: 'assets',
+      icon: <DatabaseOutlined />,
+      label: 'Assets',
     },
     {
       key: 'passwords',
@@ -143,7 +151,7 @@ const Dashboard: React.FC = () => {
           <Content
             style={{
               background: '#fff',
-              padding: selectedMenuItem === 'user-management' ? '0' : '24px',
+              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets') ? '0' : '24px',
               margin: 0,
               minHeight: 280,
               borderRadius: '8px',
@@ -152,15 +160,27 @@ const Dashboard: React.FC = () => {
           >
             {selectedMenuItem === 'user-management' && canAccessUserManagement(user) ? (
               <UserManagement />
+            ) : selectedMenuItem === 'assets' ? (
+              <AssetManagement />
             ) : selectedMenuItem === 'dashboard' ? (
               <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                <div>
-                  <Title level={2} style={{ marginBottom: '8px' }}>
-                    Welcome to Ferrocodex
-                  </Title>
-                  <Text type="secondary">
-                    Your secure password management and encrypted storage solution
-                  </Text>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <Title level={2} style={{ marginBottom: '8px' }}>
+                      Welcome to Ferrocodex
+                    </Title>
+                    <Text type="secondary">
+                      Your secure configuration management and versioning solution
+                    </Text>
+                  </div>
+                  <Button 
+                    type="primary" 
+                    icon={<ImportOutlined />}
+                    onClick={() => setSelectedMenuItem('assets')}
+                    size="large"
+                  >
+                    Import Configuration
+                  </Button>
                 </div>
 
                 <Row gutter={[16, 16]}>
@@ -174,10 +194,11 @@ const Dashboard: React.FC = () => {
                         justifyContent: 'center',
                         height: '100%'
                       }}
+                      onClick={() => setSelectedMenuItem('assets')}
                     >
-                      <KeyOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '12px' }} />
-                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Passwords</Title>
-                      <Text type="secondary">Manage your passwords</Text>
+                      <DatabaseOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '12px' }} />
+                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Assets</Title>
+                      <Text type="secondary">Manage configuration assets</Text>
                     </Card>
                   </Col>
 
@@ -192,9 +213,9 @@ const Dashboard: React.FC = () => {
                         height: '100%'
                       }}
                     >
-                      <LockOutlined style={{ fontSize: '32px', color: '#1890ff', marginBottom: '12px' }} />
-                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Secure Notes</Title>
-                      <Text type="secondary">Store encrypted notes</Text>
+                      <KeyOutlined style={{ fontSize: '32px', color: '#1890ff', marginBottom: '12px' }} />
+                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Passwords</Title>
+                      <Text type="secondary">Manage your passwords</Text>
                     </Card>
                   </Col>
 
@@ -222,19 +243,19 @@ const Dashboard: React.FC = () => {
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
                         <Title level={2} style={{ color: '#52c41a', margin: 0 }}>0</Title>
-                        <Text type="secondary">Stored Passwords</Text>
+                        <Text type="secondary">Configuration Assets</Text>
                       </div>
                     </Col>
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
                         <Title level={2} style={{ color: '#1890ff', margin: 0 }}>0</Title>
-                        <Text type="secondary">Secure Notes</Text>
+                        <Text type="secondary">Total Versions</Text>
                       </div>
                     </Col>
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
-                        <Title level={2} style={{ color: '#fa8c16', margin: 0 }}>Strong</Title>
-                        <Text type="secondary">Security Level</Text>
+                        <Title level={2} style={{ color: '#fa8c16', margin: 0 }}>AES-256</Title>
+                        <Text type="secondary">Encryption</Text>
                       </div>
                     </Col>
                   </Row>
