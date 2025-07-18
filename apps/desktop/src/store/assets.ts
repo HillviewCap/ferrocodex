@@ -8,6 +8,7 @@ interface AssetState {
   selectedAsset: AssetInfo | null;
   versions: ConfigurationVersionInfo[];
   versionsLoading: boolean;
+  currentView: 'dashboard' | 'history';
   
   // Actions
   fetchAssets: (token: string) => Promise<void>;
@@ -16,6 +17,9 @@ interface AssetState {
   fetchVersions: (token: string, assetId: number) => Promise<void>;
   clearError: () => void;
   refreshAssets: (token: string) => Promise<void>;
+  setCurrentView: (view: 'dashboard' | 'history') => void;
+  navigateToHistory: (asset: AssetInfo) => void;
+  navigateToDashboard: () => void;
 }
 
 const useAssetStore = create<AssetState>((set, get) => ({
@@ -25,6 +29,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
   selectedAsset: null,
   versions: [],
   versionsLoading: false,
+  currentView: 'dashboard',
 
   fetchAssets: async (token: string) => {
     set({ isLoading: true, error: null });
@@ -89,6 +94,26 @@ const useAssetStore = create<AssetState>((set, get) => ({
 
   refreshAssets: async (token: string) => {
     await get().fetchAssets(token);
+  },
+
+  setCurrentView: (view: 'dashboard' | 'history') => {
+    set({ currentView: view });
+  },
+
+  navigateToHistory: (asset: AssetInfo) => {
+    set({ 
+      selectedAsset: asset, 
+      currentView: 'history',
+      versions: [] // Clear previous versions
+    });
+  },
+
+  navigateToDashboard: () => {
+    set({ 
+      currentView: 'dashboard',
+      selectedAsset: null,
+      versions: []
+    });
   }
 }));
 

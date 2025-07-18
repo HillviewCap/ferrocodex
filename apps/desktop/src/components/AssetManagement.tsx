@@ -28,6 +28,7 @@ import { formatVersion } from '../types/assets';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
 import ImportConfigurationModal from './ImportConfigurationModal';
+import ConfigurationHistoryView from './ConfigurationHistoryView';
 
 const { Title, Text } = Typography;
 
@@ -38,7 +39,11 @@ const AssetManagement: React.FC = () => {
     isLoading, 
     error, 
     fetchAssets, 
-    clearError 
+    clearError,
+    currentView,
+    selectedAsset,
+    navigateToHistory,
+    navigateToDashboard
   } = useAssetStore();
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -75,6 +80,10 @@ const AssetManagement: React.FC = () => {
     }
   };
 
+  const handleViewHistory = (asset: AssetInfo) => {
+    navigateToHistory(asset);
+  };
+
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
     <Card 
       hoverable
@@ -85,7 +94,7 @@ const AssetManagement: React.FC = () => {
           <EyeOutlined key="view" />
         </Tooltip>,
         <Tooltip title="Version History">
-          <HistoryOutlined key="history" />
+          <HistoryOutlined key="history" onClick={() => handleViewHistory(asset)} />
         </Tooltip>,
         <Tooltip title="Add Version">
           <PlusOutlined key="add" />
@@ -139,6 +148,17 @@ const AssetManagement: React.FC = () => {
     </Card>
   );
 
+  // Render history view if selected
+  if (currentView === 'history' && selectedAsset) {
+    return (
+      <ConfigurationHistoryView
+        asset={selectedAsset}
+        onBack={navigateToDashboard}
+      />
+    );
+  }
+
+  // Render dashboard view
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
