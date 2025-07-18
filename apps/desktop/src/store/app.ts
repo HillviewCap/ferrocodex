@@ -1,0 +1,67 @@
+import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
+
+interface AppState {
+  isFirstLaunch: boolean | null;
+  isDatabaseInitialized: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
+interface AppActions {
+  checkFirstLaunch: () => Promise<void>;
+  initializeDatabase: () => Promise<void>;
+  setLoading: (loading: boolean) => void;
+  clearError: () => void;
+}
+
+const useAppStore = create<AppState & AppActions>((set) => ({
+  // State
+  isFirstLaunch: null,
+  isDatabaseInitialized: false,
+  isLoading: false,
+  error: null,
+
+  // Actions
+  checkFirstLaunch: async () => {
+    try {
+      set({ isLoading: true, error: null });
+      const isFirstLaunch: boolean = await invoke('is_first_launch');
+      set({ isFirstLaunch, isLoading: false });
+    } catch (error) {
+      set({ 
+        error: error as string, 
+        isLoading: false,
+        isFirstLaunch: false
+      });
+    }
+  },
+
+  initializeDatabase: async () => {
+    try {
+      set({ isLoading: true, error: null });
+      const success: boolean = await invoke('initialize_database');
+      if (success) {
+        const healthCheck: boolean = await invoke('database_health_check');
+        set({ 
+          isDatabaseInitialized: healthCheck, 
+          isLoading: false 
+        });
+      } else {
+        throw new Error('Database initialization failed');
+      }
+    } catch (error) {
+      set({ 
+        error: error as string, 
+        isLoading: false,
+        isDatabaseInitialized: false
+      });
+    }
+  },
+
+  setLoading: (loading: boolean) => set({ isLoading: loading }),
+  
+  clearError: () => set({ error: null }),
+}));
+
+export default useAppStore;
