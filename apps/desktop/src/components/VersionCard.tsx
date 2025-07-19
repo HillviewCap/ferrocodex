@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Typography,
@@ -7,24 +7,48 @@ import {
   Tooltip,
   Row,
   Col,
-  Divider
+  Divider,
+  Button,
+  Dropdown,
+  MenuProps
 } from 'antd';
 import {
   UserOutlined,
   CalendarOutlined,
   FileOutlined,
   NumberOutlined,
-  CommentOutlined
+  CommentOutlined,
+  BranchesOutlined,
+  MoreOutlined,
+  EditOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 import { ConfigurationVersionInfo, formatVersion, formatFileSize } from '../types/assets';
+import ConfigurationStatusBadge from './ConfigurationStatusBadge';
+import ChangeStatusModal from './ChangeStatusModal';
+import StatusHistoryModal from './StatusHistoryModal';
 
 const { Text } = Typography;
 
 interface VersionCardProps {
   version: ConfigurationVersionInfo;
+  onCreateBranch?: (version: ConfigurationVersionInfo) => void;
+  showCreateBranch?: boolean;
+  onStatusChange?: () => void;
+  token?: string;
+  canChangeStatus?: boolean;
 }
 
-const VersionCard: React.FC<VersionCardProps> = ({ version }) => {
+const VersionCard: React.FC<VersionCardProps> = React.memo(({ 
+  version, 
+  onCreateBranch, 
+  showCreateBranch = false,
+  onStatusChange,
+  token,
+  canChangeStatus = false
+}) => {
+  const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
+  const [showStatusHistoryModal, setShowStatusHistoryModal] = useState(false);
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -84,6 +108,44 @@ const VersionCard: React.FC<VersionCardProps> = ({ version }) => {
     return 'purple';
   };
 
+  const handleCreateBranch = () => {
+    if (onCreateBranch) {
+      onCreateBranch(version);
+    }
+  };
+
+  const handleChangeStatus = () => {
+    setShowChangeStatusModal(true);
+  };
+
+  const handleStatusChanged = () => {
+    setShowChangeStatusModal(false);
+    if (onStatusChange) {
+      onStatusChange();
+    }
+  };
+
+  const handleViewHistory = () => {
+    setShowStatusHistoryModal(true);
+  };
+
+  const statusMenuItems: MenuProps['items'] = [
+    ...(canChangeStatus && token ? [
+      {
+        key: 'change-status',
+        label: 'Change Status',
+        icon: <EditOutlined />,
+        onClick: handleChangeStatus
+      }
+    ] : []),
+    {
+      key: 'view-history',
+      label: 'View Status History',
+      icon: <HistoryOutlined />,
+      onClick: handleViewHistory
+    }
+  ];
+
   return (
     <Card 
       size="small" 
@@ -106,6 +168,10 @@ const VersionCard: React.FC<VersionCardProps> = ({ version }) => {
                 <Tag color={getVersionColor(version.version_number)}>
                   {formatVersion(version.version_number)}
                 </Tag>
+                <ConfigurationStatusBadge 
+                  status={version.status}
+                  onClick={canChangeStatus && token ? handleChangeStatus : undefined}
+                />
                 <Text strong style={{ fontSize: '16px' }}>
                   {version.file_name}
                 </Text>
@@ -165,9 +231,62 @@ const VersionCard: React.FC<VersionCardProps> = ({ version }) => {
             </>
           )}
         </Col>
+        
+        <Col flex="none">
+          <Space>
+            {statusMenuItems.length > 0 && (
+              <Dropdown
+                menu={{ items: statusMenuItems }}
+                placement="bottomRight"
+                trigger={['click']}
+              >
+                <Button 
+                  size="small" 
+                  icon={<MoreOutlined />}
+                  style={{ minWidth: 'auto' }}
+                  title="Status actions"
+                />
+              </Dropdown>
+            )}
+            
+            {showCreateBranch && onCreateBranch && (
+              <Button 
+                type="primary" 
+                size="small" 
+                icon={<BranchesOutlined />}
+                onClick={handleCreateBranch}
+                style={{ minWidth: '120px' }}
+              >
+                Create Branch
+              </Button>
+            )}
+          </Space>
+        </Col>
       </Row>
+      
+      {/* Status Management Modals */}
+      {token && (
+        <>
+          <ChangeStatusModal
+            visible={showChangeStatusModal}
+            onCancel={() => setShowChangeStatusModal(false)}
+            onSuccess={handleStatusChanged}
+            version={version}
+            token={token}
+          />
+          
+          <StatusHistoryModal
+            visible={showStatusHistoryModal}
+            onCancel={() => setShowStatusHistoryModal(false)}
+            version={version}
+            token={token}
+          />
+        </>
+      )}
     </Card>
   );
-};
+});
+
+VersionCard.displayName = 'VersionCard';
 
 export default VersionCard;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Typography,
   Button,
@@ -10,7 +10,8 @@ import {
   Breadcrumb,
   Divider,
   Avatar,
-  Tag
+  Tag,
+  Tabs
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -18,13 +19,17 @@ import {
   HistoryOutlined,
   CalendarOutlined,
   UserOutlined,
-  FileOutlined
+  FileOutlined,
+  BranchesOutlined
 } from '@ant-design/icons';
-import { AssetInfo } from '../types/assets';
+import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
+import useBranchStore from '../store/branches';
 import VersionHistoryList from './VersionHistoryList';
+import CreateBranchModal from './CreateBranchModal';
+import BranchManagement from './BranchManagement';
 
 const { Title, Text } = Typography;
 
@@ -42,12 +47,21 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     fetchVersions, 
     clearError 
   } = useAssetStore();
+  const { 
+    fetchBranches, 
+    clearError: clearBranchError 
+  } = useBranchStore();
+  
+  const [createBranchModalVisible, setCreateBranchModalVisible] = useState(false);
+  const [selectedVersionForBranch, setSelectedVersionForBranch] = useState<ConfigurationVersionInfo | null>(null);
+  const [activeTab, setActiveTab] = useState('versions');
 
   useEffect(() => {
     if (token && asset.id) {
       fetchVersions(token, asset.id);
+      fetchBranches(token, asset.id);
     }
-  }, [token, asset.id, fetchVersions]);
+  }, [token, asset.id, fetchVersions, fetchBranches]);
 
   useEffect(() => {
     if (error) {
@@ -55,6 +69,40 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
       clearError();
     }
   }, [error, clearError]);
+
+  const handleCreateBranch = (version: ConfigurationVersionInfo) => {
+    setSelectedVersionForBranch(version);
+    setCreateBranchModalVisible(true);
+  };
+
+  const handleBranchCreated = () => {
+    setCreateBranchModalVisible(false);
+    setSelectedVersionForBranch(null);
+    clearBranchError();
+    // Refresh branches after creation
+    if (token && asset.id) {
+      fetchBranches(token, asset.id);
+    }
+  };
+
+  const handleCancelBranchCreation = () => {
+    setCreateBranchModalVisible(false);
+    setSelectedVersionForBranch(null);
+    clearBranchError();
+  };
+
+  const handleStatusChange = () => {
+    // Refresh the versions list when status changes
+    if (token && asset.id) {
+      fetchVersions(token, asset.id);
+    }
+  };
+
+  const handleCreateBranchFromManagement = () => {
+    // For now, we'll just show a message as we need a version to create a branch from
+    message.info('Please select a version from the history to create a branch from');
+    setActiveTab('versions');
+  };
 
   const formatDate = (dateString: string) => {
     try {
@@ -136,38 +184,85 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
 
       <Divider style={{ margin: '24px 0' }} />
 
-      {/* Version History Section */}
-      <div>
-        <Title level={4} style={{ marginBottom: '16px' }}>
-          <HistoryOutlined /> Version History
-        </Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: '24px' }}>
-          Complete audit trail of all configuration changes
-        </Text>
-
-        {versionsLoading ? (
-          <div style={{ textAlign: 'center', padding: '48px' }}>
-            <Spin size="large" />
-            <div style={{ marginTop: '16px' }}>
-              <Text type="secondary">Loading version history...</Text>
-            </div>
-          </div>
-        ) : versions.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
+      {/* Tabs for Version History and Branch Management */}
+      <Tabs 
+        activeKey={activeTab} 
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'versions',
+            label: (
+              <span>
+                <HistoryOutlined />
+                Version History
+              </span>
+            ),
+            children: (
               <div>
-                <Title level={5}>No Version History</Title>
-                <Text type="secondary">
-                  This asset has no configuration versions yet
+                <Text type="secondary" style={{ display: 'block', marginBottom: '24px' }}>
+                  Complete audit trail of all configuration changes. Select any version to create a branch from it.
                 </Text>
+
+                {versionsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '48px' }}>
+                    <Spin size="large" />
+                    <div style={{ marginTop: '16px' }}>
+                      <Text type="secondary">Loading version history...</Text>
+                    </div>
+                  </div>
+                ) : versions.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={
+                      <div>
+                        <Title level={5}>No Version History</Title>
+                        <Text type="secondary">
+                          This asset has no configuration versions yet
+                        </Text>
+                      </div>
+                    }
+                  />
+                ) : (
+                  <VersionHistoryList 
+                    versions={versions} 
+                    onCreateBranch={handleCreateBranch}
+                    showCreateBranch={true}
+                    onStatusChange={handleStatusChange}
+                  />
+                )}
               </div>
-            }
-          />
-        ) : (
-          <VersionHistoryList versions={versions} />
-        )}
-      </div>
+            )
+          },
+          {
+            key: 'branches',
+            label: (
+              <span>
+                <BranchesOutlined />
+                Branch Management
+              </span>
+            ),
+            children: (
+              <BranchManagement 
+                asset={asset}
+                onCreateBranch={handleCreateBranchFromManagement}
+                showCreateButton={false}
+                showSelectActions={false}
+              />
+            )
+          }
+        ]}
+      />
+
+      {/* Create Branch Modal */}
+      {selectedVersionForBranch && (
+        <CreateBranchModal
+          visible={createBranchModalVisible}
+          onCancel={handleCancelBranchCreation}
+          onSuccess={handleBranchCreated}
+          parentVersion={selectedVersionForBranch}
+          assetId={asset.id}
+        />
+      )}
     </div>
   );
 };

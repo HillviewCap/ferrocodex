@@ -44,3 +44,23 @@ export const getStatusColor = (isActive: boolean): string => {
 export const getStatusText = (isActive: boolean): string => {
   return isActive ? 'Active' : 'Inactive';
 };
+
+export const canChangeConfigurationStatus = (user: UserInfo | null): boolean => {
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canChangeStatusFromApprovedToDraft = (user: UserInfo | null): boolean => {
+  return isAdministrator(user);
+};
+
+export const canApproveConfiguration = (user: UserInfo | null): boolean => {
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canSetGoldenStatus = (user: UserInfo | null): boolean => {
+  return isAdministrator(user);
+};
+
+export const canArchiveConfiguration = (user: UserInfo | null): boolean => {
+  return isAdministrator(user);
+};

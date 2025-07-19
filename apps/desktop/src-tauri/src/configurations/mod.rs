@@ -18,6 +18,47 @@ pub struct ConfigurationVersion {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConfigurationStatus {
+    Draft,
+    Approved,
+    Golden,
+    Archived,
+}
+
+impl ConfigurationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConfigurationStatus::Draft => "Draft",
+            ConfigurationStatus::Approved => "Approved", 
+            ConfigurationStatus::Golden => "Golden",
+            ConfigurationStatus::Archived => "Archived",
+        }
+    }
+    
+    pub fn from_str(s: &str) -> Option<ConfigurationStatus> {
+        match s {
+            "Draft" => Some(ConfigurationStatus::Draft),
+            "Approved" => Some(ConfigurationStatus::Approved),
+            "Golden" => Some(ConfigurationStatus::Golden),
+            "Archived" => Some(ConfigurationStatus::Archived),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusChangeRecord {
+    pub id: i64,
+    pub version_id: i64,
+    pub old_status: Option<String>,
+    pub new_status: String,
+    pub changed_by: i64,
+    pub changed_by_username: String,
+    pub change_reason: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigurationVersionInfo {
     pub id: i64,
     pub asset_id: i64,
@@ -28,6 +69,9 @@ pub struct ConfigurationVersionInfo {
     pub author: i64,
     pub author_username: String,
     pub notes: String,
+    pub status: String,
+    pub status_changed_by: Option<i64>,
+    pub status_changed_at: Option<String>,
     pub created_at: String,
 }
 
@@ -43,6 +87,9 @@ impl From<ConfigurationVersion> for ConfigurationVersionInfo {
             author: config.author,
             author_username: String::new(), // Will be populated by join query
             notes: config.notes,
+            status: "Draft".to_string(), // Default status
+            status_changed_by: None,
+            status_changed_at: None,
             created_at: config.created_at,
         }
     }
@@ -73,6 +120,11 @@ pub trait ConfigurationRepository {
     fn get_latest_version_number(&self, asset_id: i64) -> Result<Option<String>>;
     fn delete_configuration_version(&self, version_id: i64) -> Result<()>;
     fn get_configuration_count(&self, asset_id: i64) -> Result<i64>;
+    
+    // Status management methods
+    fn update_configuration_status(&self, version_id: i64, new_status: ConfigurationStatus, changed_by: i64, change_reason: Option<String>) -> Result<()>;
+    fn get_configuration_status_history(&self, version_id: i64) -> Result<Vec<StatusChangeRecord>>;
+    fn get_available_status_transitions(&self, version_id: i64, user_role: &str) -> Result<Vec<ConfigurationStatus>>;
 }
 
 pub struct SqliteConfigurationRepository<'a> {
@@ -97,16 +149,34 @@ impl<'a> SqliteConfigurationRepository<'a> {
                 content_hash TEXT NOT NULL,
                 author INTEGER NOT NULL,
                 notes TEXT,
+                status TEXT DEFAULT 'Draft' CHECK(status IN ('Draft', 'Approved', 'Golden', 'Archived')),
+                status_changed_by INTEGER REFERENCES users(id),
+                status_changed_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                 FOREIGN KEY (author) REFERENCES users(id),
                 UNIQUE(asset_id, version_number)
             );
 
+            CREATE TABLE IF NOT EXISTS configuration_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version_id INTEGER NOT NULL,
+                old_status TEXT,
+                new_status TEXT NOT NULL,
+                changed_by INTEGER NOT NULL,
+                change_reason TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (version_id) REFERENCES configuration_versions(id) ON DELETE CASCADE,
+                FOREIGN KEY (changed_by) REFERENCES users(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_config_asset_id ON configuration_versions(asset_id);
             CREATE INDEX IF NOT EXISTS idx_config_version ON configuration_versions(asset_id, version_number);
             CREATE INDEX IF NOT EXISTS idx_config_author ON configuration_versions(author);
             CREATE INDEX IF NOT EXISTS idx_config_created_at ON configuration_versions(created_at);
+            CREATE INDEX IF NOT EXISTS idx_configuration_versions_status ON configuration_versions(status);
+            CREATE INDEX IF NOT EXISTS idx_configuration_versions_status_asset ON configuration_versions(asset_id, status);
+            CREATE INDEX IF NOT EXISTS idx_status_history_version ON configuration_status_history(version_id);
             "#,
         )?;
         Ok(())
@@ -138,6 +208,22 @@ impl<'a> SqliteConfigurationRepository<'a> {
             author: row.get("author")?,
             author_username: row.get("author_username")?,
             notes: row.get("notes")?,
+            status: row.get("status")?,
+            status_changed_by: row.get("status_changed_by")?,
+            status_changed_at: row.get("status_changed_at")?,
+            created_at: row.get("created_at")?,
+        })
+    }
+
+    fn row_to_status_change_record(row: &Row) -> rusqlite::Result<StatusChangeRecord> {
+        Ok(StatusChangeRecord {
+            id: row.get("id")?,
+            version_id: row.get("version_id")?,
+            old_status: row.get("old_status")?,
+            new_status: row.get("new_status")?,
+            changed_by: row.get("changed_by")?,
+            changed_by_username: row.get("changed_by_username")?,
+            change_reason: row.get("change_reason")?,
             created_at: row.get("created_at")?,
         })
     }
@@ -234,7 +320,8 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
     fn get_configuration_versions(&self, asset_id: i64) -> Result<Vec<ConfigurationVersionInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT cv.id, cv.asset_id, cv.version_number, cv.file_name, cv.file_size, 
-                    cv.content_hash, cv.author, u.username as author_username, cv.notes, cv.created_at
+                    cv.content_hash, cv.author, u.username as author_username, cv.notes,
+                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.created_at
              FROM configuration_versions cv
              JOIN users u ON cv.author = u.id
              WHERE cv.asset_id = ?1
@@ -323,6 +410,102 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         )?;
         let count: i64 = stmt.query_row([asset_id], |row| row.get(0))?;
         Ok(count)
+    }
+
+    fn update_configuration_status(&self, version_id: i64, new_status: ConfigurationStatus, changed_by: i64, change_reason: Option<String>) -> Result<()> {
+        // First get the current status
+        let mut stmt = self.conn.prepare(
+            "SELECT status FROM configuration_versions WHERE id = ?1"
+        )?;
+        let current_status: String = stmt.query_row([version_id], |row| row.get(0))?;
+
+        // Update the configuration version status
+        self.conn.execute(
+            "UPDATE configuration_versions 
+             SET status = ?1, status_changed_by = ?2, status_changed_at = datetime('now') 
+             WHERE id = ?3",
+            (new_status.as_str(), changed_by, version_id),
+        )?;
+
+        // Record the status change in history
+        self.conn.execute(
+            "INSERT INTO configuration_status_history (version_id, old_status, new_status, changed_by, change_reason)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (version_id, current_status, new_status.as_str(), changed_by, change_reason),
+        )?;
+
+        Ok(())
+    }
+
+    fn get_configuration_status_history(&self, version_id: i64) -> Result<Vec<StatusChangeRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT csh.id, csh.version_id, csh.old_status, csh.new_status, 
+                    csh.changed_by, u.username as changed_by_username, csh.change_reason, csh.created_at
+             FROM configuration_status_history csh
+             JOIN users u ON csh.changed_by = u.id
+             WHERE csh.version_id = ?1
+             ORDER BY csh.created_at DESC"
+        )?;
+
+        let history_iter = stmt.query_map([version_id], Self::row_to_status_change_record)?;
+        let mut history = Vec::new();
+
+        for record in history_iter {
+            history.push(record?);
+        }
+
+        Ok(history)
+    }
+
+    fn get_available_status_transitions(&self, version_id: i64, user_role: &str) -> Result<Vec<ConfigurationStatus>> {
+        // Get current status
+        let mut stmt = self.conn.prepare(
+            "SELECT status FROM configuration_versions WHERE id = ?1"
+        )?;
+        let current_status: String = stmt.query_row([version_id], |row| row.get(0))?;
+
+        let current = ConfigurationStatus::from_str(&current_status)
+            .ok_or_else(|| anyhow::anyhow!("Invalid status: {}", current_status))?;
+
+        let mut transitions = Vec::new();
+
+        match user_role {
+            "Engineer" => {
+                match current {
+                    ConfigurationStatus::Draft => {
+                        transitions.push(ConfigurationStatus::Approved);
+                    }
+                    _ => {} // Engineers can only promote Draft to Approved
+                }
+            }
+            "Administrator" => {
+                match current {
+                    ConfigurationStatus::Draft => {
+                        transitions.push(ConfigurationStatus::Approved);
+                        transitions.push(ConfigurationStatus::Golden);
+                        transitions.push(ConfigurationStatus::Archived);
+                    }
+                    ConfigurationStatus::Approved => {
+                        transitions.push(ConfigurationStatus::Draft);
+                        transitions.push(ConfigurationStatus::Golden);
+                        transitions.push(ConfigurationStatus::Archived);
+                    }
+                    ConfigurationStatus::Golden => {
+                        transitions.push(ConfigurationStatus::Draft);
+                        transitions.push(ConfigurationStatus::Approved);
+                        transitions.push(ConfigurationStatus::Archived);
+                    }
+                    ConfigurationStatus::Archived => {
+                        transitions.push(ConfigurationStatus::Draft);
+                        transitions.push(ConfigurationStatus::Approved);
+                        transitions.push(ConfigurationStatus::Golden);
+                    }
+                }
+            }
+            _ => {} // Unknown roles have no permissions
+        }
+
+        Ok(transitions)
     }
 }
 

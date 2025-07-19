@@ -6,6 +6,7 @@ mod validation;
 mod assets;
 mod configurations;
 mod encryption;
+mod branches;
 
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
@@ -13,7 +14,8 @@ use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
 use audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
-use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, file_utils};
+use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils};
+use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
@@ -813,6 +815,499 @@ async fn get_configuration_versions(
     }
 }
 
+// Branch Management Commands
+
+#[tauri::command]
+async fn create_branch(
+    token: String,
+    name: String,
+    description: Option<String>,
+    asset_id: i64,
+    parent_version_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<BranchInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let name = InputSanitizer::sanitize_string(&name);
+    let description = description.map(|d| InputSanitizer::sanitize_string(&d));
+
+    if InputSanitizer::is_potentially_malicious(&name) {
+        error!("Potentially malicious input detected in create_branch");
+        return Err("Invalid input detected".to_string());
+    }
+
+    if let Some(ref desc) = description {
+        if InputSanitizer::is_potentially_malicious(desc) {
+            error!("Potentially malicious input detected in create_branch description");
+            return Err("Invalid input detected".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            let request = CreateBranchRequest {
+                name,
+                description,
+                asset_id,
+                parent_version_id,
+                created_by: session.user_id,
+            };
+
+            match branch_repo.create_branch(request) {
+                Ok(branch) => {
+                    info!("Branch created by {}: {} for asset {}", session.username, branch.name, asset_id);
+                    Ok(branch.into())
+                }
+                Err(e) => {
+                    error!("Failed to create branch: {}", e);
+                    Err(format!("Failed to create branch: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_branches(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<BranchInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            match branch_repo.get_branches(asset_id) {
+                Ok(branches) => {
+                    info!("Branches accessed by {}: Asset ID {}", session.username, asset_id);
+                    Ok(branches)
+                }
+                Err(e) => {
+                    error!("Failed to get branches: {}", e);
+                    Err(format!("Failed to get branches: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_branch_details(
+    token: String,
+    branch_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<BranchInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            match branch_repo.get_branch_by_id(branch_id) {
+                Ok(Some(branch)) => {
+                    info!("Branch details accessed by {}: Branch ID {}", session.username, branch_id);
+                    Ok(branch)
+                }
+                Ok(None) => Err("Branch not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get branch details: {}", e);
+                    Err(format!("Failed to get branch details: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Branch Version Management Commands
+
+#[tauri::command]
+async fn import_version_to_branch(
+    token: String,
+    branch_id: i64,
+    file_path: String,
+    notes: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<BranchVersionInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let notes = InputSanitizer::sanitize_string(&notes);
+    
+    if InputSanitizer::is_potentially_malicious(&notes) {
+        error!("Potentially malicious input detected in import_version_to_branch");
+        return Err("Invalid input detected".to_string());
+    }
+
+    if notes.len() > 1000 {
+        return Err("Notes cannot exceed 1000 characters".to_string());
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            let request = CreateBranchVersionRequest {
+                branch_id,
+                file_path,
+                notes,
+                author: session.user_id,
+            };
+
+            match branch_repo.import_version_to_branch(request) {
+                Ok(_branch_version) => {
+                    // Get the full branch version info
+                    match branch_repo.get_branch_latest_version(branch_id) {
+                        Ok(Some(version_info)) => {
+                            info!("Version imported to branch by {}: Branch ID {}", session.username, branch_id);
+                            Ok(version_info)
+                        }
+                        Ok(None) => Err("Failed to retrieve imported version info".to_string()),
+                        Err(e) => {
+                            error!("Failed to get branch version info: {}", e);
+                            Err(format!("Failed to get branch version info: {}", e))
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to import version to branch: {}", e);
+                    Err(format!("Failed to import version to branch: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_branch_versions(
+    token: String,
+    branch_id: i64,
+    page: Option<i32>,
+    limit: Option<i32>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<BranchVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            match branch_repo.get_branch_versions(branch_id, page, limit) {
+                Ok(versions) => {
+                    info!("Branch versions accessed by {}: Branch ID {}", session.username, branch_id);
+                    Ok(versions)
+                }
+                Err(e) => {
+                    error!("Failed to get branch versions: {}", e);
+                    Err(format!("Failed to get branch versions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_branch_latest_version(
+    token: String,
+    branch_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Option<BranchVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            match branch_repo.get_branch_latest_version(branch_id) {
+                Ok(version) => {
+                    info!("Branch latest version accessed by {}: Branch ID {}", session.username, branch_id);
+                    Ok(version)
+                }
+                Err(e) => {
+                    error!("Failed to get branch latest version: {}", e);
+                    Err(format!("Failed to get branch latest version: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn compare_branch_versions(
+    token: String,
+    branch_id: i64,
+    version1_id: i64,
+    version2_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            
+            match branch_repo.compare_branch_versions(branch_id, version1_id, version2_id) {
+                Ok(diff_content) => {
+                    // Convert bytes to string for frontend
+                    match String::from_utf8(diff_content) {
+                        Ok(diff_str) => {
+                            info!("Branch versions compared by {}: Branch ID {}", session.username, branch_id);
+                            Ok(diff_str)
+                        }
+                        Err(_) => Err("Failed to convert diff content to string".to_string()),
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to compare branch versions: {}", e);
+                    Err(format!("Failed to compare branch versions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Configuration Status Management Commands
+
+#[tauri::command]
+async fn update_configuration_status(
+    token: String,
+    version_id: i64,
+    new_status: String,
+    change_reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Parse and validate status
+    let status = ConfigurationStatus::from_str(&new_status)
+        .ok_or_else(|| format!("Invalid status: {}", new_status))?;
+
+    // Validate inputs
+    let change_reason = change_reason.map(|r| InputSanitizer::sanitize_string(&r));
+    
+    if let Some(ref reason) = change_reason {
+        if InputSanitizer::is_potentially_malicious(reason) {
+            error!("Potentially malicious input detected in update_configuration_status");
+            return Err("Invalid input detected".to_string());
+        }
+        if reason.len() > 500 {
+            return Err("Change reason cannot exceed 500 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+
+            // Check if user has permission for this status transition
+            let available_transitions = config_repo.get_available_status_transitions(version_id, &session.role.to_string())
+                .map_err(|e| format!("Failed to check permissions: {}", e))?;
+
+            if !available_transitions.iter().any(|t| t.as_str() == status.as_str()) {
+                return Err("You do not have permission to make this status change".to_string());
+            }
+
+            match config_repo.update_configuration_status(version_id, status, session.user_id, change_reason) {
+                Ok(_) => {
+                    info!("Configuration status updated by {}: Version ID {} to {}", session.username, version_id, new_status);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update configuration status: {}", e);
+                    Err(format!("Failed to update configuration status: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_configuration_status_history(
+    token: String,
+    version_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<StatusChangeRecord>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_configuration_status_history(version_id) {
+                Ok(history) => {
+                    info!("Configuration status history accessed by {}: Version ID {}", session.username, version_id);
+                    Ok(history)
+                }
+                Err(e) => {
+                    error!("Failed to get configuration status history: {}", e);
+                    Err(format!("Failed to get configuration status history: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_available_status_transitions(
+    token: String,
+    version_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<String>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_available_status_transitions(version_id, &session.role.to_string()) {
+                Ok(transitions) => {
+                    let status_strings: Vec<String> = transitions.iter().map(|s| s.as_str().to_string()).collect();
+                    info!("Available status transitions accessed by {}: Version ID {}", session.username, version_id);
+                    Ok(status_strings)
+                }
+                Err(e) => {
+                    error!("Failed to get available status transitions: {}", e);
+                    Err(format!("Failed to get available status transitions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -840,7 +1335,17 @@ pub fn run() {
             get_dashboard_assets,
             get_asset_details,
             import_configuration,
-            get_configuration_versions
+            get_configuration_versions,
+            update_configuration_status,
+            get_configuration_status_history,
+            get_available_status_transitions,
+            create_branch,
+            get_branches,
+            get_branch_details,
+            import_version_to_branch,
+            get_branch_versions,
+            get_branch_latest_version,
+            compare_branch_versions
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

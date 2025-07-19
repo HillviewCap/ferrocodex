@@ -14,6 +14,9 @@ describe('VersionCard', () => {
     author: 1,
     author_username: 'john_doe',
     notes: 'Initial configuration version',
+    status: 'Draft',
+    status_changed_by: undefined,
+    status_changed_at: undefined,
     created_at: '2023-01-01T12:00:00Z'
   };
 

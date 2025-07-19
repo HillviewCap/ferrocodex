@@ -15,6 +15,9 @@ describe('VersionHistoryList', () => {
       author: 1,
       author_username: 'john_doe',
       notes: 'Initial version',
+      status: 'Draft',
+      status_changed_by: undefined,
+      status_changed_at: undefined,
       created_at: '2023-01-01T12:00:00Z'
     },
     {
@@ -27,6 +30,9 @@ describe('VersionHistoryList', () => {
       author: 2,
       author_username: 'jane_smith',
       notes: 'Updated configuration',
+      status: 'Approved',
+      status_changed_by: undefined,
+      status_changed_at: undefined,
       created_at: '2023-01-02T12:00:00Z'
     },
     {
@@ -39,6 +45,9 @@ describe('VersionHistoryList', () => {
       author: 1,
       author_username: 'john_doe',
       notes: 'Bug fixes',
+      status: 'Golden',
+      status_changed_by: undefined,
+      status_changed_at: undefined,
       created_at: '2023-01-03T12:00:00Z'
     }
   ];
@@ -65,6 +74,7 @@ describe('VersionHistoryList', () => {
       ...mockVersions[0],
       id: i + 1,
       version_number: `v${i + 1}`,
+      status: 'Draft' as const,
       created_at: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString()
     }));
 

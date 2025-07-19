@@ -30,6 +30,8 @@ export interface ConfigurationVersion {
   created_at: string;
 }
 
+export type ConfigurationStatus = 'Draft' | 'Approved' | 'Golden' | 'Archived';
+
 export interface ConfigurationVersionInfo {
   id: number;
   asset_id: number;
@@ -40,6 +42,20 @@ export interface ConfigurationVersionInfo {
   author: number;
   author_username: string;
   notes: string;
+  status: ConfigurationStatus;
+  status_changed_by?: number;
+  status_changed_at?: string;
+  created_at: string;
+}
+
+export interface StatusChangeRecord {
+  id: number;
+  version_id: number;
+  old_status?: string;
+  new_status: string;
+  changed_by: number;
+  changed_by_username: string;
+  change_reason?: string;
   created_at: string;
 }
 
