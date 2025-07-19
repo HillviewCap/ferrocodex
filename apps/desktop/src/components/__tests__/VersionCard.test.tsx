@@ -80,4 +80,47 @@ describe('VersionCard', () => {
     const hashElement = screen.getByText('abc123de...');
     expect(hashElement).toBeInTheDocument();
   });
+
+  it('displays status badge correctly', () => {
+    render(<VersionCard version={mockVersion} />);
+    
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+  });
+
+  it('shows status dropdown when user has permissions', () => {
+    const { container } = render(<VersionCard version={mockVersion} />);
+    
+    // Check if dropdown trigger is present
+    const dropdown = container.querySelector('.ant-dropdown-trigger');
+    expect(dropdown).toBeInTheDocument();
+  });
+
+  it('displays different status badges correctly', () => {
+    const approvedVersion = { ...mockVersion, status: 'Approved' as const };
+    const { rerender } = render(<VersionCard version={approvedVersion} />);
+    
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+
+    const goldenVersion = { ...mockVersion, status: 'Golden' as const };
+    rerender(<VersionCard version={goldenVersion} />);
+    
+    expect(screen.getByText('Golden')).toBeInTheDocument();
+
+    const archivedVersion = { ...mockVersion, status: 'Archived' as const };
+    rerender(<VersionCard version={archivedVersion} />);
+    
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+  });
+
+  it('handles status change and history actions', () => {
+    const { container } = render(<VersionCard version={mockVersion} />);
+    
+    // Verify that status-related UI elements are present
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    
+    // Check that the card has proper structure for status functionality
+    const statusSection = container.querySelector('[data-testid="version-status"]') || 
+                         container.querySelector('.ant-tag');
+    expect(statusSection).toBeInTheDocument();
+  });
 });

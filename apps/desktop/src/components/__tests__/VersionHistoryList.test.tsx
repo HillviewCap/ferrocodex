@@ -75,6 +75,8 @@ describe('VersionHistoryList', () => {
       id: i + 1,
       version_number: `v${i + 1}`,
       status: 'Draft' as const,
+      status_changed_by: undefined,
+      status_changed_at: undefined,
       created_at: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString()
     }));
 

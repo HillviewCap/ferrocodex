@@ -6,6 +6,7 @@ use crate::users::SqliteUserRepository;
 use crate::audit::{SqliteAuditRepository, AuditRepository};
 use crate::assets::SqliteAssetRepository;
 use crate::configurations::SqliteConfigurationRepository;
+use crate::branches::SqliteBranchRepository;
 
 pub struct Database {
     conn: Connection,
@@ -70,6 +71,10 @@ impl Database {
         // Initialize configuration schema
         let config_repo = SqliteConfigurationRepository::new(&self.conn);
         config_repo.initialize_schema()?;
+
+        // Initialize branches schema
+        let branch_repo = SqliteBranchRepository::new(&self.conn);
+        branch_repo.initialize_schema()?;
 
         info!("Database schema initialized");
         Ok(())
