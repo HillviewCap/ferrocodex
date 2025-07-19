@@ -17,7 +17,7 @@ pub struct ConfigurationVersion {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ConfigurationStatus {
     Draft,
     Approved,
@@ -843,3 +843,6 @@ mod tests {
         assert!(result.is_none());
     }
 }
+
+#[cfg(test)]
+mod status_tests;
