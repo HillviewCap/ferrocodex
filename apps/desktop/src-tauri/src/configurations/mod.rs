@@ -125,6 +125,14 @@ pub trait ConfigurationRepository {
     fn update_configuration_status(&self, version_id: i64, new_status: ConfigurationStatus, changed_by: i64, change_reason: Option<String>) -> Result<()>;
     fn get_configuration_status_history(&self, version_id: i64) -> Result<Vec<StatusChangeRecord>>;
     fn get_available_status_transitions(&self, version_id: i64, user_role: &str) -> Result<Vec<ConfigurationStatus>>;
+    
+    // Golden promotion methods
+    fn promote_to_golden(&self, version_id: i64, promoted_by: i64, promotion_reason: Option<String>) -> Result<()>;
+    fn get_golden_version(&self, asset_id: i64) -> Result<Option<ConfigurationVersionInfo>>;
+    fn get_promotion_eligibility(&self, version_id: i64) -> Result<bool>;
+    
+    // Export methods
+    fn export_configuration_version(&self, version_id: i64, export_path: &str) -> Result<()>;
 }
 
 pub struct SqliteConfigurationRepository<'a> {
@@ -507,6 +515,160 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
 
         Ok(transitions)
     }
+
+    fn promote_to_golden(&self, version_id: i64, promoted_by: i64, promotion_reason: Option<String>) -> Result<()> {
+        // Begin transaction for atomic operation
+        let tx = self.conn.unchecked_transaction()?;
+
+        // First, get the asset_id and current status of the version to be promoted
+        let (asset_id, current_status): (i64, String) = tx.prepare(
+            "SELECT asset_id, status FROM configuration_versions WHERE id = ?1"
+        )?.query_row([version_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        // Validate that current status is Approved
+        if current_status != "Approved" {
+            return Err(anyhow::anyhow!("Only Approved versions can be promoted to Golden"));
+        }
+
+        // Get IDs of existing Golden versions before archiving them
+        let previously_golden_versions: Vec<i64> = tx.prepare(
+            "SELECT id FROM configuration_versions WHERE asset_id = ?1 AND status = 'Golden'"
+        )?.query_map([asset_id], |row| {
+            Ok(row.get::<_, i64>(0)?)
+        })?.collect::<Result<Vec<_>, _>>()?;
+
+        // Archive any existing Golden version for this asset
+        tx.execute(
+            "UPDATE configuration_versions 
+             SET status = 'Archived', status_changed_by = ?1, status_changed_at = datetime('now') 
+             WHERE asset_id = ?2 AND status = 'Golden'",
+            (promoted_by, asset_id),
+        )?;
+
+        // Record status change for the archived versions
+        for archived_id in previously_golden_versions {
+            tx.execute(
+                "INSERT INTO configuration_status_history (version_id, old_status, new_status, changed_by, change_reason)
+                 VALUES (?1, 'Golden', 'Archived', ?2, ?3)",
+                (archived_id, promoted_by, Some("Automatically archived due to new Golden promotion".to_string())),
+            )?;
+        }
+
+        // Promote the target version to Golden
+        tx.execute(
+            "UPDATE configuration_versions 
+             SET status = 'Golden', status_changed_by = ?1, status_changed_at = datetime('now') 
+             WHERE id = ?2",
+            (promoted_by, version_id),
+        )?;
+
+        // Record the promotion in status history
+        tx.execute(
+            "INSERT INTO configuration_status_history (version_id, old_status, new_status, changed_by, change_reason)
+             VALUES (?1, ?2, 'Golden', ?3, ?4)",
+            (version_id, current_status, promoted_by, promotion_reason),
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn get_golden_version(&self, asset_id: i64) -> Result<Option<ConfigurationVersionInfo>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT cv.id, cv.asset_id, cv.version_number, cv.file_name, cv.file_size, 
+                    cv.content_hash, cv.author, u.username as author_username, cv.notes,
+                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.created_at
+             FROM configuration_versions cv
+             JOIN users u ON cv.author = u.id
+             WHERE cv.asset_id = ?1 AND cv.status = 'Golden'
+             LIMIT 1"
+        )?;
+
+        let result = stmt.query_row([asset_id], Self::row_to_configuration_info);
+        
+        match result {
+            Ok(config) => Ok(Some(config)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn get_promotion_eligibility(&self, version_id: i64) -> Result<bool> {
+        // Check if version exists and has Approved status
+        let mut stmt = self.conn.prepare(
+            "SELECT status FROM configuration_versions WHERE id = ?1"
+        )?;
+
+        let result = stmt.query_row([version_id], |row| {
+            Ok(row.get::<_, String>(0)?)
+        });
+
+        match result {
+            Ok(status) => Ok(status == "Approved"),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn export_configuration_version(&self, version_id: i64, export_path: &str) -> Result<()> {
+        use std::fs;
+        use std::path::Path;
+
+        // Prevent directory traversal attacks first
+        if export_path.contains("..") || export_path.contains("~") {
+            return Err(anyhow::anyhow!("Invalid export path detected"));
+        }
+
+        // Validate export path
+        let path = Path::new(export_path);
+        
+        // Check if parent directory exists
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                return Err(anyhow::anyhow!("Export directory does not exist: {}", parent.display()));
+            }
+        }
+
+        // Get configuration version information
+        let config_info = match self.get_configuration_by_id(version_id)? {
+            Some(config) => config,
+            None => return Err(anyhow::anyhow!("Configuration version not found")),
+        };
+
+        // Get decrypted file content
+        let file_content = self.get_configuration_content(version_id)?;
+
+        // Write file to export path
+        match fs::write(path, &file_content) {
+            Ok(()) => {
+                // Verify file integrity after export
+                let exported_content = fs::read(path)?;
+                if exported_content.len() != file_content.len() {
+                    // Clean up partial file on failure
+                    let _ = fs::remove_file(path);
+                    return Err(anyhow::anyhow!("Export failed: file size mismatch"));
+                }
+
+                // Verify content hash if available
+                let exported_hash = self.calculate_content_hash(&exported_content);
+                if exported_hash != config_info.content_hash {
+                    // Clean up corrupted file
+                    let _ = fs::remove_file(path);
+                    return Err(anyhow::anyhow!("Export failed: content hash mismatch"));
+                }
+
+                tracing::info!("Configuration version {} exported to {}", version_id, export_path);
+                Ok(())
+            }
+            Err(e) => {
+                // Clean up any partial file on failure
+                let _ = fs::remove_file(path);
+                Err(anyhow::anyhow!("Failed to write export file: {}", e))
+            }
+        }
+    }
 }
 
 // File handling utilities
@@ -841,6 +1003,324 @@ mod tests {
 
         let result = repo.get_configuration_by_id(config.id).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_golden_promotion_workflow() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Initially should not be eligible for golden promotion (Draft status)
+        assert!(!repo.get_promotion_eligibility(config.id).unwrap());
+
+        // Approve the configuration first
+        repo.update_configuration_status(config.id, ConfigurationStatus::Approved, 1, Some("Ready for production".to_string())).unwrap();
+
+        // Now should be eligible for golden promotion
+        assert!(repo.get_promotion_eligibility(config.id).unwrap());
+
+        // Should have no golden version initially
+        assert!(repo.get_golden_version(1).unwrap().is_none());
+
+        // Promote to golden
+        repo.promote_to_golden(config.id, 1, Some("First golden version".to_string())).unwrap();
+
+        // Should now have a golden version
+        let golden = repo.get_golden_version(1).unwrap().unwrap();
+        assert_eq!(golden.id, config.id);
+        assert_eq!(golden.status, "Golden");
+
+        // Should no longer be eligible for promotion (already Golden)
+        assert!(!repo.get_promotion_eligibility(config.id).unwrap());
+    }
+
+    #[test]
+    fn test_golden_promotion_archiving() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create first configuration
+        let request1 = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config1.json".to_string(),
+            file_content: b"{\"test\": \"value1\"}".to_vec(),
+            author: 1,
+            notes: "First config".to_string(),
+        };
+
+        let config1 = repo.store_configuration(request1).unwrap();
+
+        // Create second configuration
+        let request2 = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config2.json".to_string(),
+            file_content: b"{\"test\": \"value2\"}".to_vec(),
+            author: 1,
+            notes: "Second config".to_string(),
+        };
+
+        let config2 = repo.store_configuration(request2).unwrap();
+
+        // Approve both configurations
+        repo.update_configuration_status(config1.id, ConfigurationStatus::Approved, 1, None).unwrap();
+        repo.update_configuration_status(config2.id, ConfigurationStatus::Approved, 1, None).unwrap();
+
+        // Promote first to golden
+        repo.promote_to_golden(config1.id, 1, Some("First golden".to_string())).unwrap();
+
+        // Verify first is golden
+        let golden = repo.get_golden_version(1).unwrap().unwrap();
+        assert_eq!(golden.id, config1.id);
+
+        // Promote second to golden
+        repo.promote_to_golden(config2.id, 1, Some("Second golden".to_string())).unwrap();
+
+        // Verify second is now golden
+        let golden = repo.get_golden_version(1).unwrap().unwrap();
+        assert_eq!(golden.id, config2.id);
+
+        // Verify first was archived
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let config1_version = versions.iter().find(|v| v.id == config1.id).unwrap();
+        assert_eq!(config1_version.status, "Archived");
+    }
+
+    #[test]
+    fn test_golden_promotion_validation() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Should fail to promote draft to golden
+        let result = repo.promote_to_golden(config.id, 1, None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Only Approved versions can be promoted to Golden"));
+
+        // Non-existent version should not be eligible
+        assert!(!repo.get_promotion_eligibility(99999).unwrap());
+    }
+
+    #[test]
+    fn test_export_configuration_version() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let content = b"{\"test\": \"export_value\"}";
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "export_test.json".to_string(),
+            file_content: content.to_vec(),
+            author: 1,
+            notes: "Export test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Create a temporary export file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let export_path = temp_dir.path().join("exported_config.json");
+        let export_path_str = export_path.to_str().unwrap();
+
+        // Test successful export
+        let result = repo.export_configuration_version(config.id, export_path_str);
+        assert!(result.is_ok());
+
+        // Verify exported file exists and has correct content
+        assert!(export_path.exists());
+        let exported_content = std::fs::read(&export_path).unwrap();
+        assert_eq!(exported_content, content);
+    }
+
+    #[test]
+    fn test_export_invalid_version() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let export_path = temp_dir.path().join("nonexistent.json");
+        let export_path_str = export_path.to_str().unwrap();
+
+        // Test export of non-existent version
+        let result = repo.export_configuration_version(99999, export_path_str);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Configuration version not found"));
+    }
+
+    #[test]
+    fn test_export_invalid_path() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let content = b"{\"test\": \"value\"}";
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "test.json".to_string(),
+            file_content: content.to_vec(),
+            author: 1,
+            notes: "Test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Test directory traversal protection
+        let result = repo.export_configuration_version(config.id, "../malicious.json");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid export path detected"));
+
+        // Test home directory expansion protection
+        let result = repo.export_configuration_version(config.id, "~/malicious.json");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid export path detected"));
+    }
+
+    #[test]
+    fn test_export_nonexistent_directory() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let content = b"{\"test\": \"value\"}";
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "test.json".to_string(),
+            file_content: content.to_vec(),
+            author: 1,
+            notes: "Test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Test export to non-existent directory
+        let result = repo.export_configuration_version(config.id, "/nonexistent/directory/file.json");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Export directory does not exist"));
+    }
+
+    #[test]
+    fn test_export_performance() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a larger file for performance testing (1MB)
+        let content = vec![b'A'; 1024 * 1024]; // 1MB of 'A' characters
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "large_config.json".to_string(),
+            file_content: content,
+            author: 1,
+            notes: "Performance test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Create a temporary export file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let export_path = temp_dir.path().join("large_exported_config.json");
+        let export_path_str = export_path.to_str().unwrap();
+
+        // Measure export time
+        let start = std::time::Instant::now();
+        let result = repo.export_configuration_version(config.id, export_path_str);
+        let duration = start.elapsed();
+
+        assert!(result.is_ok());
+        assert!(duration.as_secs() < 2, "Export took {} seconds, should be under 2 seconds", duration.as_secs_f64());
+        
+        // Verify the file was created and has correct size
+        assert!(export_path.exists());
+        let exported_content = std::fs::read(&export_path).unwrap();
+        assert_eq!(exported_content.len(), 1024 * 1024);
+    }
+
+    #[test]
+    fn test_export_large_file_performance() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a very large file for performance testing (10MB)
+        let content = vec![b'B'; 10 * 1024 * 1024]; // 10MB of 'B' characters
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "very_large_config.bin".to_string(),
+            file_content: content,
+            author: 1,
+            notes: "Large file performance test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Create a temporary export file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let export_path = temp_dir.path().join("very_large_exported_config.bin");
+        let export_path_str = export_path.to_str().unwrap();
+
+        // Measure export time
+        let start = std::time::Instant::now();
+        let result = repo.export_configuration_version(config.id, export_path_str);
+        let duration = start.elapsed();
+
+        assert!(result.is_ok());
+        // Large files may take longer, but should still be reasonable
+        assert!(duration.as_secs() < 10, "Large file export took {} seconds, should be under 10 seconds", duration.as_secs_f64());
+        
+        // Verify the file was created and has correct size
+        assert!(export_path.exists());
+        let exported_content = std::fs::read(&export_path).unwrap();
+        assert_eq!(exported_content.len(), 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_export_integrity_validation() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let content = b"{\"test\": \"integrity_validation\", \"value\": 12345}";
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "integrity_test.json".to_string(),
+            file_content: content.to_vec(),
+            author: 1,
+            notes: "Integrity validation test".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Create a temporary export file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let export_path = temp_dir.path().join("integrity_exported.json");
+        let export_path_str = export_path.to_str().unwrap();
+
+        // Test successful export with integrity validation
+        let result = repo.export_configuration_version(config.id, export_path_str);
+        assert!(result.is_ok());
+
+        // Verify exported file content matches original
+        let exported_content = std::fs::read(&export_path).unwrap();
+        assert_eq!(exported_content, content);
+
+        // Verify file integrity by checking hash
+        let original_hash = repo.calculate_content_hash(content);
+        let exported_hash = repo.calculate_content_hash(&exported_content);
+        assert_eq!(original_hash, exported_hash);
     }
 }
 

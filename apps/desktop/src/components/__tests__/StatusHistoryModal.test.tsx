@@ -28,7 +28,7 @@ describe('StatusHistoryModal', () => {
     {
       id: 1,
       version_id: 1,
-      old_status: null,
+      old_status: undefined,
       new_status: 'Draft',
       changed_by: 1,
       changed_by_username: 'john_doe',

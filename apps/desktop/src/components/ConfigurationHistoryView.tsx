@@ -30,6 +30,8 @@ import useBranchStore from '../store/branches';
 import VersionHistoryList from './VersionHistoryList';
 import CreateBranchModal from './CreateBranchModal';
 import BranchManagement from './BranchManagement';
+import GoldenVersionIndicator from './GoldenVersionIndicator';
+import { invoke } from '@tauri-apps/api/core';
 
 const { Title, Text } = Typography;
 
@@ -55,13 +57,33 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
   const [createBranchModalVisible, setCreateBranchModalVisible] = useState(false);
   const [selectedVersionForBranch, setSelectedVersionForBranch] = useState<ConfigurationVersionInfo | null>(null);
   const [activeTab, setActiveTab] = useState('versions');
+  const [goldenVersion, setGoldenVersion] = useState<ConfigurationVersionInfo | null>(null);
+  const [loadingGolden, setLoadingGolden] = useState(false);
 
   useEffect(() => {
     if (token && asset.id) {
       fetchVersions(token, asset.id);
       fetchBranches(token, asset.id);
+      fetchGoldenVersion();
     }
   }, [token, asset.id, fetchVersions, fetchBranches]);
+
+  const fetchGoldenVersion = async () => {
+    if (!token || !asset.id) return;
+    
+    setLoadingGolden(true);
+    try {
+      const golden = await invoke<ConfigurationVersionInfo | null>('get_golden_version', {
+        token,
+        assetId: asset.id
+      });
+      setGoldenVersion(golden);
+    } catch (err) {
+      console.warn('Failed to fetch golden version:', err);
+    } finally {
+      setLoadingGolden(false);
+    }
+  };
 
   useEffect(() => {
     if (error) {
@@ -95,7 +117,18 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     // Refresh the versions list when status changes
     if (token && asset.id) {
       fetchVersions(token, asset.id);
+      fetchGoldenVersion(); // Also refresh golden version
     }
+  };
+
+  const handleGoldenPromotion = () => {
+    // Refresh both versions and golden version after promotion
+    handleStatusChange();
+  };
+
+  const handleExport = (version: ConfigurationVersionInfo, exportPath: string) => {
+    // Show success message with export details
+    message.success(`Configuration ${version.version_number} exported successfully to ${exportPath}`);
   };
 
   const handleCreateBranchFromManagement = () => {
@@ -180,6 +213,33 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
             </div>
           </div>
         </Card>
+
+        {/* Golden Version Display */}
+        {loadingGolden ? (
+          <Card style={{ marginBottom: '24px' }}>
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Spin />
+              <Text type="secondary" style={{ marginLeft: '8px' }}>
+                Loading Golden version...
+              </Text>
+            </div>
+          </Card>
+        ) : goldenVersion && (
+          <div style={{ marginBottom: '24px' }}>
+            <GoldenVersionIndicator
+              goldenVersion={goldenVersion}
+              onViewDetails={(version) => {
+                // Could implement a modal to view details
+                message.info(`Viewing details for Golden version ${version.version_number}`);
+              }}
+              onViewHistory={(version) => {
+                // Scroll to or highlight this version in the history
+                setActiveTab('versions');
+                message.info(`Golden version ${version.version_number} highlighted in history`);
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <Divider style={{ margin: '24px 0' }} />
@@ -228,6 +288,8 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                     onCreateBranch={handleCreateBranch}
                     showCreateBranch={true}
                     onStatusChange={handleStatusChange}
+                    onGoldenPromotion={handleGoldenPromotion}
+                    onExport={handleExport}
                   />
                 )}
               </div>

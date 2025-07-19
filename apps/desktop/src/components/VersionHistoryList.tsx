@@ -1,22 +1,26 @@
 import React from 'react';
-import { List } from 'antd';
+import { List, message } from 'antd';
 import { ConfigurationVersionInfo, sortVersions } from '../types/assets';
 import VersionCard from './VersionCard';
 import useAuthStore from '../store/auth';
-import { canChangeConfigurationStatus } from '../utils/roleUtils';
+import { canChangeConfigurationStatus, canPromoteToGolden, canExportConfiguration } from '../utils/roleUtils';
 
 interface VersionHistoryListProps {
   versions: ConfigurationVersionInfo[];
   onCreateBranch?: (version: ConfigurationVersionInfo) => void;
   showCreateBranch?: boolean;
   onStatusChange?: () => void;
+  onGoldenPromotion?: () => void;
+  onExport?: (version: ConfigurationVersionInfo, exportPath: string) => void;
 }
 
 const VersionHistoryList: React.FC<VersionHistoryListProps> = ({ 
   versions, 
   onCreateBranch, 
   showCreateBranch = false,
-  onStatusChange 
+  onStatusChange,
+  onGoldenPromotion,
+  onExport
 }) => {
   const { token, user } = useAuthStore();
   
@@ -24,6 +28,16 @@ const VersionHistoryList: React.FC<VersionHistoryListProps> = ({
   const sortedVersions = sortVersions(versions);
   
   const canUserChangeStatus = canChangeConfigurationStatus(user);
+  const canUserPromoteToGolden = canPromoteToGolden(user);
+  const canUserExport = canExportConfiguration(user);
+
+  const handleExport = (exportPath: string, version: ConfigurationVersionInfo) => {
+    if (onExport) {
+      onExport(version, exportPath);
+    } else {
+      message.success(`Configuration ${version.version_number} exported successfully to ${exportPath}`);
+    }
+  };
 
   return (
     <List
@@ -44,6 +58,10 @@ const VersionHistoryList: React.FC<VersionHistoryListProps> = ({
             onStatusChange={onStatusChange}
             token={token || undefined}
             canChangeStatus={canUserChangeStatus}
+            canPromoteToGolden={canUserPromoteToGolden}
+            onGoldenPromotion={onGoldenPromotion}
+            canExport={canUserExport}
+            onExport={(exportPath) => handleExport(exportPath, version)}
           />
         </List.Item>
       )}

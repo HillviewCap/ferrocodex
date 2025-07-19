@@ -47,14 +47,14 @@ describe('ConfigurationStatusBadge', () => {
   });
 
   it('shows tooltip with description on hover', async () => {
-    render(<ConfigurationStatusBadge status="Draft" showTooltip />);
+    render(<ConfigurationStatusBadge status="Draft" />);
     
     const badge = screen.getByText('Draft');
     expect(badge).toBeInTheDocument();
   });
 
-  it('does not show tooltip when showTooltip is false', () => {
-    render(<ConfigurationStatusBadge status="Draft" showTooltip={false} />);
+  it('renders without tooltip prop', () => {
+    render(<ConfigurationStatusBadge status="Draft" />);
     
     const badge = screen.getByText('Draft');
     expect(badge).toBeInTheDocument();

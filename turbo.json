@@ -22,6 +22,5 @@
       "cache": false
     }
   },
-  "globalDependencies": ["**/.env.*local"],
-  "ui": "tui"
+  "globalDependencies": ["**/.env.*local"]
 }

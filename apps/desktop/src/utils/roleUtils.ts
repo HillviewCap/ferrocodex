@@ -64,3 +64,12 @@ export const canSetGoldenStatus = (user: UserInfo | null): boolean => {
 export const canArchiveConfiguration = (user: UserInfo | null): boolean => {
   return isAdministrator(user);
 };
+
+export const canPromoteToGolden = (user: UserInfo | null): boolean => {
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canExportConfiguration = (user: UserInfo | null): boolean => {
+  // All authenticated users (Engineers and Administrators) can export configurations
+  return (isAdministrator(user) || isEngineer(user));
+};

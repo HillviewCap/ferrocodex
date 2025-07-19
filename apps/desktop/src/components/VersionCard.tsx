@@ -21,12 +21,16 @@ import {
   BranchesOutlined,
   MoreOutlined,
   EditOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  TrophyOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { ConfigurationVersionInfo, formatVersion, formatFileSize } from '../types/assets';
 import ConfigurationStatusBadge from './ConfigurationStatusBadge';
 import ChangeStatusModal from './ChangeStatusModal';
 import StatusHistoryModal from './StatusHistoryModal';
+import PromoteToGoldenWizard from './PromoteToGoldenWizard';
+import ExportConfirmationModal from './ExportConfirmationModal';
 
 const { Text } = Typography;
 
@@ -37,6 +41,10 @@ interface VersionCardProps {
   onStatusChange?: () => void;
   token?: string;
   canChangeStatus?: boolean;
+  canPromoteToGolden?: boolean;
+  onGoldenPromotion?: () => void;
+  canExport?: boolean;
+  onExport?: (exportPath: string) => void;
 }
 
 const VersionCard: React.FC<VersionCardProps> = React.memo(({ 
@@ -45,10 +53,16 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
   showCreateBranch = false,
   onStatusChange,
   token,
-  canChangeStatus = false
+  canChangeStatus = false,
+  canPromoteToGolden = false,
+  onGoldenPromotion,
+  canExport = false,
+  onExport
 }) => {
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
   const [showStatusHistoryModal, setShowStatusHistoryModal] = useState(false);
+  const [showGoldenPromotionWizard, setShowGoldenPromotionWizard] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -129,7 +143,52 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
     setShowStatusHistoryModal(true);
   };
 
+  const handlePromoteToGolden = () => {
+    setShowGoldenPromotionWizard(true);
+  };
+
+  const handleGoldenPromotionSuccess = () => {
+    setShowGoldenPromotionWizard(false);
+    if (onGoldenPromotion) {
+      onGoldenPromotion();
+    }
+    if (onStatusChange) {
+      onStatusChange();
+    }
+  };
+
+  const handleExport = () => {
+    setShowExportModal(true);
+  };
+
+  const handleExportSuccess = (exportPath: string) => {
+    setShowExportModal(false);
+    if (onExport) {
+      onExport(exportPath);
+    }
+  };
+
+  const canShowPromoteToGolden = canPromoteToGolden && 
+    token && 
+    version.status === 'Approved';
+
   const statusMenuItems: MenuProps['items'] = [
+    ...(canExport && token ? [
+      {
+        key: 'export',
+        label: 'Export',
+        icon: <DownloadOutlined />,
+        onClick: handleExport
+      }
+    ] : []),
+    ...(canShowPromoteToGolden ? [
+      {
+        key: 'promote-to-golden',
+        label: 'Promote to Golden',
+        icon: <TrophyOutlined />,
+        onClick: handlePromoteToGolden
+      }
+    ] : []),
     ...(canChangeStatus && token ? [
       {
         key: 'change-status',
@@ -278,6 +337,22 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
           <StatusHistoryModal
             visible={showStatusHistoryModal}
             onCancel={() => setShowStatusHistoryModal(false)}
+            version={version}
+            token={token}
+          />
+          
+          <PromoteToGoldenWizard
+            visible={showGoldenPromotionWizard}
+            onCancel={() => setShowGoldenPromotionWizard(false)}
+            onSuccess={handleGoldenPromotionSuccess}
+            version={version}
+            token={token}
+          />
+          
+          <ExportConfirmationModal
+            visible={showExportModal}
+            onCancel={() => setShowExportModal(false)}
+            onSuccess={handleExportSuccess}
             version={version}
             token={token}
           />

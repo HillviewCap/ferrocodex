@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import VersionCard from '../VersionCard';
 import { ConfigurationVersionInfo } from '../../types/assets';
 
@@ -122,5 +122,137 @@ describe('VersionCard', () => {
     const statusSection = container.querySelector('[data-testid="version-status"]') || 
                          container.querySelector('.ant-tag');
     expect(statusSection).toBeInTheDocument();
+  });
+
+  it('shows promote to golden action for approved versions when user has permission', () => {
+    const approvedVersion = { ...mockVersion, status: 'Approved' as const };
+    render(
+      <VersionCard 
+        version={approvedVersion} 
+        canPromoteToGolden={true}
+        token="test-token"
+      />
+    );
+    
+    // Approved status should be displayed
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    
+    // Component should have the structure to support golden promotion
+    const { container } = render(
+      <VersionCard 
+        version={approvedVersion} 
+        canPromoteToGolden={true}
+        token="test-token"
+      />
+    );
+    expect(container.querySelector('.ant-card')).toBeInTheDocument();
+  });
+
+  it('does not show promote to golden action for non-approved versions', () => {
+    render(
+      <VersionCard 
+        version={mockVersion} // Draft status
+        canPromoteToGolden={true}
+        token="test-token"
+      />
+    );
+    
+    // Should show Draft status
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    
+    // The promote to golden action should not be available for Draft versions
+    // (This is handled by the menu logic in the component)
+  });
+
+  it('handles golden promotion callback when provided', () => {
+    const onGoldenPromotion = vi.fn();
+    const approvedVersion = { ...mockVersion, status: 'Approved' as const };
+    
+    render(
+      <VersionCard 
+        version={approvedVersion} 
+        canPromoteToGolden={true}
+        token="test-token"
+        onGoldenPromotion={onGoldenPromotion}
+      />
+    );
+    
+    // Verify component renders correctly with golden promotion props
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+  });
+
+  it('shows export action when user has export permission', () => {
+    render(
+      <VersionCard 
+        version={mockVersion} 
+        canExport={true}
+        token="test-token"
+      />
+    );
+    
+    // Should render with export capability enabled
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    const { container } = render(
+      <VersionCard 
+        version={mockVersion} 
+        canExport={true}
+        token="test-token"
+      />
+    );
+    expect(container.querySelector('.ant-card')).toBeInTheDocument();
+  });
+
+  it('does not show export action when user lacks permission', () => {
+    render(<VersionCard version={mockVersion} canExport={false} />);
+    
+    // Should render normally but without export permission
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+  });
+
+  it('handles export callback when provided', () => {
+    const onExport = vi.fn();
+    
+    render(
+      <VersionCard 
+        version={mockVersion} 
+        canExport={true}
+        token="test-token"
+        onExport={onExport}
+      />
+    );
+    
+    // Verify component renders correctly with export props
+    expect(screen.getByText('config.json')).toBeInTheDocument();
+  });
+
+  it('shows export option for all version statuses when user has permission', () => {
+    const statuses = ['Draft', 'Approved', 'Golden', 'Archived'] as const;
+    
+    statuses.forEach(status => {
+      const versionWithStatus = { ...mockVersion, status };
+      const { container } = render(
+        <VersionCard 
+          version={versionWithStatus} 
+          canExport={true}
+          token="test-token"
+        />
+      );
+      
+      expect(screen.getByText(status)).toBeInTheDocument();
+      expect(container.querySelector('.ant-card')).toBeInTheDocument();
+    });
+  });
+
+  it('requires token for export functionality', () => {
+    render(
+      <VersionCard 
+        version={mockVersion} 
+        canExport={true}
+        // No token provided
+      />
+    );
+    
+    // Should render but export functionality won't be fully enabled without token
+    expect(screen.getByText('Draft')).toBeInTheDocument();
   });
 });

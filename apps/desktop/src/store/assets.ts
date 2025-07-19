@@ -9,6 +9,8 @@ interface AssetState {
   versions: ConfigurationVersionInfo[];
   versionsLoading: boolean;
   currentView: 'dashboard' | 'history';
+  goldenVersions: Record<number, ConfigurationVersionInfo | null>; // Map asset_id to golden version
+  goldenVersionsLoading: Record<number, boolean>; // Track loading state per asset
   
   // Actions
   fetchAssets: (token: string) => Promise<void>;
@@ -20,6 +22,14 @@ interface AssetState {
   setCurrentView: (view: 'dashboard' | 'history') => void;
   navigateToHistory: (asset: AssetInfo) => void;
   navigateToDashboard: () => void;
+  
+  // Golden promotion actions
+  fetchGoldenVersion: (token: string, assetId: number) => Promise<ConfigurationVersionInfo | null>;
+  promoteToGolden: (token: string, versionId: number, reason: string) => Promise<void>;
+  checkPromotionEligibility: (token: string, versionId: number) => Promise<boolean>;
+  
+  // Export actions
+  exportConfiguration: (token: string, versionId: number, exportPath: string) => Promise<void>;
 }
 
 const useAssetStore = create<AssetState>((set, get) => ({
@@ -30,6 +40,8 @@ const useAssetStore = create<AssetState>((set, get) => ({
   versions: [],
   versionsLoading: false,
   currentView: 'dashboard',
+  goldenVersions: {},
+  goldenVersionsLoading: {},
 
   fetchAssets: async (token: string) => {
     set({ isLoading: true, error: null });
@@ -114,6 +126,83 @@ const useAssetStore = create<AssetState>((set, get) => ({
       selectedAsset: null,
       versions: []
     });
+  },
+
+  fetchGoldenVersion: async (token: string, assetId: number) => {
+    set(state => ({ 
+      goldenVersionsLoading: { ...state.goldenVersionsLoading, [assetId]: true } 
+    }));
+    
+    try {
+      const goldenVersion = await window.__TAURI__.invoke('get_golden_version', {
+        token,
+        assetId
+      });
+      
+      set(state => ({
+        goldenVersions: { ...state.goldenVersions, [assetId]: goldenVersion },
+        goldenVersionsLoading: { ...state.goldenVersionsLoading, [assetId]: false }
+      }));
+      
+      return goldenVersion;
+    } catch (error) {
+      console.error('Failed to fetch golden version:', error);
+      set(state => ({
+        goldenVersionsLoading: { ...state.goldenVersionsLoading, [assetId]: false },
+        error: error instanceof Error ? error.message : 'Failed to fetch golden version'
+      }));
+      throw error;
+    }
+  },
+
+  promoteToGolden: async (token: string, versionId: number, reason: string) => {
+    try {
+      await window.__TAURI__.invoke('promote_to_golden', {
+        token,
+        versionId,
+        promotionReason: reason
+      });
+      
+      // After successful promotion, we should refresh the versions and golden version
+      // This will be handled by the calling component
+    } catch (error) {
+      console.error('Failed to promote to golden:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to promote to golden';
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  checkPromotionEligibility: async (token: string, versionId: number) => {
+    try {
+      const isEligible = await window.__TAURI__.invoke('get_promotion_eligibility', {
+        token,
+        versionId
+      });
+      return isEligible;
+    } catch (error) {
+      console.error('Failed to check promotion eligibility:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check promotion eligibility';
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  exportConfiguration: async (token: string, versionId: number, exportPath: string) => {
+    try {
+      await window.__TAURI__.invoke('export_configuration_version', {
+        token,
+        versionId,
+        exportPath
+      });
+      
+      // No state updates needed for successful export
+    } catch (error) {
+      console.error('Failed to export configuration:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export configuration';
+      set({ error: errorMessage });
+      throw error;
+    }
   }
 }));
 

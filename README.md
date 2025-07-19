@@ -16,7 +16,7 @@ A secure cross-platform desktop application for password management and encrypte
 - **Node.js**: 18+ 
 - **Rust**: 1.78.0+
 - **Platform-specific dependencies**:
-  - **Linux**: `libwebkit2gtk-4.0-dev`, `build-essential`, `curl`, `wget`, `file`, `libgtk-3-dev`, `librsvg2-dev`
+  - **Linux**: `libwebkit2gtk-4.1-dev`, `build-essential`, `curl`, `wget`, `file`, `libgtk-3-dev`, `librsvg2-dev`
   - **macOS**: Xcode Command Line Tools
   - **Windows**: Microsoft Visual Studio C++ Build Tools
 
@@ -36,7 +36,7 @@ A secure cross-platform desktop application for password management and encrypte
 3. **Install platform dependencies** (Linux example):
    ```bash
    sudo apt update
-   sudo apt install libwebkit2gtk-4.0-dev build-essential curl wget file libgtk-3-dev librsvg2-dev
+   sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libgtk-3-dev librsvg2-dev
    ```
 
 ## Development

@@ -1308,12 +1308,223 @@ async fn get_available_status_transitions(
     }
 }
 
+// Golden Promotion Commands
+
+#[tauri::command]
+async fn promote_to_golden(
+    token: String,
+    version_id: i64,
+    promotion_reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can promote to Golden
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to promote to Golden: {}", session.username);
+        return Err("Only Engineers and Administrators can promote versions to Golden".to_string());
+    }
+
+    // Validate inputs
+    let promotion_reason = promotion_reason.map(|r| InputSanitizer::sanitize_string(&r));
+    
+    if let Some(ref reason) = promotion_reason {
+        if InputSanitizer::is_potentially_malicious(reason) {
+            error!("Potentially malicious input detected in promote_to_golden");
+            return Err("Invalid input detected".to_string());
+        }
+        if reason.len() > 500 {
+            return Err("Promotion reason cannot exceed 500 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+
+            // Check promotion eligibility
+            let is_eligible = config_repo.get_promotion_eligibility(version_id)
+                .map_err(|e| format!("Failed to check promotion eligibility: {}", e))?;
+
+            if !is_eligible {
+                return Err("Version is not eligible for Golden promotion. Only Approved versions can be promoted.".to_string());
+            }
+
+            match config_repo.promote_to_golden(version_id, session.user_id, promotion_reason) {
+                Ok(_) => {
+                    info!("Version promoted to Golden by {}: Version ID {}", session.username, version_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to promote to Golden: {}", e);
+                    Err(format!("Failed to promote to Golden: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_golden_version(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Option<ConfigurationVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_golden_version(asset_id) {
+                Ok(golden_version) => {
+                    info!("Golden version accessed by {}: Asset ID {}", session.username, asset_id);
+                    Ok(golden_version)
+                }
+                Err(e) => {
+                    error!("Failed to get Golden version: {}", e);
+                    Err(format!("Failed to get Golden version: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_promotion_eligibility(
+    token: String,
+    version_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<bool, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_promotion_eligibility(version_id) {
+                Ok(eligibility) => {
+                    info!("Promotion eligibility checked by {}: Version ID {}", session.username, version_id);
+                    Ok(eligibility)
+                }
+                Err(e) => {
+                    error!("Failed to check promotion eligibility: {}", e);
+                    Err(format!("Failed to check promotion eligibility: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn export_configuration_version(
+    token: String,
+    version_id: i64,
+    export_path: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let export_path = InputSanitizer::sanitize_string(&export_path);
+    
+    if InputSanitizer::is_potentially_malicious(&export_path) {
+        error!("Potentially malicious input detected in export_configuration_version");
+        return Err("Invalid export path detected".to_string());
+    }
+
+    if export_path.trim().is_empty() {
+        return Err("Export path cannot be empty".to_string());
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            let start_time = std::time::Instant::now();
+            
+            match config_repo.export_configuration_version(version_id, &export_path) {
+                Ok(_) => {
+                    let duration = start_time.elapsed();
+                    
+                    // Log performance metrics
+                    if duration.as_secs() >= 2 {
+                        warn!("Export operation took {} seconds, exceeding 2-second requirement", duration.as_secs_f64());
+                    } else {
+                        info!("Export completed in {:.2} seconds", duration.as_secs_f64());
+                    }
+                    
+                    info!("Configuration exported by {}: Version ID {} to {}", session.username, version_id, export_path);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to export configuration: {}", e);
+                    Err(format!("Failed to export configuration: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(DatabaseState::default())
         .manage(SessionManagerState::default())
         .manage(LoginAttemptTrackerState::default())
@@ -1339,6 +1550,10 @@ pub fn run() {
             update_configuration_status,
             get_configuration_status_history,
             get_available_status_transitions,
+            promote_to_golden,
+            get_golden_version,
+            get_promotion_eligibility,
+            export_configuration_version,
             create_branch,
             get_branches,
             get_branch_details,

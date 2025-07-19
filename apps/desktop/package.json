@@ -17,6 +17,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
     "antd": "~5.17.4",
     "react": "~18.3.1",
     "react-dom": "~18.3.1",
