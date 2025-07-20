@@ -9,6 +9,7 @@ Ferrocodex is a secure OT (Operational Technology) configuration management plat
 ## Development Commands
 
 ### Quick Start
+
 ```bash
 # Install dependencies (from root)
 npm install
@@ -22,6 +23,7 @@ npm run tauri:dev
 ```
 
 ### Essential Commands
+
 ```bash
 # From root directory:
 npm run dev          # Start development server with hot reload
@@ -39,6 +41,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
 ### Running Individual Tests
+
 ```bash
 # Frontend test for specific file
 cd apps/desktop
@@ -51,6 +54,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
 ## Architecture Overview
 
 ### Technology Stack
+
 - **Frontend**: React 18 + TypeScript + Vite + Ant Design + Zustand
 - **Backend**: Rust + Tauri 2.0 + SQLite (encrypted) + bcrypt
 - **Testing**: Vitest (frontend) + Rust built-in tests (backend)
@@ -80,6 +84,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
    - Session tokens with automatic validation
 
 ### Project Structure
+
 ```
 apps/desktop/
 ├── src/                    # React frontend
