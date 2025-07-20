@@ -55,7 +55,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const branches = await invoke<BranchInfo[]>('get_branches', { 
         token, 
-        asset_id: assetId 
+        assetId: assetId 
       });
       set({ branches, isLoading: false });
     } catch (error) {
@@ -73,8 +73,8 @@ const useBranchStore = create<BranchState>((set, get) => ({
         token,
         name: request.name,
         description: request.description || null,
-        asset_id: request.asset_id,
-        parent_version_id: request.parent_version_id
+        assetId: request.asset_id,
+        parentVersionId: request.parent_version_id
       });
       
       // Add to the beginning of the branches array
@@ -95,7 +95,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const branch = await invoke<BranchInfo>('get_branch_details', {
         token,
-        branch_id: branchId
+        branchId: branchId
       });
       return branch;
     } catch (error) {
@@ -147,7 +147,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const versions = await invoke<BranchVersionInfo[]>('get_branch_versions', {
         token,
-        branch_id: branchId,
+        branchId: branchId,
         page: page || 1,
         limit: limit || 50
       });
@@ -172,8 +172,8 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const versionInfo = await invoke<BranchVersionInfo>('import_version_to_branch', {
         token,
-        branch_id: request.branch_id,
-        file_path: request.file_path,
+        branchId: request.branch_id,
+        filePath: request.file_path,
         notes: request.notes
       });
       
@@ -199,7 +199,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const version = await invoke<BranchVersionInfo | null>('get_branch_latest_version', {
         token,
-        branch_id: branchId
+        branchId: branchId
       });
       return version || null;
     } catch (error) {
@@ -214,9 +214,9 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const diff = await invoke<string>('compare_branch_versions', {
         token,
-        branch_id: branchId,
-        version1_id: version1Id,
-        version2_id: version2Id
+        branchId: branchId,
+        version1Id: version1Id,
+        version2Id: version2Id
       });
       return diff;
     } catch (error) {
