@@ -89,7 +89,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     try {
       const response = await invoke<BranchInfo[]>('get_branches', {
         token,
-        asset_id: asset.id
+        assetId: asset.id
       });
       
       const sortedBranches = sortBranchesByCreated(response);
