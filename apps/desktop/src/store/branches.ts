@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
 import { BranchInfo, CreateBranchRequest, BranchVersionInfo, CreateBranchVersionRequest } from '../types/branches';
 
 interface BranchState {
@@ -52,7 +53,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
   fetchBranches: async (token: string, assetId: number) => {
     set({ isLoading: true, error: null });
     try {
-      const branches = await window.__TAURI__.invoke('get_branches', { 
+      const branches = await invoke<BranchInfo[]>('get_branches', { 
         token, 
         asset_id: assetId 
       });
@@ -68,7 +69,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
 
   createBranch: async (token: string, request: CreateBranchRequest) => {
     try {
-      const branch = await window.__TAURI__.invoke('create_branch', {
+      const branch = await invoke<BranchInfo>('create_branch', {
         token,
         name: request.name,
         description: request.description || null,
@@ -92,7 +93,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
 
   getBranchDetails: async (token: string, branchId: number) => {
     try {
-      const branch = await window.__TAURI__.invoke('get_branch_details', {
+      const branch = await invoke<BranchInfo>('get_branch_details', {
         token,
         branch_id: branchId
       });
@@ -144,7 +145,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
   fetchBranchVersions: async (token: string, branchId: number, page?: number, limit?: number) => {
     set({ isLoadingVersions: true, versionsError: null });
     try {
-      const versions = await window.__TAURI__.invoke('get_branch_versions', {
+      const versions = await invoke<BranchVersionInfo[]>('get_branch_versions', {
         token,
         branch_id: branchId,
         page: page || 1,
@@ -169,7 +170,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
   importVersionToBranch: async (token: string, request: CreateBranchVersionRequest) => {
     set({ isImportingVersion: true, versionsError: null });
     try {
-      const versionInfo = await window.__TAURI__.invoke('import_version_to_branch', {
+      const versionInfo = await invoke<BranchVersionInfo>('import_version_to_branch', {
         token,
         branch_id: request.branch_id,
         file_path: request.file_path,
@@ -196,7 +197,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
 
   getBranchLatestVersion: async (token: string, branchId: number) => {
     try {
-      const version = await window.__TAURI__.invoke('get_branch_latest_version', {
+      const version = await invoke<BranchVersionInfo | null>('get_branch_latest_version', {
         token,
         branch_id: branchId
       });
@@ -211,7 +212,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
 
   compareBranchVersions: async (token: string, branchId: number, version1Id: number, version2Id: number) => {
     try {
-      const diff = await window.__TAURI__.invoke('compare_branch_versions', {
+      const diff = await invoke<string>('compare_branch_versions', {
         token,
         branch_id: branchId,
         version1_id: version1Id,

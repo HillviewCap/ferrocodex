@@ -21,6 +21,7 @@ import {
   CalendarOutlined,
   UserOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { BranchInfo, validateBranchName, validateBranchDescription } from '../types/branches';
 import useAuthStore from '../store/auth';
@@ -72,7 +73,7 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       const values = await form.validateFields();
       setCreating(true);
 
-      const response = await window.__TAURI__.invoke('create_branch', {
+      const response = await invoke<BranchInfo>('create_branch', {
         token,
         name: values.name,
         description: values.description || null,

@@ -19,6 +19,7 @@ import {
   FileOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize } from '../types/assets';
 import useAuthStore from '../store/auth';
 
@@ -100,7 +101,7 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
         });
       }, 100);
 
-      const response = await window.__TAURI__.invoke('import_configuration', {
+      const response = await invoke<AssetInfo>('import_configuration', {
         token,
         asset_name: values.assetName,
         file_path: selectedFile.path,
