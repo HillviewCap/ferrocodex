@@ -89,7 +89,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
     try {
       const versions = await invoke<ConfigurationVersionInfo[]>('get_configuration_versions', {
         token,
-        asset_id: assetId
+        assetId: assetId
       });
       set({ versions, versionsLoading: false });
     } catch (error) {
@@ -160,7 +160,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
     try {
       await invoke<void>('promote_to_golden', {
         token,
-        versionId,
+        versionId: versionId,
         promotionReason: reason
       });
       
@@ -178,7 +178,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
     try {
       const isEligible = await invoke<boolean>('get_promotion_eligibility', {
         token,
-        versionId
+        versionId: versionId
       });
       return isEligible;
     } catch (error) {
@@ -193,8 +193,8 @@ const useAssetStore = create<AssetState>((set, get) => ({
     try {
       await invoke<void>('export_configuration_version', {
         token,
-        versionId,
-        exportPath
+        versionId: versionId,
+        exportPath: exportPath
       });
       
       // No state updates needed for successful export
