@@ -236,6 +236,42 @@ impl InputSanitizer {
 
         false
     }
+
+    /// Validates file paths for security concerns without flagging legitimate OS paths
+    pub fn validate_file_path(path: &str) -> Result<(), String> {
+        // Check for directory traversal attempts
+        if path.contains("..") || path.contains("~") {
+            return Err("Path traversal attempt detected".to_string());
+        }
+
+        // Check for null bytes
+        if path.contains('\0') {
+            return Err("Invalid path: contains null bytes".to_string());
+        }
+
+        // Check for extremely long paths (potential buffer overflow)
+        if path.len() > 4096 {
+            return Err("Path too long".to_string());
+        }
+
+        // Allow legitimate Windows paths (C:\, D:\, etc.) and Unix paths
+        // but still check for suspicious patterns in the path content
+        let path_lower = path.to_lowercase();
+        
+        // Check for suspicious executable or system file patterns
+        let dangerous_patterns = vec![
+            "autoexec.bat", "boot.ini", "win.ini", "system.ini",
+            "/etc/passwd", "/etc/shadow", ".ssh/id_rsa",
+        ];
+        
+        for pattern in dangerous_patterns {
+            if path_lower.contains(pattern) {
+                return Err(format!("Access to {} is not allowed", pattern));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -299,5 +335,28 @@ mod tests {
         assert!(InputSanitizer::is_potentially_malicious("DROP TABLE users"));
         assert!(InputSanitizer::is_potentially_malicious("../../../etc/passwd"));
         assert!(!InputSanitizer::is_potentially_malicious("normal user input"));
+    }
+
+    #[test]
+    fn test_file_path_validation() {
+        // Valid paths
+        assert!(InputSanitizer::validate_file_path("C:\\Users\\user\\Documents\\file.txt").is_ok());
+        assert!(InputSanitizer::validate_file_path("C:/Users/user/Documents/file.txt").is_ok());
+        assert!(InputSanitizer::validate_file_path("/home/user/documents/file.txt").is_ok());
+        assert!(InputSanitizer::validate_file_path("D:\\Projects\\config.json").is_ok());
+        assert!(InputSanitizer::validate_file_path("file.txt").is_ok());
+        
+        // Invalid paths - directory traversal
+        assert!(InputSanitizer::validate_file_path("../../../etc/passwd").is_err());
+        assert!(InputSanitizer::validate_file_path("..\\..\\windows\\system32").is_err());
+        assert!(InputSanitizer::validate_file_path("~/../../etc/passwd").is_err());
+        
+        // Invalid paths - dangerous files
+        assert!(InputSanitizer::validate_file_path("C:\\Windows\\System32\\boot.ini").is_err());
+        assert!(InputSanitizer::validate_file_path("/etc/passwd").is_err());
+        assert!(InputSanitizer::validate_file_path("/etc/shadow").is_err());
+        
+        // Invalid paths - null bytes
+        assert!(InputSanitizer::validate_file_path("file\0.txt").is_err());
     }
 }
