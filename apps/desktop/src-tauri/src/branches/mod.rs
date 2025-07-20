@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
+use tracing::{info, error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Branch {
@@ -310,6 +311,54 @@ impl<'a> SqliteBranchRepository<'a> {
 
         Ok(())
     }
+
+    fn copy_parent_version_to_branch(&self, branch_id: i64, parent_version_id: i64, created_by: i64) -> Result<BranchVersion> {
+        use crate::configurations::{SqliteConfigurationRepository, ConfigurationRepository, CreateConfigurationRequest};
+        
+        // Get the parent version details and content
+        let config_repo = SqliteConfigurationRepository::new(self.conn);
+        
+        let parent_config = config_repo.get_configuration_by_id(parent_version_id)?
+            .ok_or_else(|| anyhow::anyhow!("Parent version not found"))?;
+        
+        let parent_content = config_repo.get_configuration_content(parent_version_id)?;
+        
+        // Get the asset_id from the branch
+        let asset_id: i64 = self.conn.query_row(
+            "SELECT asset_id FROM branches WHERE id = ?1",
+            [branch_id],
+            |row| row.get(0)
+        )?;
+        
+        // Create a new configuration version as a copy of the parent
+        let config_request = CreateConfigurationRequest {
+            asset_id,
+            file_name: parent_config.file_name.clone(),
+            file_content: parent_content,
+            author: created_by,
+            notes: format!("Initial branch version created from parent version {}", parent_config.version_number),
+        };
+        
+        let new_config = config_repo.store_configuration(config_request)?;
+        
+        // Create the branch version entry
+        let branch_version_number = self.get_next_branch_version_number(branch_id)?;
+        
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO branch_versions (branch_id, version_id, branch_version_number, is_latest)
+             VALUES (?1, ?2, ?3, 1) RETURNING *"
+        )?;
+        
+        let branch_version = stmt.query_row(
+            params![branch_id, new_config.id, &branch_version_number],
+            Self::row_to_branch_version,
+        )?;
+        
+        // Update branch with latest version info
+        self.update_branch_latest_version(branch_id, new_config.id, &branch_version_number)?;
+        
+        Ok(branch_version)
+    }
 }
 
 impl<'a> BranchRepository for SqliteBranchRepository<'a> {
@@ -353,6 +402,21 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
             ),
             Self::row_to_branch,
         )?;
+
+        // Automatically create an initial branch version from the parent version
+        let result = self.copy_parent_version_to_branch(branch.id, request.parent_version_id, request.created_by);
+        
+        match result {
+            Ok(branch_version) => {
+                info!("Created initial branch version {} from parent version {}", 
+                    branch_version.branch_version_number, request.parent_version_id);
+            }
+            Err(e) => {
+                error!("Failed to create initial branch version: {}", e);
+                // We don't fail the branch creation if initial version fails
+                // The user can still import versions manually
+            }
+        }
 
         Ok(branch)
     }
