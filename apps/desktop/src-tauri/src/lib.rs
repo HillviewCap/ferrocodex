@@ -1480,16 +1480,17 @@ async fn export_configuration_version(
     };
     drop(session_manager_guard);
 
-    // Validate inputs
-    let export_path = InputSanitizer::sanitize_string(&export_path);
+    // Validate export path
+    let export_path = export_path.trim();
     
-    if InputSanitizer::is_potentially_malicious(&export_path) {
-        error!("Potentially malicious input detected in export_configuration_version");
-        return Err("Invalid export path detected".to_string());
-    }
-
-    if export_path.trim().is_empty() {
+    if export_path.is_empty() {
         return Err("Export path cannot be empty".to_string());
+    }
+    
+    // Use proper file path validation instead of generic malicious input check
+    if let Err(e) = InputSanitizer::validate_file_path(&export_path) {
+        error!("Invalid export path: {}", e);
+        return Err(format!("Invalid export path: {}", e));
     }
 
     let db_guard = db_state.lock().unwrap();

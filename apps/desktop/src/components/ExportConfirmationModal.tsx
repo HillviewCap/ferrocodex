@@ -113,47 +113,12 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
       // Log the path for debugging
       console.log('Attempting to export to path:', selectedPath);
       
-      // WORKAROUND: The backend validation flags Windows drive letters as malicious
-      // We need to convert the path to use forward slashes and lowercase the drive letter
-      let processedPath = selectedPath;
-      
-      // For Windows paths, convert to a format that won't trigger the validation
-      if (selectedPath.match(/^[A-Za-z]:\\/)) {
-        // Convert C:\path\to\file to C:/path/to/file
-        processedPath = selectedPath.replace(/\\/g, '/');
-        // Also try lowercase drive letter if uppercase fails
-        const lowercasePath = processedPath.charAt(0).toLowerCase() + processedPath.slice(1);
-        
-        console.log('Processed path for export:', processedPath);
-        
-        try {
-          // First try with forward slashes
-          await invoke('export_configuration_version', {
-            token,
-            versionId: version.id,
-            exportPath: processedPath
-          });
-        } catch (err: any) {
-          if (err.message && err.message.includes('Invalid export path')) {
-            console.log('Trying with lowercase drive letter:', lowercasePath);
-            // Try with lowercase drive letter
-            await invoke('export_configuration_version', {
-              token,
-              versionId: version.id,
-              exportPath: lowercasePath
-            });
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        // Non-Windows paths, use as-is
-        await invoke('export_configuration_version', {
-          token,
-          versionId: version.id,
-          exportPath: selectedPath
-        });
-      }
+      // Call the backend export function
+      await invoke('export_configuration_version', {
+        token,
+        versionId: version.id,
+        exportPath: selectedPath
+      });
 
       const duration = Date.now() - startTime;
 
