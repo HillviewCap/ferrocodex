@@ -22,19 +22,25 @@ function App() {
       setAppState('initializing');
       setError('');
       
+      console.log('Starting app initialization...');
+      
       // Initialize database
       await initializeDatabase();
+      console.log('Database initialized');
       
       // Check if this is first launch
       await checkFirstLaunch();
+      console.log('First launch check complete. isFirstLaunch:', isFirstLaunch);
       
       // Check existing session if user was previously authenticated
       if (isAuthenticated) {
+        console.log('User was previously authenticated, checking session...');
         await checkSession();
       }
       
       setAppState('ready');
     } catch (err) {
+      console.error('App initialization error:', err);
       setAppState('error');
       setError(err as string);
     }

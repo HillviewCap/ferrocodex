@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use tracing::info;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UserRole {
@@ -219,6 +220,7 @@ impl<'a> UserRepository for SqliteUserRepository<'a> {
             "SELECT COUNT(*) FROM users WHERE role = 'Administrator' AND is_active = 1"
         )?;
         let count: i64 = stmt.query_row([], |row| row.get(0))?;
+        info!("Admin user count: {}", count);
         Ok(count > 0)
     }
 
