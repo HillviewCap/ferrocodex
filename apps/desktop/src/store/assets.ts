@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 
 interface AssetState {
@@ -46,7 +47,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
   fetchAssets: async (token: string) => {
     set({ isLoading: true, error: null });
     try {
-      const assets = await window.__TAURI__.invoke('get_dashboard_assets', { token });
+      const assets = await invoke<AssetInfo[]>('get_dashboard_assets', { token });
       set({ assets, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch assets:', error);
@@ -59,7 +60,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
 
   createAsset: async (token: string, name: string, description: string) => {
     try {
-      const asset = await window.__TAURI__.invoke('create_asset', {
+      const asset = await invoke<AssetInfo>('create_asset', {
         token,
         name,
         description
@@ -86,7 +87,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
   fetchVersions: async (token: string, assetId: number) => {
     set({ versionsLoading: true, error: null });
     try {
-      const versions = await window.__TAURI__.invoke('get_configuration_versions', {
+      const versions = await invoke<ConfigurationVersionInfo[]>('get_configuration_versions', {
         token,
         asset_id: assetId
       });
@@ -134,7 +135,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
     }));
     
     try {
-      const goldenVersion = await window.__TAURI__.invoke('get_golden_version', {
+      const goldenVersion = await invoke<ConfigurationVersionInfo | null>('get_golden_version', {
         token,
         assetId
       });
@@ -157,7 +158,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
 
   promoteToGolden: async (token: string, versionId: number, reason: string) => {
     try {
-      await window.__TAURI__.invoke('promote_to_golden', {
+      await invoke<void>('promote_to_golden', {
         token,
         versionId,
         promotionReason: reason
@@ -175,7 +176,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
 
   checkPromotionEligibility: async (token: string, versionId: number) => {
     try {
-      const isEligible = await window.__TAURI__.invoke('get_promotion_eligibility', {
+      const isEligible = await invoke<boolean>('get_promotion_eligibility', {
         token,
         versionId
       });
@@ -190,7 +191,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
 
   exportConfiguration: async (token: string, versionId: number, exportPath: string) => {
     try {
-      await window.__TAURI__.invoke('export_configuration_version', {
+      await invoke<void>('export_configuration_version', {
         token,
         versionId,
         exportPath

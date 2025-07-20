@@ -27,6 +27,7 @@ import {
   UnorderedListOutlined,
   FileOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 import { BranchInfo, sortBranchesByCreated } from '../types/branches';
 import BranchCard from './BranchCard';
@@ -86,7 +87,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
 
     setLoading(true);
     try {
-      const response = await window.__TAURI__.invoke('get_branches', {
+      const response = await invoke<BranchInfo[]>('get_branches', {
         token,
         asset_id: asset.id
       });
