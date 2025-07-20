@@ -84,6 +84,17 @@ const AssetManagement: React.FC = () => {
     navigateToHistory(asset);
   };
 
+  const handleViewDetails = (asset: AssetInfo) => {
+    // For now, navigate to history view as it shows all details
+    navigateToHistory(asset);
+  };
+
+  const handleAddVersion = (asset: AssetInfo) => {
+    // Navigate to history view and show import modal
+    navigateToHistory(asset);
+    message.info('Navigate to Version History to import a new version');
+  };
+
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
     <Card 
       hoverable
@@ -91,13 +102,13 @@ const AssetManagement: React.FC = () => {
       bodyStyle={{ padding: '16px' }}
       actions={[
         <Tooltip title="View Details">
-          <EyeOutlined key="view" />
+          <EyeOutlined key="view" onClick={() => handleViewDetails(asset)} />
         </Tooltip>,
         <Tooltip title="Version History">
           <HistoryOutlined key="history" onClick={() => handleViewHistory(asset)} />
         </Tooltip>,
         <Tooltip title="Add Version">
-          <PlusOutlined key="add" />
+          <PlusOutlined key="add" onClick={() => handleAddVersion(asset)} />
         </Tooltip>
       ]}
     >
