@@ -342,7 +342,7 @@ impl<'a> SqliteBranchRepository<'a> {
         let new_config = config_repo.store_configuration(config_request)?;
         
         // Create the branch version entry
-        let branch_version_number = self.get_next_branch_version_number(branch_id)?;
+        let branch_version_number = self.generate_next_branch_version_number(branch_id)?;
         
         let mut stmt = self.conn.prepare(
             "INSERT INTO branch_versions (branch_id, version_id, branch_version_number, is_latest)
