@@ -4,7 +4,6 @@ import {
   Form, 
   Input, 
   Button, 
-  Upload, 
   message, 
   Space,
   Typography,
@@ -20,12 +19,12 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
+import * as dialog from '@tauri-apps/plugin-dialog';
 import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize } from '../types/assets';
 import useAuthStore from '../store/auth';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-const { Dragger } = Upload;
 
 interface ImportConfigurationModalProps {
   visible: boolean;
@@ -67,19 +66,42 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
     }
   };
 
-  const handleFileSelect = async (file: any) => {
-    // In a real Tauri app, you would use the file dialog
-    // For now, we'll simulate file selection
-    const fileInfo: FileInfo = {
-      name: file.name,
-      size: file.size,
-      path: file.path || file.name, // In real implementation, this would be the actual file path
-      type: file.type || 'application/octet-stream'
-    };
+  const handleFileSelect = async () => {
+    try {
+      const selected = await dialog.open({
+        multiple: false,
+        filters: [{
+          name: 'Configuration Files',
+          extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump', 'vio']
+        }]
+      });
 
-    setSelectedFile(fileInfo);
-    setCurrentStep(1);
-    return false; // Prevent default upload
+      if (selected && typeof selected === 'string') {
+        // Get file name from path
+        const fileName = selected.split(/[\\/]/).pop() || 'unknown';
+        
+        // For now, we'll set a placeholder size since we can't get it from the dialog
+        // In a production app, you might want to invoke a Rust command to get file info
+        const fileInfo: FileInfo = {
+          name: fileName,
+          size: 0, // Placeholder
+          path: selected,
+          type: 'application/octet-stream'
+        };
+
+        setSelectedFile(fileInfo);
+        setCurrentStep(1);
+      }
+    } catch (error) {
+      console.error('File selection error:', error);
+      message.error(`Failed to select file: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDraggerClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleFileSelect();
   };
 
   const handleImport = async () => {
@@ -103,8 +125,8 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
 
       const response = await invoke<AssetInfo>('import_configuration', {
         token,
-        asset_name: values.assetName,
-        file_path: selectedFile.path,
+        assetName: values.assetName,
+        filePath: selectedFile.path,
         notes: values.notes || ''
       });
 
@@ -163,20 +185,29 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
             Choose a configuration file to import. Supported formats include JSON, XML, YAML, and binary files.
           </Text>
           
-          <Dragger
-            accept=".json,.xml,.yaml,.yml,.txt,.cfg,.conf,.ini,.csv,.log,.properties,.config,.settings,.toml,.bin,.dat,.hex,.raw,.dump"
-            beforeUpload={handleFileSelect}
-            showUploadList={false}
-            style={{ marginBottom: '16px' }}
+          <div 
+            onClick={handleDraggerClick}
+            style={{ 
+              border: '1px dashed #d9d9d9',
+              borderRadius: '8px',
+              padding: '40px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              marginBottom: '16px',
+              backgroundColor: '#fafafa',
+              transition: 'border-color 0.3s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = '#40a9ff'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d9d9d9'}
           >
-            <p className="ant-upload-drag-icon">
+            <p style={{ fontSize: '48px', color: '#40a9ff', marginBottom: '8px' }}>
               <InboxOutlined />
             </p>
-            <p className="ant-upload-text">Click or drag file to this area to upload</p>
-            <p className="ant-upload-hint">
+            <p style={{ margin: '0 0 4px', fontSize: '16px' }}>Click to select configuration file</p>
+            <p style={{ margin: 0, color: '#8c8c8c', fontSize: '14px' }}>
               Support for configuration files up to 100MB
             </p>
-          </Dragger>
+          </div>
 
           <Alert
             message="Supported File Types"

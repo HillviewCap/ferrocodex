@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}

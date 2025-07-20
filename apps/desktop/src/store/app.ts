@@ -26,9 +26,12 @@ const useAppStore = create<AppState & AppActions>((set) => ({
   checkFirstLaunch: async () => {
     try {
       set({ isLoading: true, error: null });
+      console.log('Checking if this is first launch...');
       const isFirstLaunch: boolean = await invoke('is_first_launch');
+      console.log('Is first launch result:', isFirstLaunch);
       set({ isFirstLaunch, isLoading: false });
     } catch (error) {
+      console.error('Failed to check first launch:', error);
       set({ 
         error: error as string, 
         isLoading: false,

@@ -41,6 +41,8 @@ async fn initialize_database(app: AppHandle, db_state: State<'_, DatabaseState>)
         .map_err(|e| format!("Failed to get app data directory: {}", e))?;
     
     let db_path = app_data_dir.join("ferrocodex.db");
+    info!("Database path: {:?}", db_path);
+    info!("Database exists before creation: {}", db_path.exists());
     
     match Database::new(db_path) {
         Ok(database) => {
@@ -74,13 +76,16 @@ async fn database_health_check(db_state: State<'_, DatabaseState>) -> Result<boo
 
 #[tauri::command]
 async fn is_first_launch(db_state: State<'_, DatabaseState>) -> Result<bool, String> {
+    info!("Checking if this is first launch");
     let db_guard = db_state.lock().unwrap();
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
             let has_admins = user_repo.has_admin_users()
                 .map_err(|e| format!("Failed to check for admin users: {}", e))?;
-            Ok(!has_admins)
+            let is_first = !has_admins;
+            info!("Has admin users: {}, Is first launch: {}", has_admins, is_first);
+            Ok(is_first)
         }
         None => Err("Database not initialized".to_string()),
     }
