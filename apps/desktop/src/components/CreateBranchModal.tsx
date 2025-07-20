@@ -77,8 +77,8 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
         token,
         name: values.name,
         description: values.description || null,
-        asset_id: assetId,
-        parent_version_id: parentVersion.id
+        assetId: assetId,
+        parentVersionId: parentVersion.id
       });
 
       message.success('Branch created successfully!');
