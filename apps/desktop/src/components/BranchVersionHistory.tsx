@@ -13,7 +13,8 @@ import {
   Row,
   Col,
   Statistic,
-  Divider
+  Divider,
+  message
 } from 'antd';
 import {
   FileOutlined,
@@ -27,6 +28,7 @@ import { BranchInfo, BranchVersionInfo } from '../types/branches';
 import useAuthStore from '../store/auth';
 import useBranchStore from '../store/branches';
 import BranchVersionCard from './BranchVersionCard';
+import ExportConfirmationModal from './ExportConfirmationModal';
 
 const { Text } = Typography;
 
@@ -50,6 +52,8 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [compareResult, setCompareResult] = useState<string>('');
   const [isComparing, setIsComparing] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [versionToExport, setVersionToExport] = useState<BranchVersionInfo | null>(null);
 
   const versions = branchVersions[branch.id] || [];
 
@@ -102,6 +106,22 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
     setCompareModalVisible(false);
     setCompareResult('');
     setSelectedVersions([]);
+  };
+
+  const handleExportVersion = (version: BranchVersionInfo) => {
+    setVersionToExport(version);
+    setExportModalVisible(true);
+  };
+
+  const handleExportSuccess = (exportPath: string) => {
+    setExportModalVisible(false);
+    setVersionToExport(null);
+    message.success(`Branch version exported successfully to ${exportPath}`);
+  };
+
+  const handleExportCancel = () => {
+    setExportModalVisible(false);
+    setVersionToExport(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -288,6 +308,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
                   // Handle view version
                   console.log('View version:', version);
                 }}
+                onDownload={() => handleExportVersion(version)}
               />
             )}
           />
@@ -373,6 +394,30 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
           </div>
         )}
       </Modal>
+
+      {/* Export Modal */}
+      {versionToExport && token && (
+        <ExportConfirmationModal
+          visible={exportModalVisible}
+          onCancel={handleExportCancel}
+          onSuccess={handleExportSuccess}
+          version={{
+            id: versionToExport.version_id,
+            version_number: versionToExport.version_number,
+            file_name: versionToExport.file_name,
+            file_size: versionToExport.file_size,
+            created_at: versionToExport.created_at,
+            author_username: versionToExport.author_username,
+            status: 'Active',
+            notes: versionToExport.notes,
+            content_hash: '',
+            asset_id: 0,
+            is_golden: false,
+            status_history: []
+          }}
+          token={token}
+        />
+      )}
     </div>
   );
 };
