@@ -20,7 +20,9 @@ import {
   EyeOutlined,
   UploadOutlined,
   HistoryOutlined,
-  TagOutlined
+  TagOutlined,
+  ImportOutlined,
+  ExportOutlined
 } from '@ant-design/icons';
 import { BranchInfo, getBranchStatusColor, getBranchStatusText } from '../types/branches';
 
@@ -32,6 +34,8 @@ interface BranchCardProps {
   onSelectBranch?: (branch: BranchInfo) => void;
   onUpdateBranch?: (branch: BranchInfo) => void;
   onViewHistory?: (branch: BranchInfo) => void;
+  onImportVersion?: (branch: BranchInfo) => void;
+  onExportLatestVersion?: (branch: BranchInfo) => void;
   showActions?: boolean;
   versionCount?: number;
   latestVersionNumber?: string;
@@ -43,6 +47,8 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   onSelectBranch, 
   onUpdateBranch,
   onViewHistory,
+  onImportVersion,
+  onExportLatestVersion,
   showActions = true,
   versionCount = 0,
   latestVersionNumber
@@ -111,6 +117,18 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   const handleViewHistory = () => {
     if (onViewHistory) {
       onViewHistory(branch);
+    }
+  };
+
+  const handleImportVersion = () => {
+    if (onImportVersion) {
+      onImportVersion(branch);
+    }
+  };
+
+  const handleExportLatestVersion = () => {
+    if (onExportLatestVersion) {
+      onExportLatestVersion(branch);
     }
   };
 
@@ -230,15 +248,26 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   View Details
                 </Button>
               )}
-              {onUpdateBranch && branch.is_active && (
+              {onImportVersion && branch.is_active && (
                 <Button 
                   type="primary" 
                   size="small" 
-                  icon={<UploadOutlined />}
-                  onClick={handleUpdateBranch}
+                  icon={<ImportOutlined />}
+                  onClick={handleImportVersion}
                   style={{ width: '100%' }}
                 >
-                  Update Branch
+                  Import Version
+                </Button>
+              )}
+              {onExportLatestVersion && versionCount > 0 && (
+                <Button 
+                  type="default" 
+                  size="small" 
+                  icon={<ExportOutlined />}
+                  onClick={handleExportLatestVersion}
+                  style={{ width: '100%' }}
+                >
+                  Export Latest
                 </Button>
               )}
               {onViewHistory && versionCount > 0 && (

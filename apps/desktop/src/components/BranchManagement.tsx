@@ -33,6 +33,7 @@ import { BranchInfo, sortBranchesByCreated } from '../types/branches';
 import BranchCard from './BranchCard';
 import ImportVersionToBranchModal from './ImportVersionToBranchModal';
 import BranchVersionHistory from './BranchVersionHistory';
+import ExportConfirmationModal from './ExportConfirmationModal';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
 import useBranchStore from '../store/branches';
@@ -71,8 +72,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   // Branch version management state
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const [selectedBranchForImport, setSelectedBranchForImport] = useState<BranchInfo | null>(null);
   const [selectedBranchForHistory, setSelectedBranchForHistory] = useState<BranchInfo | null>(null);
+  const [selectedBranchForExport, setSelectedBranchForExport] = useState<BranchInfo | null>(null);
+  const [versionToExport, setVersionToExport] = useState<any>(null);
 
   useEffect(() => {
     fetchBranches();
@@ -173,6 +177,72 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const handleHistoryClose = () => {
     setHistoryModalVisible(false);
     setSelectedBranchForHistory(null);
+  };
+
+  const handleExportBranch = useCallback(async (branch: BranchInfo) => {
+    if (!token) return;
+    
+    // Fetch the latest version for this branch
+    const versions = branchVersions[branch.id] || [];
+    const latestVersion = versions.find(v => v.is_branch_latest);
+    
+    if (!latestVersion) {
+      // If no versions cached, fetch them
+      await fetchBranchVersions(token, branch.id);
+      const updatedVersions = branchVersions[branch.id] || [];
+      const latest = updatedVersions.find(v => v.is_branch_latest);
+      
+      if (!latest) {
+        message.warning('No versions found for this branch to export');
+        return;
+      }
+      
+      setVersionToExport({
+        id: latest.version_id,
+        version_number: latest.version_number,
+        file_name: latest.file_name,
+        file_size: latest.file_size,
+        created_at: latest.created_at,
+        author_username: latest.author_username,
+        status: 'Active',
+        notes: latest.notes,
+        content_hash: '',
+        asset_id: 0,
+        is_golden: false,
+        status_history: []
+      });
+    } else {
+      setVersionToExport({
+        id: latestVersion.version_id,
+        version_number: latestVersion.version_number,
+        file_name: latestVersion.file_name,
+        file_size: latestVersion.file_size,
+        created_at: latestVersion.created_at,
+        author_username: latestVersion.author_username,
+        status: 'Active',
+        notes: latestVersion.notes,
+        content_hash: '',
+        asset_id: 0,
+        is_golden: false,
+        status_history: []
+      });
+    }
+    
+    setSelectedBranchForExport(branch);
+    setExportModalVisible(true);
+  }, [token, branchVersions, fetchBranchVersions]);
+
+  const handleExportSuccess = (exportPath: string) => {
+    setExportModalVisible(false);
+    setSelectedBranchForExport(null);
+    setVersionToExport(null);
+    message.success(`Branch version exported successfully to ${exportPath}`);
+  };
+
+  const handleExportCancel = () => {
+    setExportModalVisible(false);
+    setSelectedBranchForExport(null);
+    setVersionToExport(null);
   };
 
   const branchTreeData = useMemo(() => {
@@ -443,9 +513,10 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
                       branch={branch}
                       onViewDetails={onViewBranchDetails}
                       onSelectBranch={showSelectActions ? onSelectBranch : undefined}
-                      onUpdateBranch={handleUpdateBranch}
+                      onImportVersion={handleUpdateBranch}
+                      onExportLatestVersion={handleExportBranch}
                       onViewHistory={handleViewBranchHistory}
-                      showActions={showSelectActions}
+                      showActions={true}
                       versionCount={versionInfo.count}
                       latestVersionNumber={versionInfo.latestVersionNumber}
                     />
@@ -509,6 +580,17 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Export Modal */}
+      {versionToExport && token && (
+        <ExportConfirmationModal
+          visible={exportModalVisible}
+          onCancel={handleExportCancel}
+          onSuccess={handleExportSuccess}
+          version={versionToExport}
+          token={token}
+        />
       )}
     </div>
   );
