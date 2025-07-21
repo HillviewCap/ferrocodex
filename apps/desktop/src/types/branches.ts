@@ -23,6 +23,7 @@ export interface BranchInfo {
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  version_count: number;
 }
 
 export interface CreateBranchRequest {

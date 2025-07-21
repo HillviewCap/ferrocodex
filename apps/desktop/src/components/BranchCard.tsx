@@ -269,7 +269,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   Import Version
                 </Button>
               )}
-              {onExportLatestVersion && branch.is_active && (
+              {onExportLatestVersion && branch.is_active && versionCount > 1 && (
                 <Button 
                   type="default" 
                   size="small" 
@@ -280,7 +280,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   Export Latest
                 </Button>
               )}
-              {onPromoteToSilver && branch.is_active && versionCount > 0 && (
+              {onPromoteToSilver && branch.is_active && versionCount > 1 && (
                 <Button 
                   type="default" 
                   size="small" 
@@ -295,7 +295,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   Promote to Silver
                 </Button>
               )}
-              {onViewHistory && versionCount > 0 && (
+              {onViewHistory && versionCount > 1 && (
                 <Button 
                   type="default" 
                   size="small" 

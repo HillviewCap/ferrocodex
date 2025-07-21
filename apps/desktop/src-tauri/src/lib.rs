@@ -936,7 +936,18 @@ async fn create_branch(
             match branch_repo.create_branch(request) {
                 Ok(branch) => {
                     info!("Branch created by {}: {} for asset {}", session.username, branch.name, asset_id);
-                    Ok(branch.into())
+                    // For a newly created branch, we need to fetch the full BranchInfo with proper metadata
+                    match branch_repo.get_branch_by_id(branch.id) {
+                        Ok(Some(branch_info)) => Ok(branch_info),
+                        Ok(None) => {
+                            error!("Created branch not found: {}", branch.id);
+                            Err("Failed to retrieve created branch".to_string())
+                        }
+                        Err(e) => {
+                            error!("Failed to retrieve created branch: {}", e);
+                            Err(format!("Failed to retrieve created branch: {}", e))
+                        }
+                    }
                 }
                 Err(e) => {
                     error!("Failed to create branch: {}", e);
