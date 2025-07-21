@@ -11,6 +11,7 @@ interface AppState {
 interface AppActions {
   checkFirstLaunch: () => Promise<void>;
   initializeDatabase: () => Promise<void>;
+  setFirstLaunchComplete: () => void;
   setLoading: (loading: boolean) => void;
   clearError: () => void;
 }
@@ -62,6 +63,8 @@ const useAppStore = create<AppState & AppActions>((set) => ({
     }
   },
 
+  setFirstLaunchComplete: () => set({ isFirstLaunch: false }),
+  
   setLoading: (loading: boolean) => set({ isLoading: loading }),
   
   clearError: () => set({ error: null }),

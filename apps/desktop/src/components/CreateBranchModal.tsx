@@ -11,16 +11,14 @@ import {
   Alert,
   Tag,
   Avatar,
-  Divider,
-  Checkbox
+  Checkbox,
+  Tooltip
 } from 'antd';
 import { 
   BranchesOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
-  FileOutlined,
-  CalendarOutlined,
-  UserOutlined
+  FileOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
@@ -152,7 +150,7 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       open={visible}
       onCancel={handleCancel}
       footer={null}
-      width={720}
+      width={600}
       closable={!creating}
       maskClosable={!creating}
       aria-labelledby="create-branch-modal-title"
@@ -161,63 +159,37 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       <div style={{ marginBottom: '24px' }}>
         <Alert
           message="Create a Branch"
-          description="Create a new branch from this configuration version to safely experiment with changes without affecting the main line of development."
+          description="Create a new branch from this version to safely experiment with changes."
           type="info"
           showIcon
-          icon={<InfoCircleOutlined />}
           style={{ marginBottom: '16px' }}
         />
 
-        <Card title="Parent Version" size="small" style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Card size="small" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Avatar 
               icon={<FileOutlined />} 
-              size={40}
+              size={32}
               style={{ backgroundColor: '#1890ff' }}
             />
-            <div style={{ flex: 1 }}>
-              <div style={{ marginBottom: '4px' }}>
-                <Space size={8}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ marginBottom: '2px' }}>
+                <Space size={6}>
                   <Tag color={getVersionColor(parentVersion.version_number)}>
                     {parentVersion.version_number}
                   </Tag>
-                  <Text strong>
+                  <Text strong style={{ fontSize: '13px' }}>
                     {parentVersion.file_name}
                   </Text>
                 </Space>
               </div>
               <div>
-                <Space size={12} wrap>
-                  <Space size={4}>
-                    <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                      {parentVersion.author_username}
-                    </Text>
-                  </Space>
-                  <Space size={4}>
-                    <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                      {formatDate(parentVersion.created_at)}
-                    </Text>
-                  </Space>
-                  <Space size={4}>
-                    <FileOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                      {formatFileSize(parentVersion.file_size)}
-                    </Text>
-                  </Space>
-                </Space>
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {parentVersion.author_username} · {formatDate(parentVersion.created_at)} · {formatFileSize(parentVersion.file_size)}
+                </Text>
               </div>
             </div>
           </div>
-          {parentVersion.notes && (
-            <>
-              <Divider style={{ margin: '12px 0' }} />
-              <Text type="secondary" style={{ fontSize: '12px', fontStyle: 'italic' }}>
-                {parentVersion.notes}
-              </Text>
-            </>
-          )}
         </Card>
       </div>
 
@@ -228,7 +200,14 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       >
         <Form.Item
           name="name"
-          label="Branch Name"
+          label={
+            <Space>
+              Branch Name
+              <Tooltip title="A unique name for this branch. Use descriptive names like 'test-new-parameters' or 'feature-improvements'">
+                <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+              </Tooltip>
+            </Space>
+          }
           rules={[
             { required: true, message: 'Please enter a branch name' },
             {
@@ -239,7 +218,6 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
               }
             }
           ]}
-          tooltip="A unique name for this branch. Use descriptive names like 'test-new-parameters' or 'feature-improvements'"
         >
           <Input 
             placeholder="e.g., test-new-parameters, feature-improvements"
@@ -250,7 +228,14 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
 
         <Form.Item
           name="description"
-          label="Description (Optional)"
+          label={
+            <Space>
+              Description (Optional)
+              <Tooltip title="Describe the purpose of this branch">
+                <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+              </Tooltip>
+            </Space>
+          }
           rules={[
             {
               validator: (_, value) => {
@@ -260,10 +245,9 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
               }
             }
           ]}
-          tooltip="Describe the purpose of this branch"
         >
           <TextArea
-            rows={3}
+            rows={2}
             placeholder="Describe the purpose of this branch..."
             showCount
             maxLength={500}
@@ -280,18 +264,11 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
         </Form.Item>
 
         <Alert
-          message="Branch Guidelines"
-          description={
-            <ul style={{ marginBottom: 0, paddingLeft: '20px' }}>
-              <li>Branch names should be descriptive and use kebab-case</li>
-              <li>Use branches for experimental changes or feature development</li>
-              <li>Each branch maintains its own configuration history</li>
-              <li>Branches can be merged back or kept separate as needed</li>
-            </ul>
-          }
+          message="Guidelines"
+          description="Use descriptive kebab-case names for experimental changes. Each branch maintains its own history."
           type="info"
           showIcon
-          style={{ marginBottom: '24px' }}
+          style={{ marginBottom: '16px' }}
         />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
