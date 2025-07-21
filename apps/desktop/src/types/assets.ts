@@ -12,9 +12,11 @@ export interface AssetInfo {
   name: string;
   description: string;
   created_by: number;
+  created_by_username: string;
   created_at: string;
   version_count: number;
   latest_version: string | null;
+  latest_version_notes: string | null;
 }
 
 export interface ConfigurationVersion {
