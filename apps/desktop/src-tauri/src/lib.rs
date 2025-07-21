@@ -1193,6 +1193,11 @@ async fn update_configuration_status(
     let status = ConfigurationStatus::from_str(&new_status)
         .ok_or_else(|| format!("Invalid status: {}", new_status))?;
 
+    // Prevent direct Golden status changes - must use promote_to_golden
+    if status == ConfigurationStatus::Golden {
+        return Err("Golden status can only be set through the promotion wizard. Please use 'Promote to Golden' option for Approved versions.".to_string());
+    }
+
     // Validate inputs
     let change_reason = change_reason.map(|r| InputSanitizer::sanitize_string(&r));
     

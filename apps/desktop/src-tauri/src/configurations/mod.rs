@@ -490,12 +490,12 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
                 match current {
                     ConfigurationStatus::Draft => {
                         transitions.push(ConfigurationStatus::Approved);
-                        transitions.push(ConfigurationStatus::Golden);
+                        // Golden status removed - must use promote_to_golden
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Approved => {
                         transitions.push(ConfigurationStatus::Draft);
-                        transitions.push(ConfigurationStatus::Golden);
+                        // Golden status removed - must use promote_to_golden
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Golden => {
@@ -504,9 +504,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Archived => {
-                        transitions.push(ConfigurationStatus::Draft);
-                        transitions.push(ConfigurationStatus::Approved);
-                        transitions.push(ConfigurationStatus::Golden);
+                        // Archived versions are immutable - no transitions allowed
                     }
                 }
             }

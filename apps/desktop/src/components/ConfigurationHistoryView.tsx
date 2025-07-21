@@ -11,7 +11,8 @@ import {
   Divider,
   Avatar,
   Tag,
-  Tabs
+  Tabs,
+  Switch
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -59,6 +60,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
   const [activeTab, setActiveTab] = useState('versions');
   const [goldenVersion, setGoldenVersion] = useState<ConfigurationVersionInfo | null>(null);
   const [loadingGolden, setLoadingGolden] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (token && asset.id) {
@@ -259,9 +261,19 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
             ),
             children: (
               <div>
-                <Text type="secondary" style={{ display: 'block', marginBottom: '24px' }}>
-                  Complete audit trail of all configuration changes. Select any version to create a branch from it.
-                </Text>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                  <Text type="secondary">
+                    Complete audit trail of all configuration changes. Select any version to create a branch from it.
+                  </Text>
+                  <Space>
+                    <Text type="secondary">Show archived versions</Text>
+                    <Switch 
+                      checked={showArchived} 
+                      onChange={setShowArchived}
+                      size="small"
+                    />
+                  </Space>
+                </div>
 
                 {versionsLoading ? (
                   <div style={{ textAlign: 'center', padding: '48px' }}>
@@ -283,14 +295,32 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                     }
                   />
                 ) : (
-                  <VersionHistoryList 
-                    versions={versions} 
-                    onCreateBranch={handleCreateBranch}
-                    showCreateBranch={true}
-                    onStatusChange={handleStatusChange}
-                    onGoldenPromotion={handleGoldenPromotion}
-                    onExport={handleExport}
-                  />
+                  (() => {
+                    const filteredVersions = showArchived 
+                      ? versions 
+                      : versions.filter(v => v.status !== 'Archived');
+                    const archivedCount = versions.filter(v => v.status === 'Archived').length;
+                    
+                    return (
+                      <>
+                        {!showArchived && archivedCount > 0 && (
+                          <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                            <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                              Hiding {archivedCount} archived {archivedCount === 1 ? 'version' : 'versions'}
+                            </Text>
+                          </div>
+                        )}
+                        <VersionHistoryList 
+                          versions={filteredVersions} 
+                          onCreateBranch={handleCreateBranch}
+                          showCreateBranch={true}
+                          onStatusChange={handleStatusChange}
+                          onGoldenPromotion={handleGoldenPromotion}
+                          onExport={handleExport}
+                        />
+                      </>
+                    );
+                  })()
                 )}
               </div>
             )

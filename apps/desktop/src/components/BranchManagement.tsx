@@ -75,7 +75,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [selectedBranchForImport, setSelectedBranchForImport] = useState<BranchInfo | null>(null);
   const [selectedBranchForHistory, setSelectedBranchForHistory] = useState<BranchInfo | null>(null);
-  const [selectedBranchForExport, setSelectedBranchForExport] = useState<BranchInfo | null>(null);
+  const [, setSelectedBranchForExport] = useState<BranchInfo | null>(null);
   const [versionToExport, setVersionToExport] = useState<any>(null);
 
   useEffect(() => {
@@ -160,13 +160,13 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   };
 
   const handleImportSuccess = () => {
-    setImportModalVisible(false);
-    setSelectedBranchForImport(null);
-    message.success('Version imported successfully!');
-    // Refresh branch versions if needed
+    // Refresh branch versions before clearing the selected branch
     if (selectedBranchForImport && token) {
       fetchBranchVersions(token, selectedBranchForImport.id);
     }
+    
+    setImportModalVisible(false);
+    setSelectedBranchForImport(null);
   };
 
   const handleImportCancel = () => {

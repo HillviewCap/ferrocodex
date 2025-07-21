@@ -408,12 +408,13 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
             file_size: versionToExport.file_size,
             created_at: versionToExport.created_at,
             author_username: versionToExport.author_username,
-            status: 'Active',
+            status: 'Draft',
             notes: versionToExport.notes,
             content_hash: '',
             asset_id: 0,
-            is_golden: false,
-            status_history: []
+            author: 0,
+            status_changed_by: undefined,
+            status_changed_at: undefined
           }}
           token={token}
         />
