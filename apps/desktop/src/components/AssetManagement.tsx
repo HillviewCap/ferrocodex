@@ -101,8 +101,16 @@ const AssetManagement: React.FC = () => {
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
     <Card 
       hoverable
-      style={{ height: '100%' }}
-      bodyStyle={{ padding: '16px' }}
+      style={{ 
+        height: '100%',
+        minHeight: '200px'
+      }}
+      bodyStyle={{ 
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100% - 57px)' // Account for actions bar
+      }}
       actions={[
         <Tooltip title="View Details">
           <EyeOutlined key="view" onClick={() => handleViewDetails(asset)} />
@@ -115,50 +123,57 @@ const AssetManagement: React.FC = () => {
         </Tooltip>
       ]}
     >
-      <Card.Meta
-        avatar={
-          <Avatar 
-            icon={<DatabaseOutlined />} 
-            style={{ backgroundColor: '#52c41a' }}
-          />
-        }
-        title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong style={{ fontSize: '16px' }}>{asset.name}</Text>
-            <Space>
-              {asset.version_count > 0 && (
-                <Tag color="blue">
-                  {formatVersion(asset.latest_version || 'v1')}
-                </Tag>
-              )}
-              <Tag color="green">
-                {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
-              </Tag>
-            </Space>
-          </div>
-        }
-        description={
-          <div style={{ marginTop: '8px' }}>
-            <Text type="secondary" style={{ fontSize: '14px' }}>
-              {asset.description || 'No description'}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+        <Avatar 
+          icon={<DatabaseOutlined />} 
+          style={{ backgroundColor: '#52c41a' }}
+          size={48}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+            <Text strong style={{ fontSize: '16px', lineHeight: '24px' }} ellipsis>
+              {asset.name}
             </Text>
-            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <Space size={4}>
-                <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  {formatDate(asset.created_at)}
-                </Text>
-              </Space>
-              <Space size={4}>
-                <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  ID: {asset.created_by}
-                </Text>
-              </Space>
-            </div>
+            <Tag color="blue" style={{ flexShrink: 0 }}>
+              {formatVersion(asset.latest_version || 'v1')}
+            </Tag>
           </div>
-        }
-      />
+          <Tag color="green">
+            {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
+          </Tag>
+        </div>
+      </div>
+      
+      <div style={{ flex: 1, marginBottom: '12px' }}>
+        <Text 
+          type="secondary" 
+          style={{ 
+            fontSize: '14px',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}
+        >
+          {asset.description || 'Configuration asset - imported from file'}
+        </Text>
+      </div>
+      
+      <div style={{ marginTop: 'auto' }}>
+        <Space size={4} style={{ marginBottom: '4px' }}>
+          <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {formatDate(asset.created_at)}
+          </Text>
+        </Space>
+        <br />
+        <Space size={4}>
+          <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            ID: {asset.created_by}
+          </Text>
+        </Space>
+      </div>
     </Card>
   );
 
@@ -226,7 +241,7 @@ const AssetManagement: React.FC = () => {
       ) : (
         <Row gutter={[16, 16]}>
           {assets.map(asset => (
-            <Col xs={24} sm={12} lg={8} xl={6} key={asset.id}>
+            <Col xs={24} sm={24} md={12} lg={8} xl={8} key={asset.id}>
               <AssetCard asset={asset} />
             </Col>
           ))}
