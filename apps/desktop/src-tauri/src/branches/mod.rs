@@ -30,6 +30,7 @@ pub struct BranchInfo {
     pub created_at: String,
     pub updated_at: String,
     pub is_active: bool,
+    pub version_count: i64,
 }
 
 impl From<Branch> for BranchInfo {
@@ -47,6 +48,7 @@ impl From<Branch> for BranchInfo {
             created_at: branch.created_at,
             updated_at: branch.updated_at,
             is_active: branch.is_active,
+            version_count: 0, // Will be populated by join query
         }
     }
 }
@@ -205,6 +207,7 @@ impl<'a> SqliteBranchRepository<'a> {
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             is_active: row.get("is_active")?,
+            version_count: row.get("version_count").unwrap_or(0),
         })
     }
 
@@ -438,7 +441,8 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT b.id, b.name, b.description, b.asset_id, b.parent_version_id, 
                     cv.version_number as parent_version_number, cv.status as parent_version_status, b.created_by, 
-                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active
+                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active,
+                    (SELECT COUNT(*) FROM branch_versions bv WHERE bv.branch_id = b.id) as version_count
              FROM branches b
              JOIN configuration_versions cv ON b.parent_version_id = cv.id
              JOIN users u ON b.created_by = u.id
@@ -460,7 +464,8 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT b.id, b.name, b.description, b.asset_id, b.parent_version_id, 
                     cv.version_number as parent_version_number, cv.status as parent_version_status, b.created_by, 
-                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active
+                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active,
+                    (SELECT COUNT(*) FROM branch_versions bv WHERE bv.branch_id = b.id) as version_count
              FROM branches b
              JOIN configuration_versions cv ON b.parent_version_id = cv.id
              JOIN users u ON b.created_by = u.id

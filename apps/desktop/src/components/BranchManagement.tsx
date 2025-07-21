@@ -90,6 +90,8 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     filterBranches();
   }, [branches, searchTerm, showActiveOnly, hideArchivedParents]);
 
+  // No longer need to fetch all branch versions on load since version_count is included in BranchInfo
+
   const fetchBranches = useCallback(async () => {
     if (!token) return;
 
@@ -167,7 +169,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setImportModalVisible(true);
   };
 
-  const handleViewBranchHistory = (branch: BranchInfo) => {
+  const handleViewBranchHistory = async (branch: BranchInfo) => {
+    // Ensure branch versions are fetched before showing history
+    if (!branchVersions[branch.id] && token) {
+      await fetchBranchVersions(token, branch.id);
+    }
     setSelectedBranchForHistory(branch);
     setHistoryModalVisible(true);
   };
@@ -179,6 +185,8 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     // Refresh branch versions after modal is closed
     if (selectedBranchForImport && token) {
       await fetchBranchVersions(token, selectedBranchForImport.id);
+      // Also refresh the branches list to update version_count
+      await fetchBranches();
     }
     
     // Clear the selected branch
@@ -198,51 +206,40 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const handleExportBranch = useCallback(async (branch: BranchInfo) => {
     if (!token) return;
     
-    // Fetch the latest version for this branch
-    const versions = branchVersions[branch.id] || [];
+    // Check if branch has any versions
+    if (branch.version_count === 0) {
+      message.warning('No versions found for this branch to export');
+      return;
+    }
+    
+    // Fetch the latest version for this branch if not already loaded
+    let versions = branchVersions[branch.id] || [];
+    if (versions.length === 0) {
+      await fetchBranchVersions(token, branch.id);
+      versions = branchVersions[branch.id] || [];
+    }
+    
     const latestVersion = versions.find(v => v.is_branch_latest);
     
     if (!latestVersion) {
-      // If no versions cached, fetch them
-      await fetchBranchVersions(token, branch.id);
-      const updatedVersions = branchVersions[branch.id] || [];
-      const latest = updatedVersions.find(v => v.is_branch_latest);
-      
-      if (!latest) {
-        message.warning('No versions found for this branch to export');
-        return;
-      }
-      
-      setVersionToExport({
-        id: latest.version_id,
-        version_number: latest.version_number,
-        file_name: latest.file_name,
-        file_size: latest.file_size,
-        created_at: latest.created_at,
-        author_username: latest.author_username,
-        status: 'Active',
-        notes: latest.notes,
-        content_hash: '',
-        asset_id: 0,
-        is_golden: false,
-        status_history: []
-      });
-    } else {
-      setVersionToExport({
-        id: latestVersion.version_id,
-        version_number: latestVersion.version_number,
-        file_name: latestVersion.file_name,
-        file_size: latestVersion.file_size,
-        created_at: latestVersion.created_at,
-        author_username: latestVersion.author_username,
-        status: 'Active',
-        notes: latestVersion.notes,
-        content_hash: '',
-        asset_id: 0,
-        is_golden: false,
-        status_history: []
-      });
+      message.warning('No versions found for this branch to export');
+      return;
     }
+    
+    setVersionToExport({
+      id: latestVersion.version_id,
+      version_number: latestVersion.version_number,
+      file_name: latestVersion.file_name,
+      file_size: latestVersion.file_size,
+      created_at: latestVersion.created_at,
+      author_username: latestVersion.author_username,
+      status: 'Active',
+      notes: latestVersion.notes,
+      content_hash: '',
+      asset_id: 0,
+      is_golden: false,
+      status_history: []
+    });
     
     setSelectedBranchForExport(branch);
     setExportModalVisible(true);
@@ -344,12 +341,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     return { activeBranchCount: active, totalBranchCount: total };
   }, [branches]);
 
-  const getBranchVersionInfo = useCallback((branchId: number) => {
-    const versions = branchVersions[branchId] || [];
-    const count = versions.length;
+  const getBranchVersionInfo = useCallback((branch: BranchInfo) => {
+    const versions = branchVersions[branch.id] || [];
     const latest = versions.find(v => v.is_branch_latest);
     return {
-      count,
+      count: branch.version_count,
       latestVersionNumber: latest?.branch_version_number
     };
   }, [branchVersions]);
@@ -553,7 +549,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                 {filteredBranches.map((branch) => {
-                  const versionInfo = getBranchVersionInfo(branch.id);
+                  const versionInfo = getBranchVersionInfo(branch);
                   return (
                     <BranchCard
                       key={branch.id}
