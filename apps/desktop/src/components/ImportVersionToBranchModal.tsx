@@ -115,6 +115,8 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
       });
 
       message.success('Version imported to branch successfully!');
+      
+      // Reset form and close modal
       handleReset();
       onSuccess();
       

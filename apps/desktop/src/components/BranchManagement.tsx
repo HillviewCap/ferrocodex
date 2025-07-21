@@ -172,13 +172,16 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setHistoryModalVisible(true);
   };
 
-  const handleImportSuccess = () => {
-    // Refresh branch versions before clearing the selected branch
+  const handleImportSuccess = async () => {
+    // Close modal first
+    setImportModalVisible(false);
+    
+    // Refresh branch versions after modal is closed
     if (selectedBranchForImport && token) {
-      fetchBranchVersions(token, selectedBranchForImport.id);
+      await fetchBranchVersions(token, selectedBranchForImport.id);
     }
     
-    setImportModalVisible(false);
+    // Clear the selected branch
     setSelectedBranchForImport(null);
   };
 
