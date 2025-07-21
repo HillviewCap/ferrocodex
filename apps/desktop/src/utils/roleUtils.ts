@@ -73,3 +73,13 @@ export const canExportConfiguration = (user: UserInfo | null): boolean => {
   // All authenticated users (Engineers and Administrators) can export configurations
   return (isAdministrator(user) || isEngineer(user));
 };
+
+export const canArchiveVersion = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can archive versions
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canRestoreVersion = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can restore archived versions
+  return (isAdministrator(user) || isEngineer(user));
+};

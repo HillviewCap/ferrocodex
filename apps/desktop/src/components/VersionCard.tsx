@@ -23,7 +23,9 @@ import {
   EditOutlined,
   HistoryOutlined,
   TrophyOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  InboxOutlined,
+  UndoOutlined
 } from '@ant-design/icons';
 import { ConfigurationVersionInfo, formatVersion, formatFileSize } from '../types/assets';
 import ConfigurationStatusBadge from './ConfigurationStatusBadge';
@@ -31,6 +33,8 @@ import ChangeStatusModal from './ChangeStatusModal';
 import StatusHistoryModal from './StatusHistoryModal';
 import PromoteToGoldenWizard from './PromoteToGoldenWizard';
 import ExportConfirmationModal from './ExportConfirmationModal';
+import ArchiveConfirmationModal from './ArchiveConfirmationModal';
+import RestoreConfirmationModal from './RestoreConfirmationModal';
 
 const { Text } = Typography;
 
@@ -45,6 +49,8 @@ interface VersionCardProps {
   onGoldenPromotion?: () => void;
   canExport?: boolean;
   onExport?: (exportPath: string) => void;
+  canArchive?: boolean;
+  canRestore?: boolean;
 }
 
 const VersionCard: React.FC<VersionCardProps> = React.memo(({ 
@@ -57,12 +63,16 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
   canPromoteToGolden = false,
   onGoldenPromotion,
   canExport = false,
-  onExport
+  onExport,
+  canArchive = false,
+  canRestore = false
 }) => {
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
   const [showStatusHistoryModal, setShowStatusHistoryModal] = useState(false);
   const [showGoldenPromotionWizard, setShowGoldenPromotionWizard] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -168,6 +178,28 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
     }
   };
 
+  const handleArchive = () => {
+    setShowArchiveModal(true);
+  };
+
+  const handleArchiveSuccess = () => {
+    setShowArchiveModal(false);
+    if (onStatusChange) {
+      onStatusChange();
+    }
+  };
+
+  const handleRestore = () => {
+    setShowRestoreModal(true);
+  };
+
+  const handleRestoreSuccess = () => {
+    setShowRestoreModal(false);
+    if (onStatusChange) {
+      onStatusChange();
+    }
+  };
+
   const isArchived = version.status === 'Archived';
   
   const canShowPromoteToGolden = canPromoteToGolden && 
@@ -197,6 +229,23 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
         label: 'Change Status',
         icon: <EditOutlined />,
         onClick: handleChangeStatus
+      }
+    ] : []),
+    ...(canArchive && token && !isArchived ? [
+      {
+        key: 'archive',
+        label: 'Archive Version',
+        icon: <InboxOutlined />,
+        onClick: handleArchive,
+        danger: true
+      }
+    ] : []),
+    ...(canRestore && token && isArchived ? [
+      {
+        key: 'restore',
+        label: 'Restore Version',
+        icon: <UndoOutlined />,
+        onClick: handleRestore
       }
     ] : []),
     {
@@ -357,6 +406,22 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
             visible={showExportModal}
             onCancel={() => setShowExportModal(false)}
             onSuccess={handleExportSuccess}
+            version={version}
+            token={token}
+          />
+          
+          <ArchiveConfirmationModal
+            visible={showArchiveModal}
+            onCancel={() => setShowArchiveModal(false)}
+            onSuccess={handleArchiveSuccess}
+            version={version}
+            token={token}
+          />
+          
+          <RestoreConfirmationModal
+            visible={showRestoreModal}
+            onCancel={() => setShowRestoreModal(false)}
+            onSuccess={handleRestoreSuccess}
             version={version}
             token={token}
           />
