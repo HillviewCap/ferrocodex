@@ -101,9 +101,11 @@ const AssetManagement: React.FC = () => {
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
     <Card 
       hoverable
+      onClick={() => handleViewDetails(asset)}
       style={{ 
         height: '100%',
-        minHeight: '200px'
+        minHeight: '200px',
+        cursor: 'pointer'
       }}
       bodyStyle={{ 
         padding: '20px',
@@ -113,13 +115,22 @@ const AssetManagement: React.FC = () => {
       }}
       actions={[
         <Tooltip title="View Details">
-          <EyeOutlined key="view" onClick={() => handleViewDetails(asset)} />
+          <EyeOutlined key="view" onClick={(e) => {
+            e.stopPropagation();
+            handleViewDetails(asset);
+          }} />
         </Tooltip>,
         <Tooltip title="Version History">
-          <HistoryOutlined key="history" onClick={() => handleViewHistory(asset)} />
+          <HistoryOutlined key="history" onClick={(e) => {
+            e.stopPropagation();
+            handleViewHistory(asset);
+          }} />
         </Tooltip>,
         <Tooltip title="Add Version">
-          <PlusOutlined key="add" onClick={() => handleAddVersion(asset)} />
+          <PlusOutlined key="add" onClick={(e) => {
+            e.stopPropagation();
+            handleAddVersion(asset);
+          }} />
         </Tooltip>
       ]}
     >
