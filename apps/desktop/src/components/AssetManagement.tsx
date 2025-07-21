@@ -152,18 +152,18 @@ const AssetManagement: React.FC = () => {
             right: 0,
             backgroundColor: '#FFD700',
             color: 'white',
-            padding: '4px 12px',
-            borderRadius: '0 8px 0 16px',
-            fontSize: '12px',
+            padding: '3px 8px',
+            borderRadius: '0 8px 0 12px',
+            fontSize: '11px',
             fontWeight: 'bold',
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '3px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             zIndex: 1
           }}>
-            <StarFilled style={{ fontSize: '14px' }} />
-            GOLDEN IMAGE
+            <StarFilled style={{ fontSize: '12px' }} />
+            <span style={{ display: 'inline-block' }}>GOLDEN</span>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
@@ -173,17 +173,19 @@ const AssetManagement: React.FC = () => {
           size={48}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+          <div style={{ marginBottom: '4px', paddingRight: hasGolden ? '70px' : '0' }}>
             <Text strong style={{ fontSize: '16px', lineHeight: '24px' }} ellipsis>
               {asset.name}
             </Text>
-            <Tag color="blue" style={{ flexShrink: 0 }}>
+          </div>
+          <Space size={8} wrap>
+            <Tag color="blue">
               {formatVersion(asset.latest_version || 'v1')}
             </Tag>
-          </div>
-          <Tag color="green">
-            {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
-          </Tag>
+            <Tag color="green">
+              {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
+            </Tag>
+          </Space>
         </div>
       </div>
       
