@@ -136,6 +136,10 @@ pub trait ConfigurationRepository {
     
     // Export methods
     fn export_configuration_version(&self, version_id: i64, export_path: &str) -> Result<()>;
+    
+    // Manual archive/restore methods
+    fn archive_version(&self, version_id: i64, archived_by: i64, archive_reason: Option<String>) -> Result<()>;
+    fn restore_version(&self, version_id: i64, restored_by: i64, restore_reason: Option<String>) -> Result<()>;
 }
 
 pub struct SqliteConfigurationRepository<'a> {
@@ -679,6 +683,89 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
                 Err(anyhow::anyhow!("Failed to write export file: {}", e))
             }
         }
+    }
+
+    fn archive_version(&self, version_id: i64, archived_by: i64, archive_reason: Option<String>) -> Result<()> {
+        // Get current status before archiving
+        let mut stmt = self.conn.prepare(
+            "SELECT status FROM configuration_versions WHERE id = ?1"
+        )?;
+        let current_status: String = stmt.query_row([version_id], |row| row.get(0))?;
+
+        // Validate that version is not already archived
+        if current_status == "Archived" {
+            return Err(anyhow::anyhow!("Version is already archived"));
+        }
+
+        // Update the configuration version status to Archived
+        self.conn.execute(
+            "UPDATE configuration_versions 
+             SET status = 'Archived', status_changed_by = ?1, status_changed_at = datetime('now') 
+             WHERE id = ?2",
+            (archived_by, version_id),
+        )?;
+
+        // Record the status change in history
+        self.conn.execute(
+            "INSERT INTO configuration_status_history (version_id, old_status, new_status, changed_by, change_reason)
+             VALUES (?1, ?2, 'Archived', ?3, ?4)",
+            (version_id, current_status, archived_by, archive_reason),
+        )?;
+
+        Ok(())
+    }
+
+    fn restore_version(&self, version_id: i64, restored_by: i64, restore_reason: Option<String>) -> Result<()> {
+        // Validate that version is currently archived
+        let mut current_stmt = self.conn.prepare(
+            "SELECT status FROM configuration_versions WHERE id = ?1"
+        )?;
+        let current_status: String = current_stmt.query_row([version_id], |row| row.get(0))?;
+
+        if current_status != "Archived" {
+            return Err(anyhow::anyhow!("Version is not archived"));
+        }
+
+        // Get the status history to determine what status to restore to
+        let mut stmt = self.conn.prepare(
+            "SELECT old_status FROM configuration_status_history 
+             WHERE version_id = ?1 AND new_status = 'Archived' 
+             ORDER BY created_at DESC LIMIT 1"
+        )?;
+        
+        let previous_status_result = stmt.query_row([version_id], |row| {
+            Ok(row.get::<_, Option<String>>(0)?)
+        });
+        
+        let previous_status = match previous_status_result {
+            Ok(Some(status)) => status,
+            Ok(None) => "Draft".to_string(), // If old_status was NULL
+            Err(rusqlite::Error::QueryReturnedNoRows) => "Draft".to_string(), // No history found
+            Err(e) => return Err(e.into()),
+        };
+
+        // Restore to previous status (or Draft if no previous status found)
+        let restore_status = match ConfigurationStatus::from_str(&previous_status) {
+            Some(status) => status,
+            None => ConfigurationStatus::Draft,
+        };
+
+        // Update the configuration version status
+        self.conn.execute(
+            "UPDATE configuration_versions 
+             SET status = ?1, status_changed_by = ?2, status_changed_at = datetime('now') 
+             WHERE id = ?3",
+            (restore_status.as_str(), restored_by, version_id),
+        )?;
+
+        // Record the status change in history
+        self.conn.execute(
+            "INSERT INTO configuration_status_history (version_id, old_status, new_status, changed_by, change_reason)
+             VALUES (?1, 'Archived', ?2, ?3, ?4)",
+            (version_id, restore_status.as_str(), restored_by, restore_reason),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -1332,6 +1419,165 @@ mod tests {
         let original_hash = repo.calculate_content_hash(content);
         let exported_hash = repo.calculate_content_hash(&exported_content);
         assert_eq!(original_hash, exported_hash);
+    }
+
+    #[test]
+    fn test_archive_version() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Initially should not be archived
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let version = versions.iter().find(|v| v.id == config.id).unwrap();
+        assert_eq!(version.status, "Draft");
+
+        // Archive the version
+        repo.archive_version(config.id, 1, Some("Test archive".to_string())).unwrap();
+
+        // Verify it's archived
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let archived_version = versions.iter().find(|v| v.id == config.id).unwrap();
+        assert_eq!(archived_version.status, "Archived");
+
+        // Verify status history was recorded
+        let history = repo.get_configuration_status_history(config.id).unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].old_status.as_ref().unwrap(), "Draft");
+        assert_eq!(history[0].new_status, "Archived");
+        assert_eq!(history[0].change_reason.as_ref().unwrap(), "Test archive");
+    }
+
+    #[test]
+    fn test_restore_version() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create and archive a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Change status to Silver first
+        repo.update_configuration_status(config.id, ConfigurationStatus::Silver, 1, Some("Test silver".to_string())).unwrap();
+        
+        // Then archive it
+        repo.archive_version(config.id, 1, Some("Test archive".to_string())).unwrap();
+
+        // Verify it's archived
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let archived_version = versions.iter().find(|v| v.id == config.id).unwrap();
+        assert_eq!(archived_version.status, "Archived");
+
+        // Restore the version
+        repo.restore_version(config.id, 1, Some("Test restore".to_string())).unwrap();
+
+        // Verify it's restored to previous status (Silver)
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let restored_version = versions.iter().find(|v| v.id == config.id).unwrap();
+        assert_eq!(restored_version.status, "Silver");
+
+        // Verify status history
+        let history = repo.get_configuration_status_history(config.id).unwrap();
+        assert_eq!(history.len(), 3); // Draft->Silver, Silver->Archived, Archived->Silver
+        // history[2] is most recent: Archived->Silver (restore)
+        assert_eq!(history[2].old_status.as_ref().unwrap(), "Archived");
+        assert_eq!(history[2].new_status, "Silver");
+        assert_eq!(history[2].change_reason.as_ref().unwrap(), "Test restore");
+        // history[1] is Silver->Archived (archive)
+        assert_eq!(history[1].old_status.as_ref().unwrap(), "Silver");
+        assert_eq!(history[1].new_status, "Archived");
+        // history[0] is Draft->Silver (initial status change)
+        assert_eq!(history[0].old_status.as_ref().unwrap(), "Draft");
+        assert_eq!(history[0].new_status, "Silver");
+    }
+
+    #[test]
+    fn test_archive_already_archived() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create and archive a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+        repo.archive_version(config.id, 1, Some("First archive".to_string())).unwrap();
+
+        // Try to archive again - should fail
+        let result = repo.archive_version(config.id, 1, Some("Second archive".to_string()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already archived"));
+    }
+
+    #[test]
+    fn test_restore_not_archived() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a configuration (not archived)
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+
+        // Try to restore a non-archived version - should fail
+        let result = repo.restore_version(config.id, 1, Some("Test restore".to_string()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not archived"));
+    }
+
+    #[test]
+    fn test_restore_to_draft_when_no_previous_status() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        // Create a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Archive directly from Draft (simulating a direct archive)
+        repo.archive_version(config.id, 1, Some("Direct archive".to_string())).unwrap();
+
+        // Restore should go back to Draft
+        repo.restore_version(config.id, 1, Some("Test restore".to_string())).unwrap();
+
+        let versions = repo.get_configuration_versions(1).unwrap();
+        let restored_version = versions.iter().find(|v| v.id == config.id).unwrap();
+        assert_eq!(restored_version.status, "Draft");
     }
 }
 

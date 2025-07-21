@@ -107,6 +107,8 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     if (token && asset.id) {
       fetchBranches(token, asset.id);
     }
+    // Navigate to Branch Management tab
+    setActiveTab('branches');
   };
 
   const handleCancelBranchCreation = () => {
@@ -118,8 +120,11 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
   const handleStatusChange = () => {
     // Refresh the versions list when status changes
     if (token && asset.id) {
-      fetchVersions(token, asset.id);
-      fetchGoldenVersion(); // Also refresh golden version
+      // Add a small delay to ensure database transaction is committed
+      setTimeout(() => {
+        fetchVersions(token, asset.id);
+        fetchGoldenVersion(); // Also refresh golden version
+      }, 100);
     }
   };
 
@@ -203,7 +208,17 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                 <Space size={4}>
                   <FileOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
+                    {(() => {
+                      const activeCount = versions.filter(v => v.status !== 'Archived').length;
+                      const archivedCount = versions.filter(v => v.status === 'Archived').length;
+                      const totalCount = versions.length;
+                      
+                      if (archivedCount === 0) {
+                        return `${totalCount} ${totalCount === 1 ? 'version' : 'versions'}`;
+                      } else {
+                        return `${activeCount} active, ${archivedCount} archived (${totalCount} total)`;
+                      }
+                    })()} 
                   </Text>
                 </Space>
                 {asset.latest_version && (
@@ -266,11 +281,13 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                     Complete audit trail of all configuration changes. Select any version to create a branch from it.
                   </Text>
                   <Space>
-                    <Text type="secondary">Show archived versions</Text>
+                    <Text type="secondary">Show Archived Versions</Text>
                     <Switch 
                       checked={showArchived} 
                       onChange={setShowArchived}
                       size="small"
+                      checkedChildren="On"
+                      unCheckedChildren="Off"
                     />
                   </Space>
                 </div>
@@ -300,6 +317,15 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                       ? versions 
                       : versions.filter(v => v.status !== 'Archived');
                     const archivedCount = versions.filter(v => v.status === 'Archived').length;
+                    
+                    // Debug logging for development
+                    console.log('Version filtering:', {
+                      totalVersions: versions.length,
+                      showArchived,
+                      archivedCount,
+                      filteredCount: filteredVersions.length,
+                      statuses: versions.map(v => ({ id: v.id, status: v.status }))
+                    });
                     
                     return (
                       <>

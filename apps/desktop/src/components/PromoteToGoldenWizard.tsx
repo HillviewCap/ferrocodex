@@ -262,7 +262,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
                   <div style={{ marginBottom: '12px' }}>
                     <Text>
                       The following version is currently the Golden Image and will be automatically 
-                      archived when this promotion completes:
+                      archived when this promotion completes. <strong>Archived versions can be restored later if needed.</strong>
                     </Text>
                   </div>
                   <Card size="small" style={{ backgroundColor: '#fafafa' }}>
@@ -298,7 +298,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
                     <List.Item style={{ padding: '4px 0' }}>
                       <Space>
                         <InfoCircleOutlined style={{ color: '#1890ff' }} />
-                        <Text>Previous Golden version will be archived</Text>
+                        <Text>Previous Golden version will be archived (can be restored later)</Text>
                       </Space>
                     </List.Item>
                   )}
@@ -365,7 +365,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
 
           <Alert
             message="This action cannot be undone"
-            description="Once promoted to Golden, this version will become the official master version. The previous Golden version (if any) will be automatically archived."
+            description="Once promoted to Golden, this version will become the official master version. The previous Golden version (if any) will be automatically archived but can be restored if needed through the version history."
             type="warning"
             showIcon
           />

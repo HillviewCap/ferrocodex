@@ -1721,6 +1721,124 @@ async fn export_configuration_version(
     }
 }
 
+#[tauri::command]
+async fn archive_version(
+    token: String,
+    version_id: i64,
+    archive_reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can archive versions
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to archive version: {}", session.username);
+        return Err("Only Engineers and Administrators can archive versions".to_string());
+    }
+
+    // Validate inputs
+    let archive_reason = archive_reason.map(|r| InputSanitizer::sanitize_string(&r));
+    
+    if let Some(ref reason) = archive_reason {
+        if InputSanitizer::is_potentially_malicious(reason) {
+            error!("Potentially malicious input detected in archive_version");
+            return Err("Invalid input detected".to_string());
+        }
+        if reason.len() > 500 {
+            return Err("Archive reason cannot exceed 500 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+
+            match config_repo.archive_version(version_id, session.user_id, archive_reason) {
+                Ok(_) => {
+                    info!("Version archived by {}: Version ID {}", session.username, version_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to archive version: {}", e);
+                    Err(format!("Failed to archive version: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn restore_version(
+    token: String,
+    version_id: i64,
+    restore_reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can restore versions
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to restore version: {}", session.username);
+        return Err("Only Engineers and Administrators can restore versions".to_string());
+    }
+
+    // Validate inputs
+    let restore_reason = restore_reason.map(|r| InputSanitizer::sanitize_string(&r));
+    
+    if let Some(ref reason) = restore_reason {
+        if InputSanitizer::is_potentially_malicious(reason) {
+            error!("Potentially malicious input detected in restore_version");
+            return Err("Invalid input detected".to_string());
+        }
+        if reason.len() > 500 {
+            return Err("Restore reason cannot exceed 500 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+
+            match config_repo.restore_version(version_id, session.user_id, restore_reason) {
+                Ok(_) => {
+                    info!("Version restored by {}: Version ID {}", session.username, version_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to restore version: {}", e);
+                    Err(format!("Failed to restore version: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -1765,7 +1883,9 @@ pub fn run() {
             import_version_to_branch,
             get_branch_versions,
             get_branch_latest_version,
-            compare_branch_versions
+            compare_branch_versions,
+            archive_version,
+            restore_version
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

@@ -3,7 +3,7 @@ import { List, message } from 'antd';
 import { ConfigurationVersionInfo, sortVersions } from '../types/assets';
 import VersionCard from './VersionCard';
 import useAuthStore from '../store/auth';
-import { canChangeConfigurationStatus, canPromoteToGolden, canExportConfiguration } from '../utils/roleUtils';
+import { canChangeConfigurationStatus, canPromoteToGolden, canExportConfiguration, canArchiveVersion, canRestoreVersion } from '../utils/roleUtils';
 
 interface VersionHistoryListProps {
   versions: ConfigurationVersionInfo[];
@@ -30,6 +30,8 @@ const VersionHistoryList: React.FC<VersionHistoryListProps> = ({
   const canUserChangeStatus = canChangeConfigurationStatus(user);
   const canUserPromoteToGolden = canPromoteToGolden(user);
   const canUserExport = canExportConfiguration(user);
+  const canUserArchive = canArchiveVersion(user);
+  const canUserRestore = canRestoreVersion(user);
 
   const handleExport = (exportPath: string, version: ConfigurationVersionInfo) => {
     if (onExport) {
@@ -62,6 +64,8 @@ const VersionHistoryList: React.FC<VersionHistoryListProps> = ({
             onGoldenPromotion={onGoldenPromotion}
             canExport={canUserExport}
             onExport={(exportPath) => handleExport(exportPath, version)}
+            canArchive={canUserArchive}
+            canRestore={canUserRestore}
           />
         </List.Item>
       )}
