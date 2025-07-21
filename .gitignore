@@ -1,6 +1,7 @@
 .bmad-core
 .bmad-infrastructure-devops
 .claude/commands
+web-bundles
 
 # Dependencies
 node_modules/
