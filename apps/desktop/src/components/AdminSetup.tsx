@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
+import useAppStore from '../store/app';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +14,7 @@ interface AdminSetupFormValues {
 
 const AdminSetup: React.FC = () => {
   const { createAdminAccount, isLoading, error, clearError } = useAuthStore();
+  const { setFirstLaunchComplete } = useAppStore();
   const [form] = Form.useForm();
   const [passwordStrength, setPasswordStrength] = useState<{
     score: number;
@@ -67,6 +69,8 @@ const AdminSetup: React.FC = () => {
     try {
       clearError();
       await createAdminAccount(values.username, values.password);
+      // Mark first launch as complete after successful account creation
+      setFirstLaunchComplete();
     } catch (error) {
       console.error('Admin account creation failed:', error);
     }

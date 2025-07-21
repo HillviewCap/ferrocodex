@@ -77,7 +77,22 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
       });
 
       if (filePath) {
-        setSelectedPath(filePath);
+        // Ensure the selected path maintains the original file extension
+        const originalExtension = version.file_name.split('.').pop()?.toLowerCase();
+        let correctedPath = filePath;
+        
+        if (originalExtension && filePath) {
+          const selectedExtension = filePath.split('.').pop()?.toLowerCase();
+          
+          // If the selected path doesn't have the original extension, correct it
+          if (selectedExtension !== originalExtension) {
+            // Remove any existing extension and add the original one
+            const pathWithoutExt = filePath.replace(/\.[^/.]+$/, '');
+            correctedPath = `${pathWithoutExt}.${originalExtension}`;
+          }
+        }
+        
+        setSelectedPath(correctedPath);
         setError('');
         setExportProgress({
           step: 'selecting',

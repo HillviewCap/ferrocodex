@@ -12,7 +12,9 @@
       "Bash(git checkout:*)",
       "Bash(npm run lint)",
       "Bash(npm run:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(gh issue view:*)",
+      "Bash(RUST_BACKTRACE=1 cargo test configurations::tests::test_restore_version -- --nocapture)"
     ],
     "deny": []
   }

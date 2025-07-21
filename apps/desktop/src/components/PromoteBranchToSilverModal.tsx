@@ -24,7 +24,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { BranchInfo } from '../types/branches';
 import useAuthStore from '../store/auth';
-import { useNavigate } from 'react-router-dom';
+import useAssetStore from '../store/assets';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -42,10 +42,10 @@ const PromoteBranchToSilverModal: React.FC<PromoteBranchToSilverModalProps> = ({
   onCancel,
   onSuccess,
   branch,
-  assetId
+  assetId: _ // Not used - navigation handled via asset store
 }) => {
   const { token } = useAuthStore();
-  const navigate = useNavigate();
+  const { selectedAsset, navigateToHistory } = useAssetStore();
   const [form] = Form.useForm();
   const [promoting, setPromoting] = useState(false);
 
@@ -83,8 +83,10 @@ const PromoteBranchToSilverModal: React.FC<PromoteBranchToSilverModalProps> = ({
       onSuccess();
       handleReset();
       
-      // Navigate to the configuration history to see the new Silver version
-      navigate(`/assets/${assetId}/history`);
+      // Navigate to the version history to see the new Silver version
+      if (selectedAsset) {
+        navigateToHistory(selectedAsset);
+      }
       
     } catch (error) {
       console.error('Branch promotion failed:', error);
