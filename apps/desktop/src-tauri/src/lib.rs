@@ -1388,6 +1388,127 @@ async fn promote_to_golden(
 }
 
 #[tauri::command]
+async fn promote_branch_to_silver(
+    token: String,
+    branch_id: i64,
+    promotion_notes: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<i64, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Both Engineers and Administrators can promote branches to Silver
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to promote branch to Silver: {}", session.username);
+        return Err("Insufficient permissions to promote branch to Silver".to_string());
+    }
+
+    // Validate inputs
+    let promotion_notes = promotion_notes.map(|n| InputSanitizer::sanitize_string(&n));
+    
+    if let Some(ref notes) = promotion_notes {
+        if InputSanitizer::is_potentially_malicious(notes) {
+            error!("Potentially malicious input detected in promote_branch_to_silver");
+            return Err("Invalid input detected".to_string());
+        }
+        if notes.len() > 1000 {
+            return Err("Promotion notes cannot exceed 1000 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            // Get the latest version of the branch
+            let latest_version = match branch_repo.get_branch_latest_version(branch_id) {
+                Ok(Some(version)) => version,
+                Ok(None) => return Err("Branch has no versions to promote".to_string()),
+                Err(e) => {
+                    error!("Failed to get branch latest version: {}", e);
+                    return Err(format!("Failed to get branch latest version: {}", e));
+                }
+            };
+            
+            // Get branch details to get the asset ID
+            let branch = match branch_repo.get_branch_by_id(branch_id) {
+                Ok(Some(b)) => b,
+                Ok(None) => return Err("Branch not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get branch details: {}", e);
+                    return Err(format!("Failed to get branch details: {}", e));
+                }
+            };
+            
+            // Get the configuration content
+            let content = match config_repo.get_configuration_content(latest_version.version_id) {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to get configuration content: {}", e);
+                    return Err(format!("Failed to get configuration content: {}", e));
+                }
+            };
+            
+            // Create a new configuration version in the main line with Silver status
+            let notes = format!(
+                "Promoted from branch '{}' (version {}). {}",
+                branch.name,
+                latest_version.branch_version_number,
+                promotion_notes.unwrap_or_default()
+            );
+            
+            let config_request = CreateConfigurationRequest {
+                asset_id: branch.asset_id,
+                file_name: latest_version.file_name.clone(),
+                file_content: content,
+                author: session.user_id,
+                notes,
+            };
+            
+            // Store the new configuration
+            let new_config = match config_repo.store_configuration(config_request) {
+                Ok(config) => config,
+                Err(e) => {
+                    error!("Failed to create Silver configuration: {}", e);
+                    return Err(format!("Failed to create Silver configuration: {}", e));
+                }
+            };
+            
+            // Update the status to Silver
+            match config_repo.update_configuration_status(
+                new_config.id,
+                ConfigurationStatus::Silver,
+                session.user_id,
+                Some("Promoted from branch".to_string())
+            ) {
+                Ok(_) => {
+                    info!("Branch promoted to Silver by {}: Branch {} -> Config ID {}", 
+                          session.username, branch.name, new_config.id);
+                    Ok(new_config.id)
+                }
+                Err(e) => {
+                    error!("Failed to update status to Silver: {}", e);
+                    Err(format!("Failed to update status to Silver: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
 async fn get_golden_version(
     token: String,
     asset_id: i64,
@@ -1562,6 +1683,7 @@ pub fn run() {
             get_configuration_status_history,
             get_available_status_transitions,
             promote_to_golden,
+            promote_branch_to_silver,
             get_golden_version,
             get_promotion_eligibility,
             export_configuration_version,

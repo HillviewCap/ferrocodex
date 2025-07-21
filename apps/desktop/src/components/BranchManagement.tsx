@@ -34,6 +34,7 @@ import BranchCard from './BranchCard';
 import ImportVersionToBranchModal from './ImportVersionToBranchModal';
 import BranchVersionHistory from './BranchVersionHistory';
 import ExportConfirmationModal from './ExportConfirmationModal';
+import PromoteBranchToSilverModal from './PromoteBranchToSilverModal';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
 import useBranchStore from '../store/branches';
@@ -74,9 +75,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [promoteSilverModalVisible, setPromoteSilverModalVisible] = useState(false);
   const [selectedBranchForImport, setSelectedBranchForImport] = useState<BranchInfo | null>(null);
   const [selectedBranchForHistory, setSelectedBranchForHistory] = useState<BranchInfo | null>(null);
   const [, setSelectedBranchForExport] = useState<BranchInfo | null>(null);
+  const [selectedBranchForPromotion, setSelectedBranchForPromotion] = useState<BranchInfo | null>(null);
   const [versionToExport, setVersionToExport] = useState<any>(null);
 
   useEffect(() => {
@@ -253,6 +256,22 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setExportModalVisible(false);
     setSelectedBranchForExport(null);
     setVersionToExport(null);
+  };
+
+  const handlePromoteToSilver = (branch: BranchInfo) => {
+    setSelectedBranchForPromotion(branch);
+    setPromoteSilverModalVisible(true);
+  };
+
+  const handlePromotionSuccess = () => {
+    setPromoteSilverModalVisible(false);
+    setSelectedBranchForPromotion(null);
+    message.success('Branch promoted to Silver status successfully!');
+  };
+
+  const handlePromotionCancel = () => {
+    setPromoteSilverModalVisible(false);
+    setSelectedBranchForPromotion(null);
   };
 
   const branchTreeData = useMemo(() => {
@@ -541,6 +560,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
                       onImportVersion={handleUpdateBranch}
                       onExportLatestVersion={handleExportBranch}
                       onViewHistory={handleViewBranchHistory}
+                      onPromoteToSilver={handlePromoteToSilver}
                       showActions={true}
                       versionCount={versionInfo.count}
                       latestVersionNumber={versionInfo.latestVersionNumber}
@@ -615,6 +635,17 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
           onSuccess={handleExportSuccess}
           version={versionToExport}
           token={token}
+        />
+      )}
+
+      {/* Promote to Silver Modal */}
+      {selectedBranchForPromotion && (
+        <PromoteBranchToSilverModal
+          visible={promoteSilverModalVisible}
+          onCancel={handlePromotionCancel}
+          onSuccess={handlePromotionSuccess}
+          branch={selectedBranchForPromotion}
+          assetId={asset.id}
         />
       )}
     </div>
