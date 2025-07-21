@@ -115,7 +115,7 @@ export const ConfigurationValidation = {
   allowedExtensions: [
     'json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini',
     'csv', 'log', 'properties', 'config', 'settings', 'toml',
-    'bin', 'dat', 'hex', 'raw', 'dump'
+    'bin', 'dat', 'hex', 'raw', 'dump', 'vio'
   ]
 };
 
@@ -158,13 +158,7 @@ export const validateFileSize = (size: number): string | null => {
 };
 
 export const validateFileExtension = (filename: string): string | null => {
-  const extension = filename.split('.').pop()?.toLowerCase();
-  if (!extension) {
-    return 'File must have an extension';
-  }
-  if (!ConfigurationValidation.allowedExtensions.includes(extension)) {
-    return `File type .${extension} is not supported. Allowed types: ${ConfigurationValidation.allowedExtensions.join(', ')}`;
-  }
+  // Accept all file types - no extension validation
   return null;
 };
 
