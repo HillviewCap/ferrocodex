@@ -20,8 +20,7 @@ import {
   CalendarOutlined,
   UserOutlined,
   PlusOutlined,
-  HistoryOutlined,
-  EyeOutlined
+  HistoryOutlined
 } from '@ant-design/icons';
 import { AssetInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -87,11 +86,6 @@ const AssetManagement: React.FC = () => {
     navigateToHistory(asset);
   };
 
-  const handleViewDetails = (asset: AssetInfo) => {
-    // For now, navigate to history view as it shows all details
-    navigateToHistory(asset);
-  };
-
   const handleAddVersion = (asset: AssetInfo) => {
     // Navigate to history view and show import modal
     navigateToHistory(asset);
@@ -101,7 +95,7 @@ const AssetManagement: React.FC = () => {
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
     <Card 
       hoverable
-      onClick={() => handleViewDetails(asset)}
+      onClick={() => handleViewHistory(asset)}
       style={{ 
         height: '100%',
         minHeight: '200px',
@@ -114,19 +108,13 @@ const AssetManagement: React.FC = () => {
         height: 'calc(100% - 57px)' // Account for actions bar
       }}
       actions={[
-        <Tooltip title="View Details">
-          <EyeOutlined key="view" onClick={(e) => {
-            e.stopPropagation();
-            handleViewDetails(asset);
-          }} />
-        </Tooltip>,
         <Tooltip title="Version History">
           <HistoryOutlined key="history" onClick={(e) => {
             e.stopPropagation();
             handleViewHistory(asset);
           }} />
         </Tooltip>,
-        <Tooltip title="Add Version">
+        <Tooltip title="Import New Version">
           <PlusOutlined key="add" onClick={(e) => {
             e.stopPropagation();
             handleAddVersion(asset);
