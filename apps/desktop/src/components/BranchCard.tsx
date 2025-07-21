@@ -21,7 +21,8 @@ import {
   HistoryOutlined,
   TagOutlined,
   ImportOutlined,
-  ExportOutlined
+  ExportOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { BranchInfo, getBranchStatusColor, getBranchStatusText } from '../types/branches';
 
@@ -124,6 +125,8 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
     }
   };
 
+  const isParentArchived = branch.parent_version_status === 'Archived';
+  
   return (
     <Card 
       size="small" 
@@ -132,7 +135,8 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
         marginBottom: '12px',
         borderRadius: '8px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        border: `1px solid ${branch.is_active ? '#d9f7be' : '#ffccc7'}`
+        border: `1px solid ${isParentArchived ? '#faad14' : (branch.is_active ? '#d9f7be' : '#ffccc7')}`,
+        backgroundColor: isParentArchived ? '#fffbe6' : undefined
       }}
       styles={{ body: { padding: '16px' } }}
     >
@@ -180,11 +184,16 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                       Branched from: 
                     </Text>
                     <Tag 
-                      color={getVersionColor(branch.parent_version_number)} 
+                      color={branch.parent_version_status === 'Archived' ? 'orange' : getVersionColor(branch.parent_version_number)} 
                       style={{ cursor: 'pointer' }}
-                      title={`Click to view parent version ${branch.parent_version_number}`}
+                      title={`Parent version ${branch.parent_version_number} is ${branch.parent_version_status}`}
                     >
                       {branch.parent_version_number}
+                      {branch.parent_version_status === 'Archived' && (
+                        <Tooltip title="This branch was created from a version that is now archived">
+                          <WarningOutlined style={{ marginLeft: '4px' }} />
+                        </Tooltip>
+                      )}
                     </Tag>
                   </Space>
                   {versionCount > 0 && (

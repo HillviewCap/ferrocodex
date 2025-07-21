@@ -17,6 +17,7 @@ export interface BranchInfo {
   asset_id: number;
   parent_version_id: number;
   parent_version_number: string;
+  parent_version_status: string;
   created_by: number;
   created_by_username: string;
   created_at: string;
