@@ -259,7 +259,24 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
           label="Version Notes"
           rules={[
             { required: true, message: 'Please provide notes for this version' },
-            { max: 1000, message: 'Notes cannot exceed 1000 characters' }
+            { max: 1000, message: 'Notes cannot exceed 1000 characters' },
+            {
+              validator: (_, value) => {
+                if (value) {
+                  const suspiciousPatterns = [
+                    '<script', 'javascript:', 'vbscript:', 'onload=', 'onerror=', 'onclick=',
+                    'eval(', 'exec(', 'system(', '; rm ', '; del ', "' or '1'='1"
+                  ];
+                  const valueLower = value.toLowerCase();
+                  for (const pattern of suspiciousPatterns) {
+                    if (valueLower.includes(pattern)) {
+                      return Promise.reject(new Error('Please avoid using special characters or script-like patterns in your notes'));
+                    }
+                  }
+                }
+                return Promise.resolve();
+              }
+            }
           ]}
           tooltip="Describe the changes or purpose of this version"
         >

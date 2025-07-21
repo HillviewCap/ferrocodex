@@ -705,7 +705,7 @@ async fn import_configuration(
     // Check for malicious input
     if InputSanitizer::is_potentially_malicious(&asset_name) || InputSanitizer::is_potentially_malicious(&notes) {
         error!("Potentially malicious input detected in import_configuration");
-        return Err("Invalid input detected".to_string());
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
 
     // Read file content
@@ -995,7 +995,7 @@ async fn import_version_to_branch(
     
     if InputSanitizer::is_potentially_malicious(&notes) {
         error!("Potentially malicious input detected in import_version_to_branch");
-        return Err("Invalid input detected".to_string());
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns in your notes.".to_string());
     }
 
     if notes.len() > 1000 {
