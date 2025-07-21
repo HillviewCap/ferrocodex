@@ -60,10 +60,13 @@ const AssetManagement: React.FC = () => {
     }
   }, [error, clearError]);
 
-  const handleImportSuccess = () => {
+  const handleImportSuccess = (_asset: AssetInfo) => {
     setImportModalVisible(false);
     message.success('Configuration imported successfully!');
-    // The asset will be added to the store by the import modal
+    // Refresh the assets list to ensure the new asset is displayed
+    if (token) {
+      fetchAssets(token);
+    }
   };
 
   const formatDate = (dateString: string) => {
