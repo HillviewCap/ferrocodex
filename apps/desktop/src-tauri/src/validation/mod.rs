@@ -218,11 +218,17 @@ impl InputSanitizer {
 
     pub fn is_potentially_malicious(input: &str) -> bool {
         let suspicious_patterns = vec![
-            "script", "javascript", "vbscript", "onload", "onerror", "onclick",
-            "eval", "exec", "system", "shell", "cmd", "powershell", "bash",
-            "drop", "delete", "insert", "update", "select", "union", "where",
-            "../", "..\\", "/etc/", "c:\\", "windows\\", "system32\\",
-            "passwd", "shadow", "hosts", "boot.ini", "autoexec",
+            // Script injection patterns
+            "<script", "javascript:", "vbscript:", "onload=", "onerror=", "onclick=",
+            "eval(", "exec(", 
+            // Shell command patterns
+            "system(", "shell(", "; rm ", "; del ", "| cmd", "| powershell", "| bash",
+            // SQL injection patterns (more specific)
+            "'; drop", "'; delete", "' or '1'='1", "' union select", "'; insert into",
+            // Path traversal patterns
+            "../", "..\\", 
+            // System file access patterns
+            "/etc/passwd", "/etc/shadow", "c:\\windows\\system32", "boot.ini", "autoexec.bat",
         ];
 
         let input_lower = input.to_lowercase();
@@ -332,9 +338,11 @@ mod tests {
         assert_eq!(InputSanitizer::sanitize_username("User@123"), "user123");
         
         assert!(InputSanitizer::is_potentially_malicious("javascript:alert('xss')"));
-        assert!(InputSanitizer::is_potentially_malicious("DROP TABLE users"));
+        assert!(InputSanitizer::is_potentially_malicious("'; DROP TABLE users"));
         assert!(InputSanitizer::is_potentially_malicious("../../../etc/passwd"));
         assert!(!InputSanitizer::is_potentially_malicious("normal user input"));
+        assert!(!InputSanitizer::is_potentially_malicious("Added a stop motor and updated another feature"));
+        assert!(!InputSanitizer::is_potentially_malicious("Update configuration for motor control"));
     }
 
     #[test]
