@@ -11,7 +11,8 @@ import {
   Alert,
   Tag,
   Avatar,
-  Divider
+  Divider,
+  Checkbox
 } from 'antd';
 import { 
   BranchesOutlined,
@@ -25,6 +26,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { BranchInfo, validateBranchName, validateBranchDescription } from '../types/branches';
 import useAuthStore from '../store/auth';
+import ExportConfirmationModal from './ExportConfirmationModal';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -47,16 +49,23 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   const { token } = useAuthStore();
   const [form] = Form.useForm();
   const [creating, setCreating] = useState(false);
+  const [downloadAfterCreate, setDownloadAfterCreate] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [createdBranch, setCreatedBranch] = useState<BranchInfo | null>(null);
 
   useEffect(() => {
     if (visible) {
       form.resetFields();
+      setDownloadAfterCreate(false);
+      setCreatedBranch(null);
     }
   }, [visible, form]);
 
   const handleReset = () => {
     setCreating(false);
     form.resetFields();
+    setDownloadAfterCreate(false);
+    setCreatedBranch(null);
   };
 
   const handleCancel = () => {
@@ -82,8 +91,16 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       });
 
       message.success('Branch created successfully!');
-      onSuccess(response);
-      handleReset();
+      setCreatedBranch(response);
+      
+      if (downloadAfterCreate) {
+        // Show export modal for the created branch
+        setShowExportModal(true);
+        setCreating(false);
+      } else {
+        onSuccess(response);
+        handleReset();
+      }
       
     } catch (error) {
       console.error('Branch creation failed:', error);
@@ -253,6 +270,15 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
           />
         </Form.Item>
 
+        <Form.Item>
+          <Checkbox 
+            checked={downloadAfterCreate} 
+            onChange={(e) => setDownloadAfterCreate(e.target.checked)}
+          >
+            Download configuration after creating branch
+          </Checkbox>
+        </Form.Item>
+
         <Alert
           message="Branch Guidelines"
           description={
@@ -282,6 +308,40 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
           </Button>
         </div>
       </Form>
+
+      {/* Export Modal for downloading after branch creation */}
+      {showExportModal && createdBranch && token && (
+        <ExportConfirmationModal
+          visible={showExportModal}
+          onCancel={() => {
+            setShowExportModal(false);
+            onSuccess(createdBranch);
+            handleReset();
+          }}
+          onSuccess={(exportPath) => {
+            message.success(`Configuration exported to ${exportPath}`);
+            setShowExportModal(false);
+            onSuccess(createdBranch);
+            handleReset();
+          }}
+          version={{
+            id: parentVersion.id,
+            version_number: parentVersion.version_number,
+            file_name: parentVersion.file_name,
+            file_size: parentVersion.file_size,
+            created_at: parentVersion.created_at,
+            author_username: parentVersion.author_username,
+            status: parentVersion.status,
+            notes: `Branch: ${createdBranch.name}`,
+            content_hash: parentVersion.content_hash,
+            asset_id: parentVersion.asset_id,
+            author: parentVersion.author,
+            status_changed_by: parentVersion.status_changed_by,
+            status_changed_at: parentVersion.status_changed_at
+          }}
+          token={token}
+        />
+      )}
     </Modal>
   );
 };

@@ -22,7 +22,8 @@ import {
   TagOutlined,
   ImportOutlined,
   ExportOutlined,
-  WarningOutlined
+  WarningOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { BranchInfo, getBranchStatusColor, getBranchStatusText } from '../types/branches';
 
@@ -35,6 +36,7 @@ interface BranchCardProps {
   onViewHistory?: (branch: BranchInfo) => void;
   onImportVersion?: (branch: BranchInfo) => void;
   onExportLatestVersion?: (branch: BranchInfo) => void;
+  onPromoteToSilver?: (branch: BranchInfo) => void;
   showActions?: boolean;
   versionCount?: number;
   latestVersionNumber?: string;
@@ -47,6 +49,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   onViewHistory,
   onImportVersion,
   onExportLatestVersion,
+  onPromoteToSilver,
   showActions = true,
   versionCount = 0,
   latestVersionNumber
@@ -122,6 +125,12 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   const handleExportLatestVersion = () => {
     if (onExportLatestVersion) {
       onExportLatestVersion(branch);
+    }
+  };
+
+  const handlePromoteToSilver = () => {
+    if (onPromoteToSilver) {
+      onPromoteToSilver(branch);
     }
   };
 
@@ -260,7 +269,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   Import Version
                 </Button>
               )}
-              {onExportLatestVersion && versionCount > 0 && (
+              {onExportLatestVersion && branch.is_active && (
                 <Button 
                   type="default" 
                   size="small" 
@@ -269,6 +278,21 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   style={{ width: '100%' }}
                 >
                   Export Latest
+                </Button>
+              )}
+              {onPromoteToSilver && branch.is_active && versionCount > 0 && (
+                <Button 
+                  type="default" 
+                  size="small" 
+                  icon={<TrophyOutlined />}
+                  onClick={handlePromoteToSilver}
+                  style={{ 
+                    width: '100%',
+                    color: '#00CED1',
+                    borderColor: '#00CED1'
+                  }}
+                >
+                  Promote to Silver
                 </Button>
               )}
               {onViewHistory && versionCount > 0 && (

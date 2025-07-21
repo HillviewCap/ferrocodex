@@ -30,7 +30,7 @@ export interface ConfigurationVersion {
   created_at: string;
 }
 
-export type ConfigurationStatus = 'Draft' | 'Approved' | 'Golden' | 'Archived';
+export type ConfigurationStatus = 'Draft' | 'Silver' | 'Approved' | 'Golden' | 'Archived';
 
 export interface ConfigurationVersionInfo {
   id: number;
