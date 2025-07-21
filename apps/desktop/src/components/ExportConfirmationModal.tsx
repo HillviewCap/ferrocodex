@@ -66,10 +66,6 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
         defaultPath: suggestedFilename,
         filters: [
           {
-            name: 'Configuration Files',
-            extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump']
-          },
-          {
             name: 'All Files',
             extensions: ['*']
           }

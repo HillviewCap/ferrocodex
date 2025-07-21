@@ -96,9 +96,31 @@ describe('ExportConfirmationModal', () => {
         defaultPath: 'test-config.json',
         filters: [
           {
-            name: 'Configuration Files',
-            extensions: expect.arrayContaining(['json', 'xml', 'yaml'])
-          },
+            name: 'All Files',
+            extensions: ['*']
+          }
+        ]
+      });
+    });
+  });
+
+  it('accepts any file type for export during testing phase', async () => {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    (save as any).mockResolvedValue('/path/to/export.vio');
+    
+    const vioVersion = {
+      ...mockVersion,
+      file_name: 'Gold_Plant.vio'
+    };
+    
+    render(<ExportConfirmationModal {...defaultProps} version={vioVersion} />);
+    
+    fireEvent.click(screen.getByRole('button', { name: /Select Location/i }));
+    
+    await waitFor(() => {
+      expect(save).toHaveBeenCalledWith({
+        defaultPath: 'Gold_Plant.vio',
+        filters: [
           {
             name: 'All Files',
             extensions: ['*']
