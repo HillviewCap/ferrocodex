@@ -20,7 +20,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import * as dialog from '@tauri-apps/plugin-dialog';
-import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize } from '../types/assets';
+import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize, validateFileSize, validateFileExtension } from '../types/assets';
 import useAuthStore from '../store/auth';
 
 const { Title, Text } = Typography;
@@ -77,20 +77,39 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
       });
 
       if (selected && typeof selected === 'string') {
-        // Get file name from path
-        const fileName = selected.split(/[\\/]/).pop() || 'unknown';
-        
-        // For now, we'll set a placeholder size since we can't get it from the dialog
-        // In a production app, you might want to invoke a Rust command to get file info
-        const fileInfo: FileInfo = {
-          name: fileName,
-          size: 0, // Placeholder
-          path: selected,
-          type: 'application/octet-stream'
-        };
+        // Get file metadata from backend
+        try {
+          const metadata = await invoke<{name: string, size: number, content_type: string, hash: string}>('get_file_metadata', {
+            filePath: selected
+          });
 
-        setSelectedFile(fileInfo);
-        setCurrentStep(1);
+          // Validate file extension
+          const extensionError = validateFileExtension(metadata.name);
+          if (extensionError) {
+            message.error(extensionError);
+            return;
+          }
+
+          // Validate file size
+          const sizeError = validateFileSize(metadata.size);
+          if (sizeError) {
+            message.error(sizeError);
+            return;
+          }
+
+          const fileInfo: FileInfo = {
+            name: metadata.name,
+            size: metadata.size,
+            path: selected,
+            type: metadata.content_type
+          };
+
+          setSelectedFile(fileInfo);
+          setCurrentStep(1);
+        } catch (metadataError) {
+          console.error('Failed to get file metadata:', metadataError);
+          message.error(`Failed to read file information: ${metadataError instanceof Error ? metadataError.message : String(metadataError)}`);
+        }
       }
     } catch (error) {
       console.error('File selection error:', error);

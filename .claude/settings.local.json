@@ -14,7 +14,10 @@
       "Bash(npm run:*)",
       "Bash(npx tsc:*)",
       "Bash(gh issue view:*)",
-      "Bash(RUST_BACKTRACE=1 cargo test configurations::tests::test_restore_version -- --nocapture)"
+      "Bash(RUST_BACKTRACE=1 cargo test configurations::tests::test_restore_version -- --nocapture)",
+      "Bash(npm install:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)"
     ],
     "deny": []
   }
