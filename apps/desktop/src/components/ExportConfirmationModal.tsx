@@ -110,6 +110,9 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
 
       const startTime = Date.now();
 
+      // Log the path for debugging
+      console.log('Attempting to export to path:', selectedPath);
+      
       // Call the backend export function
       await invoke('export_configuration_version', {
         token,

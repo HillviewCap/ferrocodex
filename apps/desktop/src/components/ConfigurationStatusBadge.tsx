@@ -4,7 +4,8 @@ import {
   EditOutlined,
   CheckCircleOutlined,
   StarOutlined,
-  FolderOutlined
+  FolderOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { ConfigurationStatus } from '../types/assets';
 
@@ -30,6 +31,12 @@ const ConfigurationStatusBadge: React.FC<ConfigurationStatusBadgeProps> = ({
           color: 'default',
           icon: <EditOutlined />,
           description: 'Work in progress - not yet approved'
+        };
+      case 'Silver':
+        return {
+          color: 'cyan',
+          icon: <TrophyOutlined />,
+          description: 'Candidate for review - promoted from branch'
         };
       case 'Approved':
         return {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ConfigProvider, Alert, Button } from 'antd';
+import { ConfigProvider, Alert, Button, App as AntApp } from 'antd';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import useAuthStore from './store/auth';
@@ -88,8 +88,9 @@ function App() {
         },
       }}
     >
-      <Router>
-        <Routes>
+      <AntApp>
+        <Router>
+          <Routes>
           {/* First launch - admin setup */}
           <Route 
             path="/setup" 
@@ -135,6 +136,7 @@ function App() {
           />
         </Routes>
       </Router>
+      </AntApp>
     </ConfigProvider>
   );
 }

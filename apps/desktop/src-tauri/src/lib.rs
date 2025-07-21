@@ -20,11 +20,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 use tracing::{error, info, warn};
+use serde::{Deserialize, Serialize};
 
 type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
 type LoginAttemptTrackerState = Mutex<LoginAttemptTracker>;
 type RateLimiterState = Mutex<RateLimiter>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DashboardStats {
+    total_assets: i64,
+    total_versions: i64,
+    encryption_type: String,
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -617,6 +625,58 @@ async fn get_dashboard_assets(
 }
 
 #[tauri::command]
+async fn get_dashboard_stats(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<DashboardStats, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            
+            // Get total assets count
+            let total_assets: i64 = conn
+                .query_row("SELECT COUNT(*) FROM assets", [], |row| row.get(0))
+                .map_err(|e| {
+                    error!("Failed to count assets: {}", e);
+                    format!("Failed to count assets: {}", e)
+                })?;
+            
+            // Get total versions count across all assets
+            let total_versions: i64 = conn
+                .query_row("SELECT COUNT(*) FROM configuration_versions", [], |row| row.get(0))
+                .map_err(|e| {
+                    error!("Failed to count versions: {}", e);
+                    format!("Failed to count versions: {}", e)
+                })?;
+            
+            let stats = DashboardStats {
+                total_assets,
+                total_versions,
+                encryption_type: "AES-256".to_string(),
+            };
+            
+            info!("Dashboard stats accessed by: {}", session.username);
+            Ok(stats)
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
 async fn get_asset_details(
     token: String,
     asset_id: i64,
@@ -705,7 +765,7 @@ async fn import_configuration(
     // Check for malicious input
     if InputSanitizer::is_potentially_malicious(&asset_name) || InputSanitizer::is_potentially_malicious(&notes) {
         error!("Potentially malicious input detected in import_configuration");
-        return Err("Invalid input detected".to_string());
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
 
     // Read file content
@@ -876,7 +936,18 @@ async fn create_branch(
             match branch_repo.create_branch(request) {
                 Ok(branch) => {
                     info!("Branch created by {}: {} for asset {}", session.username, branch.name, asset_id);
-                    Ok(branch.into())
+                    // For a newly created branch, we need to fetch the full BranchInfo with proper metadata
+                    match branch_repo.get_branch_by_id(branch.id) {
+                        Ok(Some(branch_info)) => Ok(branch_info),
+                        Ok(None) => {
+                            error!("Created branch not found: {}", branch.id);
+                            Err("Failed to retrieve created branch".to_string())
+                        }
+                        Err(e) => {
+                            error!("Failed to retrieve created branch: {}", e);
+                            Err(format!("Failed to retrieve created branch: {}", e))
+                        }
+                    }
                 }
                 Err(e) => {
                     error!("Failed to create branch: {}", e);
@@ -995,7 +1066,7 @@ async fn import_version_to_branch(
     
     if InputSanitizer::is_potentially_malicious(&notes) {
         error!("Potentially malicious input detected in import_version_to_branch");
-        return Err("Invalid input detected".to_string());
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns in your notes.".to_string());
     }
 
     if notes.len() > 1000 {
@@ -1193,6 +1264,11 @@ async fn update_configuration_status(
     let status = ConfigurationStatus::from_str(&new_status)
         .ok_or_else(|| format!("Invalid status: {}", new_status))?;
 
+    // Prevent direct Golden status changes - must use promote_to_golden
+    if status == ConfigurationStatus::Golden {
+        return Err("Golden status can only be set through the promotion wizard. Please use 'Promote to Golden' option for Approved versions.".to_string());
+    }
+
     // Validate inputs
     let change_reason = change_reason.map(|r| InputSanitizer::sanitize_string(&r));
     
@@ -1383,6 +1459,127 @@ async fn promote_to_golden(
 }
 
 #[tauri::command]
+async fn promote_branch_to_silver(
+    token: String,
+    branch_id: i64,
+    promotion_notes: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<i64, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Both Engineers and Administrators can promote branches to Silver
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to promote branch to Silver: {}", session.username);
+        return Err("Insufficient permissions to promote branch to Silver".to_string());
+    }
+
+    // Validate inputs
+    let promotion_notes = promotion_notes.map(|n| InputSanitizer::sanitize_string(&n));
+    
+    if let Some(ref notes) = promotion_notes {
+        if InputSanitizer::is_potentially_malicious(notes) {
+            error!("Potentially malicious input detected in promote_branch_to_silver");
+            return Err("Invalid input detected".to_string());
+        }
+        if notes.len() > 1000 {
+            return Err("Promotion notes cannot exceed 1000 characters".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let branch_repo = SqliteBranchRepository::new(db.get_connection());
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            // Get the latest version of the branch
+            let latest_version = match branch_repo.get_branch_latest_version(branch_id) {
+                Ok(Some(version)) => version,
+                Ok(None) => return Err("Branch has no versions to promote".to_string()),
+                Err(e) => {
+                    error!("Failed to get branch latest version: {}", e);
+                    return Err(format!("Failed to get branch latest version: {}", e));
+                }
+            };
+            
+            // Get branch details to get the asset ID
+            let branch = match branch_repo.get_branch_by_id(branch_id) {
+                Ok(Some(b)) => b,
+                Ok(None) => return Err("Branch not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get branch details: {}", e);
+                    return Err(format!("Failed to get branch details: {}", e));
+                }
+            };
+            
+            // Get the configuration content
+            let content = match config_repo.get_configuration_content(latest_version.version_id) {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to get configuration content: {}", e);
+                    return Err(format!("Failed to get configuration content: {}", e));
+                }
+            };
+            
+            // Create a new configuration version in the main line with Silver status
+            let notes = format!(
+                "Promoted from branch '{}' (version {}). {}",
+                branch.name,
+                latest_version.branch_version_number,
+                promotion_notes.unwrap_or_default()
+            );
+            
+            let config_request = CreateConfigurationRequest {
+                asset_id: branch.asset_id,
+                file_name: latest_version.file_name.clone(),
+                file_content: content,
+                author: session.user_id,
+                notes,
+            };
+            
+            // Store the new configuration
+            let new_config = match config_repo.store_configuration(config_request) {
+                Ok(config) => config,
+                Err(e) => {
+                    error!("Failed to create Silver configuration: {}", e);
+                    return Err(format!("Failed to create Silver configuration: {}", e));
+                }
+            };
+            
+            // Update the status to Silver
+            match config_repo.update_configuration_status(
+                new_config.id,
+                ConfigurationStatus::Silver,
+                session.user_id,
+                Some("Promoted from branch".to_string())
+            ) {
+                Ok(_) => {
+                    info!("Branch promoted to Silver by {}: Branch {} -> Config ID {}", 
+                          session.username, branch.name, new_config.id);
+                    Ok(new_config.id)
+                }
+                Err(e) => {
+                    error!("Failed to update status to Silver: {}", e);
+                    Err(format!("Failed to update status to Silver: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
 async fn get_golden_version(
     token: String,
     asset_id: i64,
@@ -1480,16 +1677,17 @@ async fn export_configuration_version(
     };
     drop(session_manager_guard);
 
-    // Validate inputs
-    let export_path = InputSanitizer::sanitize_string(&export_path);
+    // Validate export path
+    let export_path = export_path.trim();
     
-    if InputSanitizer::is_potentially_malicious(&export_path) {
-        error!("Potentially malicious input detected in export_configuration_version");
-        return Err("Invalid export path detected".to_string());
-    }
-
-    if export_path.trim().is_empty() {
+    if export_path.is_empty() {
         return Err("Export path cannot be empty".to_string());
+    }
+    
+    // Use proper file path validation instead of generic malicious input check
+    if let Err(e) = InputSanitizer::validate_file_path(&export_path) {
+        error!("Invalid export path: {}", e);
+        return Err(format!("Invalid export path: {}", e));
     }
 
     let db_guard = db_state.lock().unwrap();
@@ -1549,6 +1747,7 @@ pub fn run() {
             reactivate_user,
             create_asset,
             get_dashboard_assets,
+            get_dashboard_stats,
             get_asset_details,
             import_configuration,
             get_configuration_versions,
@@ -1556,6 +1755,7 @@ pub fn run() {
             get_configuration_status_history,
             get_available_status_transitions,
             promote_to_golden,
+            promote_branch_to_silver,
             get_golden_version,
             get_promotion_eligibility,
             export_configuration_version,

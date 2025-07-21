@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Button, Typography, Space, Card, Row, Col } from 'antd';
 import { 
   UserOutlined, 
@@ -13,6 +13,8 @@ import {
   ImportOutlined
 } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
+import { invoke } from '@tauri-apps/api/core';
+import { DashboardStats } from '../types/dashboard';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
 import { canAccessUserManagement } from '../utils/roleUtils';
@@ -21,8 +23,32 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, token } = useAuthStore();
   const [selectedMenuItem, setSelectedMenuItem] = useState('dashboard');
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (selectedMenuItem === 'dashboard' && token) {
+      fetchDashboardStats();
+    }
+  }, [selectedMenuItem, token]);
+
+  const fetchDashboardStats = async () => {
+    if (!token) return;
+    
+    setStatsLoading(true);
+    try {
+      const stats = await invoke<DashboardStats>('get_dashboard_stats', {
+        token: token
+      });
+      setDashboardStats(stats);
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -237,24 +263,30 @@ const Dashboard: React.FC = () => {
                   </Col>
                 </Row>
 
-                <Card style={{ marginTop: '24px' }}>
+                <Card style={{ marginTop: '24px' }} loading={statsLoading}>
                   <Title level={4}>Quick Stats</Title>
                   <Row gutter={[32, 16]}>
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
-                        <Title level={2} style={{ color: '#52c41a', margin: 0 }}>0</Title>
+                        <Title level={2} style={{ color: '#52c41a', margin: 0 }}>
+                          {dashboardStats?.total_assets ?? 0}
+                        </Title>
                         <Text type="secondary">Configuration Assets</Text>
                       </div>
                     </Col>
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
-                        <Title level={2} style={{ color: '#1890ff', margin: 0 }}>0</Title>
+                        <Title level={2} style={{ color: '#1890ff', margin: 0 }}>
+                          {dashboardStats?.total_versions ?? 0}
+                        </Title>
                         <Text type="secondary">Total Versions</Text>
                       </div>
                     </Col>
                     <Col span={8}>
                       <div style={{ textAlign: 'center' }}>
-                        <Title level={2} style={{ color: '#fa8c16', margin: 0 }}>AES-256</Title>
+                        <Title level={2} style={{ color: '#fa8c16', margin: 0 }}>
+                          {dashboardStats?.encryption_type ?? 'AES-256'}
+                        </Title>
                         <Text type="secondary">Encryption</Text>
                       </div>
                     </Col>

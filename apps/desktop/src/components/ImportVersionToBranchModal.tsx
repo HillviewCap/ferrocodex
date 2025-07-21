@@ -4,7 +4,6 @@ import {
   Form, 
   Input, 
   Button, 
-  message, 
   Space,
   Typography,
   Card,
@@ -12,6 +11,7 @@ import {
   Tag,
   Avatar,
   Divider,
+  App
 } from 'antd';
 import { 
   UploadOutlined,
@@ -26,6 +26,7 @@ import {
 import { BranchInfo } from '../types/branches';
 import useAuthStore from '../store/auth';
 import useBranchStore from '../store/branches';
+import * as dialog from '@tauri-apps/plugin-dialog';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -45,6 +46,7 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
 }) => {
   const { token } = useAuthStore();
   const { importVersionToBranch, isImportingVersion } = useBranchStore();
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -72,33 +74,28 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
 
   const handleFileSelect = async () => {
     try {
-      // TODO: Update to Tauri v2 dialog API
-      message.info('File selection dialog not yet implemented for Tauri v2');
-      return;
-      
-      /* const selected = await window.__TAURI__.dialog.open({
+      const selected = await dialog.open({
         multiple: false,
         filters: [
           {
             name: 'Configuration Files',
-            extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump']
+            extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump', 'vio']
           },
           {
             name: 'All Files',
             extensions: ['*']
           }
         ]
-      }); */
-      /* const selected = null;
+      });
       
       if (selected && typeof selected === 'string') {
-        const pathParts = selected.split('/');
-        const fileName = pathParts[pathParts.length - 1];
+        // Get file name from path - handle both Windows and Unix paths
+        const fileName = selected.split(/[\\/]/).pop() || 'unknown';
         
         setSelectedFile(selected);
         setFileName(fileName);
         form.setFieldValue('file_path', selected);
-      } */
+      }
     } catch (error) {
       console.error('File selection failed:', error);
       message.error('Failed to select file');
@@ -118,8 +115,10 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
       });
 
       message.success('Version imported to branch successfully!');
-      onSuccess();
+      
+      // Reset form and close modal
       handleReset();
+      onSuccess();
       
     } catch (error) {
       console.error('Version import failed:', error);
@@ -260,7 +259,24 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
           label="Version Notes"
           rules={[
             { required: true, message: 'Please provide notes for this version' },
-            { max: 1000, message: 'Notes cannot exceed 1000 characters' }
+            { max: 1000, message: 'Notes cannot exceed 1000 characters' },
+            {
+              validator: (_, value) => {
+                if (value) {
+                  const suspiciousPatterns = [
+                    '<script', 'javascript:', 'vbscript:', 'onload=', 'onerror=', 'onclick=',
+                    'eval(', 'exec(', 'system(', '; rm ', '; del ', "' or '1'='1"
+                  ];
+                  const valueLower = value.toLowerCase();
+                  for (const pattern of suspiciousPatterns) {
+                    if (valueLower.includes(pattern)) {
+                      return Promise.reject(new Error('Please avoid using special characters or script-like patterns in your notes'));
+                    }
+                  }
+                }
+                return Promise.resolve();
+              }
+            }
           ]}
           tooltip="Describe the changes or purpose of this version"
         >

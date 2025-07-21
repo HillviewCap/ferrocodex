@@ -20,6 +20,7 @@ pub struct ConfigurationVersion {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ConfigurationStatus {
     Draft,
+    Silver,
     Approved,
     Golden,
     Archived,
@@ -29,6 +30,7 @@ impl ConfigurationStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             ConfigurationStatus::Draft => "Draft",
+            ConfigurationStatus::Silver => "Silver",
             ConfigurationStatus::Approved => "Approved", 
             ConfigurationStatus::Golden => "Golden",
             ConfigurationStatus::Archived => "Archived",
@@ -38,6 +40,7 @@ impl ConfigurationStatus {
     pub fn from_str(s: &str) -> Option<ConfigurationStatus> {
         match s {
             "Draft" => Some(ConfigurationStatus::Draft),
+            "Silver" => Some(ConfigurationStatus::Silver),
             "Approved" => Some(ConfigurationStatus::Approved),
             "Golden" => Some(ConfigurationStatus::Golden),
             "Archived" => Some(ConfigurationStatus::Archived),
@@ -157,7 +160,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
                 content_hash TEXT NOT NULL,
                 author INTEGER NOT NULL,
                 notes TEXT,
-                status TEXT DEFAULT 'Draft' CHECK(status IN ('Draft', 'Approved', 'Golden', 'Archived')),
+                status TEXT DEFAULT 'Draft' CHECK(status IN ('Draft', 'Silver', 'Approved', 'Golden', 'Archived')),
                 status_changed_by INTEGER REFERENCES users(id),
                 status_changed_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -481,32 +484,40 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
             "Engineer" => {
                 match current {
                     ConfigurationStatus::Draft => {
-                        transitions.push(ConfigurationStatus::Approved);
+                        transitions.push(ConfigurationStatus::Silver);
                     }
-                    _ => {} // Engineers can only promote Draft to Approved
+                    ConfigurationStatus::Silver => {
+                        transitions.push(ConfigurationStatus::Draft);
+                    }
+                    _ => {} // Engineers can only work with Draft and Silver
                 }
             }
             "Administrator" => {
                 match current {
                     ConfigurationStatus::Draft => {
+                        transitions.push(ConfigurationStatus::Silver);
                         transitions.push(ConfigurationStatus::Approved);
-                        transitions.push(ConfigurationStatus::Golden);
+                        transitions.push(ConfigurationStatus::Archived);
+                    }
+                    ConfigurationStatus::Silver => {
+                        transitions.push(ConfigurationStatus::Draft);
+                        transitions.push(ConfigurationStatus::Approved);
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Approved => {
                         transitions.push(ConfigurationStatus::Draft);
-                        transitions.push(ConfigurationStatus::Golden);
+                        transitions.push(ConfigurationStatus::Silver);
+                        // Golden status removed - must use promote_to_golden
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Golden => {
                         transitions.push(ConfigurationStatus::Draft);
+                        transitions.push(ConfigurationStatus::Silver);
                         transitions.push(ConfigurationStatus::Approved);
                         transitions.push(ConfigurationStatus::Archived);
                     }
                     ConfigurationStatus::Archived => {
-                        transitions.push(ConfigurationStatus::Draft);
-                        transitions.push(ConfigurationStatus::Approved);
-                        transitions.push(ConfigurationStatus::Golden);
+                        // Archived versions are immutable - no transitions allowed
                     }
                 }
             }

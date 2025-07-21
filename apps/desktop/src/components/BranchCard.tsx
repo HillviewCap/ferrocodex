@@ -18,9 +18,12 @@ import {
   CommentOutlined,
   LinkOutlined,
   EyeOutlined,
-  UploadOutlined,
   HistoryOutlined,
-  TagOutlined
+  TagOutlined,
+  ImportOutlined,
+  ExportOutlined,
+  WarningOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { BranchInfo, getBranchStatusColor, getBranchStatusText } from '../types/branches';
 
@@ -30,8 +33,10 @@ interface BranchCardProps {
   branch: BranchInfo;
   onViewDetails?: (branch: BranchInfo) => void;
   onSelectBranch?: (branch: BranchInfo) => void;
-  onUpdateBranch?: (branch: BranchInfo) => void;
   onViewHistory?: (branch: BranchInfo) => void;
+  onImportVersion?: (branch: BranchInfo) => void;
+  onExportLatestVersion?: (branch: BranchInfo) => void;
+  onPromoteToSilver?: (branch: BranchInfo) => void;
   showActions?: boolean;
   versionCount?: number;
   latestVersionNumber?: string;
@@ -41,8 +46,10 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   branch, 
   onViewDetails, 
   onSelectBranch, 
-  onUpdateBranch,
   onViewHistory,
+  onImportVersion,
+  onExportLatestVersion,
+  onPromoteToSilver,
   showActions = true,
   versionCount = 0,
   latestVersionNumber
@@ -102,11 +109,6 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
     }
   };
 
-  const handleUpdateBranch = () => {
-    if (onUpdateBranch) {
-      onUpdateBranch(branch);
-    }
-  };
 
   const handleViewHistory = () => {
     if (onViewHistory) {
@@ -114,6 +116,26 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
     }
   };
 
+  const handleImportVersion = () => {
+    if (onImportVersion) {
+      onImportVersion(branch);
+    }
+  };
+
+  const handleExportLatestVersion = () => {
+    if (onExportLatestVersion) {
+      onExportLatestVersion(branch);
+    }
+  };
+
+  const handlePromoteToSilver = () => {
+    if (onPromoteToSilver) {
+      onPromoteToSilver(branch);
+    }
+  };
+
+  const isParentArchived = branch.parent_version_status === 'Archived';
+  
   return (
     <Card 
       size="small" 
@@ -122,7 +144,8 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
         marginBottom: '12px',
         borderRadius: '8px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        border: `1px solid ${branch.is_active ? '#d9f7be' : '#ffccc7'}`
+        border: `1px solid ${isParentArchived ? '#faad14' : (branch.is_active ? '#d9f7be' : '#ffccc7')}`,
+        backgroundColor: isParentArchived ? '#fffbe6' : undefined
       }}
       styles={{ body: { padding: '16px' } }}
     >
@@ -170,11 +193,16 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                       Branched from: 
                     </Text>
                     <Tag 
-                      color={getVersionColor(branch.parent_version_number)} 
+                      color={branch.parent_version_status === 'Archived' ? 'orange' : getVersionColor(branch.parent_version_number)} 
                       style={{ cursor: 'pointer' }}
-                      title={`Click to view parent version ${branch.parent_version_number}`}
+                      title={`Parent version ${branch.parent_version_number} is ${branch.parent_version_status}`}
                     >
                       {branch.parent_version_number}
+                      {branch.parent_version_status === 'Archived' && (
+                        <Tooltip title="This branch was created from a version that is now archived">
+                          <WarningOutlined style={{ marginLeft: '4px' }} />
+                        </Tooltip>
+                      )}
                     </Tag>
                   </Space>
                   {versionCount > 0 && (
@@ -230,18 +258,44 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
                   View Details
                 </Button>
               )}
-              {onUpdateBranch && branch.is_active && (
+              {onImportVersion && branch.is_active && (
                 <Button 
                   type="primary" 
                   size="small" 
-                  icon={<UploadOutlined />}
-                  onClick={handleUpdateBranch}
+                  icon={<ImportOutlined />}
+                  onClick={handleImportVersion}
                   style={{ width: '100%' }}
                 >
-                  Update Branch
+                  Import Version
                 </Button>
               )}
-              {onViewHistory && versionCount > 0 && (
+              {onExportLatestVersion && branch.is_active && versionCount > 1 && (
+                <Button 
+                  type="default" 
+                  size="small" 
+                  icon={<ExportOutlined />}
+                  onClick={handleExportLatestVersion}
+                  style={{ width: '100%' }}
+                >
+                  Export Latest
+                </Button>
+              )}
+              {onPromoteToSilver && branch.is_active && versionCount > 1 && (
+                <Button 
+                  type="default" 
+                  size="small" 
+                  icon={<TrophyOutlined />}
+                  onClick={handlePromoteToSilver}
+                  style={{ 
+                    width: '100%',
+                    color: '#00CED1',
+                    borderColor: '#00CED1'
+                  }}
+                >
+                  Promote to Silver
+                </Button>
+              )}
+              {onViewHistory && versionCount > 1 && (
                 <Button 
                   type="default" 
                   size="small" 

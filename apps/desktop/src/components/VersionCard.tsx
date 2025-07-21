@@ -168,6 +168,8 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
     }
   };
 
+  const isArchived = version.status === 'Archived';
+  
   const canShowPromoteToGolden = canPromoteToGolden && 
     token && 
     version.status === 'Approved';
@@ -189,7 +191,7 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
         onClick: handlePromoteToGolden
       }
     ] : []),
-    ...(canChangeStatus && token ? [
+    ...(canChangeStatus && token && !isArchived ? [
       {
         key: 'change-status',
         label: 'Change Status',
@@ -212,7 +214,9 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
         width: '100%',
         marginBottom: '0',
         borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        opacity: isArchived ? 0.7 : 1,
+        backgroundColor: isArchived ? '#fafafa' : undefined
       }}
       styles={{ body: { padding: '16px' } }}
     >
@@ -308,7 +312,7 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
               </Dropdown>
             )}
             
-            {showCreateBranch && onCreateBranch && (
+            {showCreateBranch && onCreateBranch && !isArchived && (
               <Button 
                 type="primary" 
                 size="small" 

@@ -12,8 +12,8 @@ import {
   Alert,
   Row,
   Col,
-  Statistic,
-  Divider
+  Divider,
+  message
 } from 'antd';
 import {
   FileOutlined,
@@ -27,8 +27,9 @@ import { BranchInfo, BranchVersionInfo } from '../types/branches';
 import useAuthStore from '../store/auth';
 import useBranchStore from '../store/branches';
 import BranchVersionCard from './BranchVersionCard';
+import ExportConfirmationModal from './ExportConfirmationModal';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 interface BranchVersionHistoryProps {
   branch: BranchInfo;
@@ -50,6 +51,8 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [compareResult, setCompareResult] = useState<string>('');
   const [isComparing, setIsComparing] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [versionToExport, setVersionToExport] = useState<BranchVersionInfo | null>(null);
 
   const versions = branchVersions[branch.id] || [];
 
@@ -102,6 +105,22 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
     setCompareModalVisible(false);
     setCompareResult('');
     setSelectedVersions([]);
+  };
+
+  const handleExportVersion = (version: BranchVersionInfo) => {
+    setVersionToExport(version);
+    setExportModalVisible(true);
+  };
+
+  const handleExportSuccess = (exportPath: string) => {
+    setExportModalVisible(false);
+    setVersionToExport(null);
+    message.success(`Branch version exported successfully to ${exportPath}`);
+  };
+
+  const handleExportCancel = () => {
+    setExportModalVisible(false);
+    setVersionToExport(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -180,16 +199,24 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
 
   return (
     <div>
-      <Card
-        title={
-          <Space>
-            <HistoryOutlined />
-            <span>Branch Version History</span>
-            <Tag color="green">{branch.name}</Tag>
-          </Space>
-        }
-        extra={
-          selectedVersions.length === 2 && (
+      {/* Page Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <Title level={2} style={{ margin: 0 }}>
+              <Space>
+                <HistoryOutlined />
+                Branch Version History
+              </Space>
+            </Title>
+            <Space style={{ marginTop: '4px' }}>
+              <Text type="secondary">
+                Manage and compare versions for branch:
+              </Text>
+              <Tag color="green">{branch.name}</Tag>
+            </Space>
+          </div>
+          {selectedVersions.length === 2 && (
             <Button
               type="primary"
               icon={<SwapOutlined />}
@@ -197,38 +224,56 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
             >
               Compare Selected
             </Button>
-          )
-        }
-      >
+          )}
+        </div>
+      </div>
+
+      <Card>
         {/* Branch Version Statistics */}
         <Row gutter={16} style={{ marginBottom: '24px' }}>
           <Col span={6}>
-            <Statistic
-              title="Total Versions"
-              value={totalVersions}
-              prefix={<TagOutlined />}
-            />
+            <Card size="small" style={{ textAlign: 'center' }}>
+              <Space direction="vertical" size={0}>
+                <TagOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
+                  {totalVersions}
+                </div>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Total Versions</Text>
+              </Space>
+            </Card>
           </Col>
           <Col span={6}>
-            <Statistic
-              title="Latest Version"
-              value={latestVersion?.branch_version_number || 'None'}
-              prefix={<FileTextOutlined />}
-            />
+            <Card size="small" style={{ textAlign: 'center' }}>
+              <Space direction="vertical" size={0}>
+                <FileTextOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
+                  {latestVersion?.branch_version_number || 'None'}
+                </div>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Latest Version</Text>
+              </Space>
+            </Card>
           </Col>
           <Col span={6}>
-            <Statistic
-              title="Total Size"
-              value={formatFileSize(totalSize)}
-              prefix={<FileOutlined />}
-            />
+            <Card size="small" style={{ textAlign: 'center' }}>
+              <Space direction="vertical" size={0}>
+                <FileOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
+                  {formatFileSize(totalSize)}
+                </div>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Total Size</Text>
+              </Space>
+            </Card>
           </Col>
           <Col span={6}>
-            <Statistic
-              title="Last Updated"
-              value={latestVersion ? formatDate(latestVersion.created_at) : 'Never'}
-              prefix={<CalendarOutlined />}
-            />
+            <Card size="small" style={{ textAlign: 'center' }}>
+              <Space direction="vertical" size={0}>
+                <CalendarOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
+                  {latestVersion ? formatDate(latestVersion.created_at).split(',')[0] : 'Never'}
+                </div>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Last Updated</Text>
+              </Space>
+            </Card>
           </Col>
         </Row>
 
@@ -288,6 +333,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
                   // Handle view version
                   console.log('View version:', version);
                 }}
+                onDownload={() => handleExportVersion(version)}
               />
             )}
           />
@@ -373,6 +419,31 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
           </div>
         )}
       </Modal>
+
+      {/* Export Modal */}
+      {versionToExport && token && (
+        <ExportConfirmationModal
+          visible={exportModalVisible}
+          onCancel={handleExportCancel}
+          onSuccess={handleExportSuccess}
+          version={{
+            id: versionToExport.version_id,
+            version_number: versionToExport.version_number,
+            file_name: versionToExport.file_name,
+            file_size: versionToExport.file_size,
+            created_at: versionToExport.created_at,
+            author_username: versionToExport.author_username,
+            status: 'Draft',
+            notes: versionToExport.notes,
+            content_hash: '',
+            asset_id: 0,
+            author: 0,
+            status_changed_by: undefined,
+            status_changed_at: undefined
+          }}
+          token={token}
+        />
+      )}
     </div>
   );
 };

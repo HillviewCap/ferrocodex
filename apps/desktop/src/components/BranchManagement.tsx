@@ -33,6 +33,8 @@ import { BranchInfo, sortBranchesByCreated } from '../types/branches';
 import BranchCard from './BranchCard';
 import ImportVersionToBranchModal from './ImportVersionToBranchModal';
 import BranchVersionHistory from './BranchVersionHistory';
+import ExportConfirmationModal from './ExportConfirmationModal';
+import PromoteBranchToSilverModal from './PromoteBranchToSilverModal';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
 import useBranchStore from '../store/branches';
@@ -67,12 +69,18 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [showTreeView, setShowTreeView] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [hideArchivedParents, setHideArchivedParents] = useState(false);
   
   // Branch version management state
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [promoteSilverModalVisible, setPromoteSilverModalVisible] = useState(false);
   const [selectedBranchForImport, setSelectedBranchForImport] = useState<BranchInfo | null>(null);
   const [selectedBranchForHistory, setSelectedBranchForHistory] = useState<BranchInfo | null>(null);
+  const [, setSelectedBranchForExport] = useState<BranchInfo | null>(null);
+  const [selectedBranchForPromotion, setSelectedBranchForPromotion] = useState<BranchInfo | null>(null);
+  const [versionToExport, setVersionToExport] = useState<any>(null);
 
   useEffect(() => {
     fetchBranches();
@@ -80,7 +88,9 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
 
   useEffect(() => {
     filterBranches();
-  }, [branches, searchTerm, showActiveOnly]);
+  }, [branches, searchTerm, showActiveOnly, hideArchivedParents]);
+
+  // No longer need to fetch all branch versions on load since version_count is included in BranchInfo
 
   const fetchBranches = useCallback(async () => {
     if (!token) return;
@@ -89,7 +99,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     try {
       const response = await invoke<BranchInfo[]>('get_branches', {
         token,
-        asset_id: asset.id
+        assetId: asset.id
       });
       
       const sortedBranches = sortBranchesByCreated(response);
@@ -120,8 +130,13 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
       filtered = filtered.filter(branch => branch.is_active);
     }
 
+    // Filter by archived parent status
+    if (hideArchivedParents) {
+      filtered = filtered.filter(branch => branch.parent_version_status !== 'Archived');
+    }
+
     setFilteredBranches(filtered);
-  }, [branches, searchTerm, showActiveOnly]);
+  }, [branches, searchTerm, showActiveOnly, hideArchivedParents]);
 
   const handleRefresh = () => {
     fetchBranches();
@@ -141,6 +156,10 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setShowActiveOnly(!showActiveOnly);
   };
 
+  const handleArchivedParentsToggle = () => {
+    setHideArchivedParents(!hideArchivedParents);
+  };
+
   const handleViewToggle = () => {
     setShowTreeView(!showTreeView);
   };
@@ -150,19 +169,28 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setImportModalVisible(true);
   };
 
-  const handleViewBranchHistory = (branch: BranchInfo) => {
+  const handleViewBranchHistory = async (branch: BranchInfo) => {
+    // Ensure branch versions are fetched before showing history
+    if (!branchVersions[branch.id] && token) {
+      await fetchBranchVersions(token, branch.id);
+    }
     setSelectedBranchForHistory(branch);
     setHistoryModalVisible(true);
   };
 
-  const handleImportSuccess = () => {
+  const handleImportSuccess = async () => {
+    // Close modal first
     setImportModalVisible(false);
-    setSelectedBranchForImport(null);
-    message.success('Version imported successfully!');
-    // Refresh branch versions if needed
+    
+    // Refresh branch versions after modal is closed
     if (selectedBranchForImport && token) {
-      fetchBranchVersions(token, selectedBranchForImport.id);
+      await fetchBranchVersions(token, selectedBranchForImport.id);
+      // Also refresh the branches list to update version_count
+      await fetchBranches();
     }
+    
+    // Clear the selected branch
+    setSelectedBranchForImport(null);
   };
 
   const handleImportCancel = () => {
@@ -173,6 +201,77 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const handleHistoryClose = () => {
     setHistoryModalVisible(false);
     setSelectedBranchForHistory(null);
+  };
+
+  const handleExportBranch = useCallback(async (branch: BranchInfo) => {
+    if (!token) return;
+    
+    // Check if branch has any versions
+    if (branch.version_count === 0) {
+      message.warning('No versions found for this branch to export');
+      return;
+    }
+    
+    // Fetch the latest version for this branch if not already loaded
+    let versions = branchVersions[branch.id] || [];
+    if (versions.length === 0) {
+      await fetchBranchVersions(token, branch.id);
+      versions = branchVersions[branch.id] || [];
+    }
+    
+    const latestVersion = versions.find(v => v.is_branch_latest);
+    
+    if (!latestVersion) {
+      message.warning('No versions found for this branch to export');
+      return;
+    }
+    
+    setVersionToExport({
+      id: latestVersion.version_id,
+      version_number: latestVersion.version_number,
+      file_name: latestVersion.file_name,
+      file_size: latestVersion.file_size,
+      created_at: latestVersion.created_at,
+      author_username: latestVersion.author_username,
+      status: 'Active',
+      notes: latestVersion.notes,
+      content_hash: '',
+      asset_id: 0,
+      is_golden: false,
+      status_history: []
+    });
+    
+    setSelectedBranchForExport(branch);
+    setExportModalVisible(true);
+  }, [token, branchVersions, fetchBranchVersions]);
+
+  const handleExportSuccess = (exportPath: string) => {
+    setExportModalVisible(false);
+    setSelectedBranchForExport(null);
+    setVersionToExport(null);
+    message.success(`Branch version exported successfully to ${exportPath}`);
+  };
+
+  const handleExportCancel = () => {
+    setExportModalVisible(false);
+    setSelectedBranchForExport(null);
+    setVersionToExport(null);
+  };
+
+  const handlePromoteToSilver = (branch: BranchInfo) => {
+    setSelectedBranchForPromotion(branch);
+    setPromoteSilverModalVisible(true);
+  };
+
+  const handlePromotionSuccess = () => {
+    setPromoteSilverModalVisible(false);
+    setSelectedBranchForPromotion(null);
+    message.success('Branch promoted to Silver status successfully!');
+  };
+
+  const handlePromotionCancel = () => {
+    setPromoteSilverModalVisible(false);
+    setSelectedBranchForPromotion(null);
   };
 
   const branchTreeData = useMemo(() => {
@@ -242,12 +341,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     return { activeBranchCount: active, totalBranchCount: total };
   }, [branches]);
 
-  const getBranchVersionInfo = useCallback((branchId: number) => {
-    const versions = branchVersions[branchId] || [];
-    const count = versions.length;
+  const getBranchVersionInfo = useCallback((branch: BranchInfo) => {
+    const versions = branchVersions[branch.id] || [];
     const latest = versions.find(v => v.is_branch_latest);
     return {
-      count,
+      count: branch.version_count,
       latestVersionNumber: latest?.branch_version_number
     };
   }, [branchVersions]);
@@ -326,6 +424,16 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
               >
                 {showActiveOnly ? 'All Branches' : 'Active Only'}
               </Button>
+              <Tooltip title={hideArchivedParents ? 'Show all branches' : 'Hide branches from archived versions'}>
+                <Button
+                  type={hideArchivedParents ? 'primary' : 'default'}
+                  icon={<FilterOutlined />}
+                  onClick={handleArchivedParentsToggle}
+                  size="middle"
+                >
+                  {hideArchivedParents ? 'Show Archived Parents' : 'Hide Archived Parents'}
+                </Button>
+              </Tooltip>
               <Tooltip title={showTreeView ? 'Switch to list view' : 'Switch to tree view'}>
                 <Button
                   type={showTreeView ? 'primary' : 'default'}
@@ -405,6 +513,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
                     Active Only
                   </Tag>
                 )}
+                {hideArchivedParents && (
+                  <Tag color="orange">
+                    Hiding Archived Parents
+                  </Tag>
+                )}
               </Space>
             </div>
             
@@ -436,16 +549,18 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                 {filteredBranches.map((branch) => {
-                  const versionInfo = getBranchVersionInfo(branch.id);
+                  const versionInfo = getBranchVersionInfo(branch);
                   return (
                     <BranchCard
                       key={branch.id}
                       branch={branch}
                       onViewDetails={onViewBranchDetails}
                       onSelectBranch={showSelectActions ? onSelectBranch : undefined}
-                      onUpdateBranch={handleUpdateBranch}
+                      onImportVersion={handleUpdateBranch}
+                      onExportLatestVersion={handleExportBranch}
                       onViewHistory={handleViewBranchHistory}
-                      showActions={showSelectActions}
+                      onPromoteToSilver={handlePromoteToSilver}
+                      showActions={true}
                       versionCount={versionInfo.count}
                       latestVersionNumber={versionInfo.latestVersionNumber}
                     />
@@ -509,6 +624,28 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Export Modal */}
+      {versionToExport && token && (
+        <ExportConfirmationModal
+          visible={exportModalVisible}
+          onCancel={handleExportCancel}
+          onSuccess={handleExportSuccess}
+          version={versionToExport}
+          token={token}
+        />
+      )}
+
+      {/* Promote to Silver Modal */}
+      {selectedBranchForPromotion && (
+        <PromoteBranchToSilverModal
+          visible={promoteSilverModalVisible}
+          onCancel={handlePromotionCancel}
+          onSuccess={handlePromotionSuccess}
+          branch={selectedBranchForPromotion}
+          assetId={asset.id}
+        />
       )}
     </div>
   );

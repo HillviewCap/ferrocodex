@@ -12,9 +12,11 @@ export interface AssetInfo {
   name: string;
   description: string;
   created_by: number;
+  created_by_username: string;
   created_at: string;
   version_count: number;
   latest_version: string | null;
+  latest_version_notes: string | null;
 }
 
 export interface ConfigurationVersion {
@@ -30,7 +32,7 @@ export interface ConfigurationVersion {
   created_at: string;
 }
 
-export type ConfigurationStatus = 'Draft' | 'Approved' | 'Golden' | 'Archived';
+export type ConfigurationStatus = 'Draft' | 'Silver' | 'Approved' | 'Golden' | 'Archived';
 
 export interface ConfigurationVersionInfo {
   id: number;

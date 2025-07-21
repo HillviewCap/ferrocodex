@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Typography, 
   Button, 
@@ -21,7 +21,7 @@ import {
   UserOutlined,
   PlusOutlined,
   HistoryOutlined,
-  EyeOutlined
+  StarFilled
 } from '@ant-design/icons';
 import { AssetInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -43,9 +43,12 @@ const AssetManagement: React.FC = () => {
     currentView,
     selectedAsset,
     navigateToHistory,
-    navigateToDashboard
+    navigateToDashboard,
+    goldenVersions,
+    fetchGoldenVersion
   } = useAssetStore();
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const fetchedGoldenVersions = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (token) {
@@ -54,16 +57,36 @@ const AssetManagement: React.FC = () => {
   }, [token, fetchAssets]);
 
   useEffect(() => {
+    // Fetch golden versions for all assets
+    if (token && assets.length > 0) {
+      assets.forEach(asset => {
+        // Only fetch if we haven't already initiated a fetch for this asset
+        if (!fetchedGoldenVersions.current.has(asset.id)) {
+          fetchedGoldenVersions.current.add(asset.id);
+          fetchGoldenVersion(token, asset.id).catch(err => {
+            console.warn(`Failed to fetch golden version for asset ${asset.id}:`, err);
+            // Remove from set on error so it can be retried later if needed
+            fetchedGoldenVersions.current.delete(asset.id);
+          });
+        }
+      });
+    }
+  }, [token, assets, fetchGoldenVersion]);
+
+  useEffect(() => {
     if (error) {
       message.error(error);
       clearError();
     }
   }, [error, clearError]);
 
-  const handleImportSuccess = () => {
+  const handleImportSuccess = (_asset: AssetInfo) => {
     setImportModalVisible(false);
     message.success('Configuration imported successfully!');
-    // The asset will be added to the store by the import modal
+    // Refresh the assets list to ensure the new asset is displayed
+    if (token) {
+      fetchAssets(token);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -84,69 +107,125 @@ const AssetManagement: React.FC = () => {
     navigateToHistory(asset);
   };
 
-  const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
-    <Card 
-      hoverable
-      style={{ height: '100%' }}
-      bodyStyle={{ padding: '16px' }}
-      actions={[
-        <Tooltip title="View Details">
-          <EyeOutlined key="view" />
-        </Tooltip>,
-        <Tooltip title="Version History">
-          <HistoryOutlined key="history" onClick={() => handleViewHistory(asset)} />
-        </Tooltip>,
-        <Tooltip title="Add Version">
-          <PlusOutlined key="add" />
-        </Tooltip>
-      ]}
-    >
-      <Card.Meta
-        avatar={
-          <Avatar 
-            icon={<DatabaseOutlined />} 
-            style={{ backgroundColor: '#52c41a' }}
-          />
-        }
-        title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong style={{ fontSize: '16px' }}>{asset.name}</Text>
-            <Space>
-              {asset.version_count > 0 && (
-                <Tag color="blue">
-                  {formatVersion(asset.latest_version || 'v1')}
-                </Tag>
-              )}
-              <Tag color="green">
-                {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
-              </Tag>
-            </Space>
+  const handleAddVersion = (asset: AssetInfo) => {
+    // Navigate to history view and show import modal
+    navigateToHistory(asset);
+    message.info('Navigate to Version History to import a new version');
+  };
+
+  const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => {
+    const goldenVersion = goldenVersions[asset.id];
+    const hasGolden = goldenVersion !== null && goldenVersion !== undefined;
+
+    return (
+      <Card 
+        hoverable
+        onClick={() => handleViewHistory(asset)}
+        style={{ 
+          height: '100%',
+          minHeight: '200px',
+          cursor: 'pointer',
+          position: 'relative',
+          overflow: 'visible'
+        }}
+        bodyStyle={{ 
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          height: 'calc(100% - 57px)' // Account for actions bar
+        }}
+        actions={[
+          <Tooltip title="Version History">
+            <HistoryOutlined key="history" onClick={(e) => {
+              e.stopPropagation();
+              handleViewHistory(asset);
+            }} />
+          </Tooltip>,
+          <Tooltip title="Import New Version">
+            <PlusOutlined key="add" onClick={(e) => {
+              e.stopPropagation();
+              handleAddVersion(asset);
+            }} />
+          </Tooltip>
+        ]}
+      >
+        {hasGolden && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            backgroundColor: '#FFD700',
+            color: 'white',
+            padding: '3px 8px',
+            borderRadius: '0 8px 0 12px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 1
+          }}>
+            <StarFilled style={{ fontSize: '12px' }} />
+            <span style={{ display: 'inline-block' }}>GOLDEN</span>
           </div>
-        }
-        description={
-          <div style={{ marginTop: '8px' }}>
-            <Text type="secondary" style={{ fontSize: '14px' }}>
-              {asset.description || 'No description'}
+        )}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+        <Avatar 
+          icon={<DatabaseOutlined />} 
+          style={{ backgroundColor: '#52c41a' }}
+          size={48}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ marginBottom: '4px', paddingRight: hasGolden ? '70px' : '0' }}>
+            <Text strong style={{ fontSize: '16px', lineHeight: '24px' }} ellipsis>
+              {asset.name}
             </Text>
-            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <Space size={4}>
-                <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  {formatDate(asset.created_at)}
-                </Text>
-              </Space>
-              <Space size={4}>
-                <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  ID: {asset.created_by}
-                </Text>
-              </Space>
-            </div>
           </div>
-        }
-      />
-    </Card>
-  );
+          <Space size={8} wrap>
+            <Tag color="blue">
+              {formatVersion(asset.latest_version || 'v1')}
+            </Tag>
+            <Tag color="green">
+              {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
+            </Tag>
+          </Space>
+        </div>
+      </div>
+      
+      <div style={{ flex: 1, marginBottom: '12px' }}>
+        <Text 
+          type="secondary" 
+          style={{ 
+            fontSize: '14px',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}
+        >
+          {asset.latest_version_notes || asset.description || 'No description available'}
+        </Text>
+      </div>
+      
+      <div style={{ marginTop: 'auto' }}>
+        <Space size={4} style={{ marginBottom: '4px' }}>
+          <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {formatDate(asset.created_at)}
+          </Text>
+        </Space>
+        <br />
+        <Space size={4}>
+          <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {asset.created_by_username}
+          </Text>
+        </Space>
+      </div>
+      </Card>
+    );
+  };
 
   // Render history view if selected
   if (currentView === 'history' && selectedAsset) {
@@ -212,7 +291,7 @@ const AssetManagement: React.FC = () => {
       ) : (
         <Row gutter={[16, 16]}>
           {assets.map(asset => (
-            <Col xs={24} sm={12} lg={8} xl={6} key={asset.id}>
+            <Col xs={24} sm={24} md={12} lg={8} xl={8} key={asset.id}>
               <AssetCard asset={asset} />
             </Col>
           ))}

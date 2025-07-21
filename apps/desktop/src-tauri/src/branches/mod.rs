@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
+use tracing::{info, error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Branch {
@@ -23,11 +24,13 @@ pub struct BranchInfo {
     pub asset_id: i64,
     pub parent_version_id: i64,
     pub parent_version_number: String,
+    pub parent_version_status: String,
     pub created_by: i64,
     pub created_by_username: String,
     pub created_at: String,
     pub updated_at: String,
     pub is_active: bool,
+    pub version_count: i64,
 }
 
 impl From<Branch> for BranchInfo {
@@ -39,11 +42,13 @@ impl From<Branch> for BranchInfo {
             asset_id: branch.asset_id,
             parent_version_id: branch.parent_version_id,
             parent_version_number: String::new(), // Will be populated by join query
+            parent_version_status: String::new(), // Will be populated by join query
             created_by: branch.created_by,
             created_by_username: String::new(), // Will be populated by join query
             created_at: branch.created_at,
             updated_at: branch.updated_at,
             is_active: branch.is_active,
+            version_count: 0, // Will be populated by join query
         }
     }
 }
@@ -196,11 +201,13 @@ impl<'a> SqliteBranchRepository<'a> {
             asset_id: row.get("asset_id")?,
             parent_version_id: row.get("parent_version_id")?,
             parent_version_number: row.get("parent_version_number")?,
+            parent_version_status: row.get("parent_version_status")?,
             created_by: row.get("created_by")?,
             created_by_username: row.get("created_by_username")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             is_active: row.get("is_active")?,
+            version_count: row.get("version_count").unwrap_or(0),
         })
     }
 
@@ -310,6 +317,54 @@ impl<'a> SqliteBranchRepository<'a> {
 
         Ok(())
     }
+
+    fn copy_parent_version_to_branch(&self, branch_id: i64, parent_version_id: i64, created_by: i64) -> Result<BranchVersion> {
+        use crate::configurations::{SqliteConfigurationRepository, ConfigurationRepository, CreateConfigurationRequest};
+        
+        // Get the parent version details and content
+        let config_repo = SqliteConfigurationRepository::new(self.conn);
+        
+        let parent_config = config_repo.get_configuration_by_id(parent_version_id)?
+            .ok_or_else(|| anyhow::anyhow!("Parent version not found"))?;
+        
+        let parent_content = config_repo.get_configuration_content(parent_version_id)?;
+        
+        // Get the asset_id from the branch
+        let asset_id: i64 = self.conn.query_row(
+            "SELECT asset_id FROM branches WHERE id = ?1",
+            [branch_id],
+            |row| row.get(0)
+        )?;
+        
+        // Create a new configuration version as a copy of the parent
+        let config_request = CreateConfigurationRequest {
+            asset_id,
+            file_name: parent_config.file_name.clone(),
+            file_content: parent_content,
+            author: created_by,
+            notes: format!("Initial branch version created from parent version {}", parent_config.version_number),
+        };
+        
+        let new_config = config_repo.store_configuration(config_request)?;
+        
+        // Create the branch version entry
+        let branch_version_number = self.generate_next_branch_version_number(branch_id)?;
+        
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO branch_versions (branch_id, version_id, branch_version_number, is_latest)
+             VALUES (?1, ?2, ?3, 1) RETURNING *"
+        )?;
+        
+        let branch_version = stmt.query_row(
+            params![branch_id, new_config.id, &branch_version_number],
+            Self::row_to_branch_version,
+        )?;
+        
+        // Update branch with latest version info
+        self.update_branch_latest_version(branch_id, new_config.id, &branch_version_number)?;
+        
+        Ok(branch_version)
+    }
 }
 
 impl<'a> BranchRepository for SqliteBranchRepository<'a> {
@@ -323,18 +378,28 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
             return Err(anyhow::anyhow!("Branch name '{}' already exists for this asset", request.name));
         }
         
-        // Verify parent version exists
+        // Verify parent version exists and is not archived
         let mut version_check_stmt = self.conn.prepare(
-            "SELECT id FROM configuration_versions WHERE id = ?1 AND asset_id = ?2"
+            "SELECT id, status FROM configuration_versions WHERE id = ?1 AND asset_id = ?2"
         )?;
         
-        let version_exists = version_check_stmt.query_row(
+        let version_status = version_check_stmt.query_row(
             [request.parent_version_id, request.asset_id],
-            |_| Ok(())
+            |row| {
+                let status: String = row.get("status")?;
+                Ok(status)
+            }
         );
         
-        if version_exists.is_err() {
-            return Err(anyhow::anyhow!("Parent version does not exist or does not belong to this asset"));
+        match version_status {
+            Ok(status) => {
+                if status == "Archived" {
+                    return Err(anyhow::anyhow!("Cannot create branch from archived version. Please select a non-archived version."));
+                }
+            },
+            Err(_) => {
+                return Err(anyhow::anyhow!("Parent version does not exist or does not belong to this asset"));
+            }
         }
         
         // Create the branch
@@ -354,14 +419,30 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
             Self::row_to_branch,
         )?;
 
+        // Automatically create an initial branch version from the parent version
+        let result = self.copy_parent_version_to_branch(branch.id, request.parent_version_id, request.created_by);
+        
+        match result {
+            Ok(branch_version) => {
+                info!("Created initial branch version {} from parent version {}", 
+                    branch_version.branch_version_number, request.parent_version_id);
+            }
+            Err(e) => {
+                error!("Failed to create initial branch version: {}", e);
+                // We don't fail the branch creation if initial version fails
+                // The user can still import versions manually
+            }
+        }
+
         Ok(branch)
     }
 
     fn get_branches(&self, asset_id: i64) -> Result<Vec<BranchInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT b.id, b.name, b.description, b.asset_id, b.parent_version_id, 
-                    cv.version_number as parent_version_number, b.created_by, 
-                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active
+                    cv.version_number as parent_version_number, cv.status as parent_version_status, b.created_by, 
+                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active,
+                    (SELECT COUNT(*) FROM branch_versions bv WHERE bv.branch_id = b.id) as version_count
              FROM branches b
              JOIN configuration_versions cv ON b.parent_version_id = cv.id
              JOIN users u ON b.created_by = u.id
@@ -382,8 +463,9 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
     fn get_branch_by_id(&self, branch_id: i64) -> Result<Option<BranchInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT b.id, b.name, b.description, b.asset_id, b.parent_version_id, 
-                    cv.version_number as parent_version_number, b.created_by, 
-                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active
+                    cv.version_number as parent_version_number, cv.status as parent_version_status, b.created_by, 
+                    u.username as created_by_username, b.created_at, b.updated_at, b.is_active,
+                    (SELECT COUNT(*) FROM branch_versions bv WHERE bv.branch_id = b.id) as version_count
              FROM branches b
              JOIN configuration_versions cv ON b.parent_version_id = cv.id
              JOIN users u ON b.created_by = u.id
