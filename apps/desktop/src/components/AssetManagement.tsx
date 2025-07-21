@@ -155,7 +155,7 @@ const AssetManagement: React.FC = () => {
             overflow: 'hidden'
           }}
         >
-          {asset.description || 'Configuration asset - imported from file'}
+          {asset.latest_version_notes || asset.description || 'No description available'}
         </Text>
       </div>
       
@@ -170,7 +170,7 @@ const AssetManagement: React.FC = () => {
         <Space size={4}>
           <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            ID: {asset.created_by}
+            {asset.created_by_username}
           </Text>
         </Space>
       </div>

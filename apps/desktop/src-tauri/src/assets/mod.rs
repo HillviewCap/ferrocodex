@@ -18,9 +18,11 @@ pub struct AssetInfo {
     pub name: String,
     pub description: String,
     pub created_by: i64,
+    pub created_by_username: String,
     pub created_at: String,
     pub version_count: i64,
     pub latest_version: Option<String>,
+    pub latest_version_notes: Option<String>,
 }
 
 impl From<Asset> for AssetInfo {
@@ -30,9 +32,11 @@ impl From<Asset> for AssetInfo {
             name: asset.name,
             description: asset.description,
             created_by: asset.created_by,
+            created_by_username: String::new(), // Will be populated from database
             created_at: asset.created_at,
             version_count: 0,
             latest_version: None,
+            latest_version_notes: None,
         }
     }
 }
@@ -102,9 +106,11 @@ impl<'a> SqliteAssetRepository<'a> {
             name: row.get("name")?,
             description: row.get("description")?,
             created_by: row.get("created_by")?,
+            created_by_username: row.get("created_by_username")?,
             created_at: row.get("created_at")?,
             version_count: row.get("version_count")?,
             latest_version: row.get("latest_version")?,
+            latest_version_notes: row.get("latest_version_notes")?,
         })
     }
 }
@@ -189,11 +195,16 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
     fn get_assets_with_info(&self) -> Result<Vec<AssetInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT a.id, a.name, a.description, a.created_by, a.created_at,
+                    u.username as created_by_username,
                     COUNT(cv.id) as version_count,
-                    MAX(cv.version_number) as latest_version
+                    MAX(cv.version_number) as latest_version,
+                    latest_cv.notes as latest_version_notes
              FROM assets a
+             INNER JOIN users u ON a.created_by = u.id
              LEFT JOIN configuration_versions cv ON a.id = cv.asset_id
-             GROUP BY a.id, a.name, a.description, a.created_by, a.created_at
+             LEFT JOIN configuration_versions latest_cv ON a.id = latest_cv.asset_id 
+                AND latest_cv.version_number = (SELECT MAX(version_number) FROM configuration_versions WHERE asset_id = a.id)
+             GROUP BY a.id, a.name, a.description, a.created_by, a.created_at, u.username, latest_cv.notes
              ORDER BY a.created_at DESC"
         )?;
 
