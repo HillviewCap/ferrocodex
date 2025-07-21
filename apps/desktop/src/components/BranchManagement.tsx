@@ -68,6 +68,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [showTreeView, setShowTreeView] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [hideArchivedParents, setHideArchivedParents] = useState(false);
   
   // Branch version management state
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -84,7 +85,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
 
   useEffect(() => {
     filterBranches();
-  }, [branches, searchTerm, showActiveOnly]);
+  }, [branches, searchTerm, showActiveOnly, hideArchivedParents]);
 
   const fetchBranches = useCallback(async () => {
     if (!token) return;
@@ -124,8 +125,13 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
       filtered = filtered.filter(branch => branch.is_active);
     }
 
+    // Filter by archived parent status
+    if (hideArchivedParents) {
+      filtered = filtered.filter(branch => branch.parent_version_status !== 'Archived');
+    }
+
     setFilteredBranches(filtered);
-  }, [branches, searchTerm, showActiveOnly]);
+  }, [branches, searchTerm, showActiveOnly, hideArchivedParents]);
 
   const handleRefresh = () => {
     fetchBranches();
@@ -143,6 +149,10 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
 
   const handleFilterToggle = () => {
     setShowActiveOnly(!showActiveOnly);
+  };
+
+  const handleArchivedParentsToggle = () => {
+    setHideArchivedParents(!hideArchivedParents);
   };
 
   const handleViewToggle = () => {
@@ -396,6 +406,16 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
               >
                 {showActiveOnly ? 'All Branches' : 'Active Only'}
               </Button>
+              <Tooltip title={hideArchivedParents ? 'Show all branches' : 'Hide branches from archived versions'}>
+                <Button
+                  type={hideArchivedParents ? 'primary' : 'default'}
+                  icon={<FilterOutlined />}
+                  onClick={handleArchivedParentsToggle}
+                  size="middle"
+                >
+                  {hideArchivedParents ? 'Show Archived Parents' : 'Hide Archived Parents'}
+                </Button>
+              </Tooltip>
               <Tooltip title={showTreeView ? 'Switch to list view' : 'Switch to tree view'}>
                 <Button
                   type={showTreeView ? 'primary' : 'default'}
@@ -473,6 +493,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
                 {showActiveOnly && (
                   <Tag color="green">
                     Active Only
+                  </Tag>
+                )}
+                {hideArchivedParents && (
+                  <Tag color="orange">
+                    Hiding Archived Parents
                   </Tag>
                 )}
               </Space>
