@@ -14,7 +14,7 @@ use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
 use audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
-use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils};
+use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils, FileMetadata};
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -1722,6 +1722,35 @@ async fn export_configuration_version(
 }
 
 #[tauri::command]
+async fn get_file_metadata(
+    file_path: String,
+) -> Result<FileMetadata, String> {
+    // Validate file path
+    let file_path = file_path.trim();
+    
+    if file_path.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    
+    // Use proper file path validation
+    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
+    }
+
+    match file_utils::get_file_metadata(&file_path) {
+        Ok(metadata) => {
+            info!("File metadata retrieved: {} ({} bytes)", metadata.name, metadata.size);
+            Ok(metadata)
+        }
+        Err(e) => {
+            error!("Failed to get file metadata: {}", e);
+            Err(format!("Failed to get file metadata: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
 async fn archive_version(
     token: String,
     version_id: i64,
@@ -1846,6 +1875,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .manage(DatabaseState::default())
         .manage(SessionManagerState::default())
         .manage(LoginAttemptTrackerState::default())
@@ -1877,6 +1907,7 @@ pub fn run() {
             get_golden_version,
             get_promotion_eligibility,
             export_configuration_version,
+            get_file_metadata,
             create_branch,
             get_branches,
             get_branch_details,

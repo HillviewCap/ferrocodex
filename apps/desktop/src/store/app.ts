@@ -6,6 +6,7 @@ interface AppState {
   isDatabaseInitialized: boolean;
   isLoading: boolean;
   error: string | null;
+  eulaAccepted: boolean;
 }
 
 interface AppActions {
@@ -14,6 +15,7 @@ interface AppActions {
   setFirstLaunchComplete: () => void;
   setLoading: (loading: boolean) => void;
   clearError: () => void;
+  acceptEula: () => void;
 }
 
 const useAppStore = create<AppState & AppActions>((set) => ({
@@ -22,6 +24,7 @@ const useAppStore = create<AppState & AppActions>((set) => ({
   isDatabaseInitialized: false,
   isLoading: false,
   error: null,
+  eulaAccepted: false,
 
   // Actions
   checkFirstLaunch: async () => {
@@ -68,6 +71,8 @@ const useAppStore = create<AppState & AppActions>((set) => ({
   setLoading: (loading: boolean) => set({ isLoading: loading }),
   
   clearError: () => set({ error: null }),
+  
+  acceptEula: () => set({ eulaAccepted: true }),
 }));
 
 export default useAppStore;

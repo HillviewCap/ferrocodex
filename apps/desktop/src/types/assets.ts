@@ -157,7 +157,7 @@ export const validateFileSize = (size: number): string | null => {
   return null;
 };
 
-export const validateFileExtension = (filename: string): string | null => {
+export const validateFileExtension = (_filename: string): string | null => {
   // Accept all file types - no extension validation
   return null;
 };

@@ -9,13 +9,14 @@ import AdminSetup from './components/AdminSetup';
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import EulaModal from './components/EulaModal';
 
 function App() {
   const [appState, setAppState] = useState<'initializing' | 'ready' | 'error'>('initializing');
   const [error, setError] = useState<string>('');
   
   const { isAuthenticated, checkSession } = useAuthStore();
-  const { isFirstLaunch, initializeDatabase, checkFirstLaunch } = useAppStore();
+  const { isFirstLaunch, eulaAccepted, initializeDatabase, checkFirstLaunch, acceptEula } = useAppStore();
 
   const initializeApp = async () => {
     try {
@@ -77,6 +78,23 @@ function App() {
           </Button>
         </div>
       </div>
+    );
+  }
+
+  // Show EULA modal if app is ready but EULA not accepted
+  if (appState === 'ready' && !eulaAccepted) {
+    return (
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: '#667eea',
+          },
+        }}
+      >
+        <AntApp>
+          <EulaModal visible={true} onAccept={acceptEula} />
+        </AntApp>
+      </ConfigProvider>
     );
   }
 
