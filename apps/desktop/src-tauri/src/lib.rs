@@ -20,11 +20,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 use tracing::{error, info, warn};
+use serde::{Deserialize, Serialize};
 
 type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
 type LoginAttemptTrackerState = Mutex<LoginAttemptTracker>;
 type RateLimiterState = Mutex<RateLimiter>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DashboardStats {
+    total_assets: i64,
+    total_versions: i64,
+    encryption_type: String,
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -611,6 +619,58 @@ async fn get_dashboard_assets(
                     Err(format!("Failed to get dashboard assets: {}", e))
                 }
             }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_dashboard_stats(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<DashboardStats, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            
+            // Get total assets count
+            let total_assets: i64 = conn
+                .query_row("SELECT COUNT(*) FROM assets", [], |row| row.get(0))
+                .map_err(|e| {
+                    error!("Failed to count assets: {}", e);
+                    format!("Failed to count assets: {}", e)
+                })?;
+            
+            // Get total versions count across all assets
+            let total_versions: i64 = conn
+                .query_row("SELECT COUNT(*) FROM configuration_versions", [], |row| row.get(0))
+                .map_err(|e| {
+                    error!("Failed to count versions: {}", e);
+                    format!("Failed to count versions: {}", e)
+                })?;
+            
+            let stats = DashboardStats {
+                total_assets,
+                total_versions,
+                encryption_type: "AES-256".to_string(),
+            };
+            
+            info!("Dashboard stats accessed by: {}", session.username);
+            Ok(stats)
         }
         None => Err("Database not initialized".to_string()),
     }
@@ -1676,6 +1736,7 @@ pub fn run() {
             reactivate_user,
             create_asset,
             get_dashboard_assets,
+            get_dashboard_stats,
             get_asset_details,
             import_configuration,
             get_configuration_versions,
