@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Typography, 
   Button, 
@@ -45,10 +45,10 @@ const AssetManagement: React.FC = () => {
     navigateToHistory,
     navigateToDashboard,
     goldenVersions,
-    goldenVersionsLoading,
     fetchGoldenVersion
   } = useAssetStore();
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const fetchedGoldenVersions = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (token) {
@@ -60,14 +60,18 @@ const AssetManagement: React.FC = () => {
     // Fetch golden versions for all assets
     if (token && assets.length > 0) {
       assets.forEach(asset => {
-        if (!goldenVersions[asset.id] && !goldenVersionsLoading[asset.id]) {
+        // Only fetch if we haven't already initiated a fetch for this asset
+        if (!fetchedGoldenVersions.current.has(asset.id)) {
+          fetchedGoldenVersions.current.add(asset.id);
           fetchGoldenVersion(token, asset.id).catch(err => {
             console.warn(`Failed to fetch golden version for asset ${asset.id}:`, err);
+            // Remove from set on error so it can be retried later if needed
+            fetchedGoldenVersions.current.delete(asset.id);
           });
         }
       });
     }
-  }, [token, assets, goldenVersions, goldenVersionsLoading, fetchGoldenVersion]);
+  }, [token, assets, fetchGoldenVersion]);
 
   useEffect(() => {
     if (error) {
