@@ -18,7 +18,6 @@ import {
   CommentOutlined,
   LinkOutlined,
   EyeOutlined,
-  UploadOutlined,
   HistoryOutlined,
   TagOutlined,
   ImportOutlined,
@@ -32,7 +31,6 @@ interface BranchCardProps {
   branch: BranchInfo;
   onViewDetails?: (branch: BranchInfo) => void;
   onSelectBranch?: (branch: BranchInfo) => void;
-  onUpdateBranch?: (branch: BranchInfo) => void;
   onViewHistory?: (branch: BranchInfo) => void;
   onImportVersion?: (branch: BranchInfo) => void;
   onExportLatestVersion?: (branch: BranchInfo) => void;
@@ -45,7 +43,6 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
   branch, 
   onViewDetails, 
   onSelectBranch, 
-  onUpdateBranch,
   onViewHistory,
   onImportVersion,
   onExportLatestVersion,
@@ -108,11 +105,6 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
     }
   };
 
-  const handleUpdateBranch = () => {
-    if (onUpdateBranch) {
-      onUpdateBranch(branch);
-    }
-  };
 
   const handleViewHistory = () => {
     if (onViewHistory) {

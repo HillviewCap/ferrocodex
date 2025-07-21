@@ -58,7 +58,9 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
         versionId: version.id
       });
 
-      setAvailableTransitions(transitions as ConfigurationStatus[]);
+      // Filter out Golden status - it should only be set through the promotion wizard
+      const filteredTransitions = transitions.filter(status => status !== 'Golden');
+      setAvailableTransitions(filteredTransitions as ConfigurationStatus[]);
     } catch (err) {
       setError(err as string);
     } finally {
