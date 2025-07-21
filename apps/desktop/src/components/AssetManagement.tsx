@@ -20,7 +20,8 @@ import {
   CalendarOutlined,
   UserOutlined,
   PlusOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  StarFilled
 } from '@ant-design/icons';
 import { AssetInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -42,7 +43,10 @@ const AssetManagement: React.FC = () => {
     currentView,
     selectedAsset,
     navigateToHistory,
-    navigateToDashboard
+    navigateToDashboard,
+    goldenVersions,
+    goldenVersionsLoading,
+    fetchGoldenVersion
   } = useAssetStore();
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -51,6 +55,19 @@ const AssetManagement: React.FC = () => {
       fetchAssets(token);
     }
   }, [token, fetchAssets]);
+
+  useEffect(() => {
+    // Fetch golden versions for all assets
+    if (token && assets.length > 0) {
+      assets.forEach(asset => {
+        if (!goldenVersions[asset.id] && !goldenVersionsLoading[asset.id]) {
+          fetchGoldenVersion(token, asset.id).catch(err => {
+            console.warn(`Failed to fetch golden version for asset ${asset.id}:`, err);
+          });
+        }
+      });
+    }
+  }, [token, assets, goldenVersions, goldenVersionsLoading, fetchGoldenVersion]);
 
   useEffect(() => {
     if (error) {
@@ -92,37 +109,64 @@ const AssetManagement: React.FC = () => {
     message.info('Navigate to Version History to import a new version');
   };
 
-  const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => (
-    <Card 
-      hoverable
-      onClick={() => handleViewHistory(asset)}
-      style={{ 
-        height: '100%',
-        minHeight: '200px',
-        cursor: 'pointer'
-      }}
-      bodyStyle={{ 
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        height: 'calc(100% - 57px)' // Account for actions bar
-      }}
-      actions={[
-        <Tooltip title="Version History">
-          <HistoryOutlined key="history" onClick={(e) => {
-            e.stopPropagation();
-            handleViewHistory(asset);
-          }} />
-        </Tooltip>,
-        <Tooltip title="Import New Version">
-          <PlusOutlined key="add" onClick={(e) => {
-            e.stopPropagation();
-            handleAddVersion(asset);
-          }} />
-        </Tooltip>
-      ]}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+  const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => {
+    const goldenVersion = goldenVersions[asset.id];
+    const hasGolden = goldenVersion !== null && goldenVersion !== undefined;
+
+    return (
+      <Card 
+        hoverable
+        onClick={() => handleViewHistory(asset)}
+        style={{ 
+          height: '100%',
+          minHeight: '200px',
+          cursor: 'pointer',
+          position: 'relative',
+          overflow: 'visible'
+        }}
+        bodyStyle={{ 
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          height: 'calc(100% - 57px)' // Account for actions bar
+        }}
+        actions={[
+          <Tooltip title="Version History">
+            <HistoryOutlined key="history" onClick={(e) => {
+              e.stopPropagation();
+              handleViewHistory(asset);
+            }} />
+          </Tooltip>,
+          <Tooltip title="Import New Version">
+            <PlusOutlined key="add" onClick={(e) => {
+              e.stopPropagation();
+              handleAddVersion(asset);
+            }} />
+          </Tooltip>
+        ]}
+      >
+        {hasGolden && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            backgroundColor: '#FFD700',
+            color: 'white',
+            padding: '4px 12px',
+            borderRadius: '0 8px 0 16px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 1
+          }}>
+            <StarFilled style={{ fontSize: '14px' }} />
+            GOLDEN IMAGE
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
         <Avatar 
           icon={<DatabaseOutlined />} 
           style={{ backgroundColor: '#52c41a' }}
@@ -173,8 +217,9 @@ const AssetManagement: React.FC = () => {
           </Text>
         </Space>
       </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   // Render history view if selected
   if (currentView === 'history' && selectedAsset) {
