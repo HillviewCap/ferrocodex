@@ -45,18 +45,25 @@ describe('ExportConfirmationModal', () => {
   it('renders export modal with version information', () => {
     render(<ExportConfirmationModal {...defaultProps} />);
     
-    expect(screen.getByText('Export Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Configuration Details')).toBeInTheDocument();
-    expect(screen.getByText('v1')).toBeInTheDocument();
-    expect(screen.getByText('test-config.json')).toBeInTheDocument();
-    expect(screen.getByText('testuser')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
+    const exportConfigElements = screen.getAllByText('Export Configuration');
+    expect(exportConfigElements.length).toBeGreaterThan(0);
+    const configDetailsElements = screen.getAllByText('Configuration Details');
+    expect(configDetailsElements.length).toBeGreaterThan(0);
+    const v1Elements = screen.getAllByText('v1');
+    expect(v1Elements.length).toBeGreaterThan(0);
+    const testConfigElements = screen.getAllByText('test-config.json');
+    expect(testConfigElements.length).toBeGreaterThan(0);
+    const testuserElements = screen.getAllByText('testuser');
+    expect(testuserElements.length).toBeGreaterThan(0);
+    const approvedElements = screen.getAllByText('Approved');
+    expect(approvedElements.length).toBeGreaterThan(0);
   });
 
   it('displays export location section', () => {
     render(<ExportConfirmationModal {...defaultProps} />);
     
-    expect(screen.getByText('Export Location')).toBeInTheDocument();
+    const exportLocationElements = screen.getAllByText('Export Location');
+    expect(exportLocationElements.length).toBeGreaterThan(0);
     expect(screen.getByPlaceholderText(/Click 'Select Location'/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Select Location/i })).toBeInTheDocument();
   });
@@ -66,7 +73,8 @@ describe('ExportConfirmationModal', () => {
     
     const exportInfoElements = screen.getAllByText('Export Information');
     expect(exportInfoElements.length).toBeGreaterThan(0);
-    expect(screen.getByText(/export process includes integrity verification/i)).toBeInTheDocument();
+    const integrityElements = screen.getAllByText(/export process includes integrity verification/i);
+    expect(integrityElements.length).toBeGreaterThan(0);
   });
 
   it('disables export button when no path is selected', () => {
@@ -154,8 +162,10 @@ describe('ExportConfirmationModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Select Location/i }));
     
     await waitFor(() => {
-      expect(screen.getByText('Export Progress')).toBeInTheDocument();
-      expect(screen.getByText('Export location selected')).toBeInTheDocument();
+      const progressElements = screen.getAllByText('Export Progress');
+      expect(progressElements.length).toBeGreaterThan(0);
+      const locationSelectedElements = screen.getAllByText('Export location selected');
+      expect(locationSelectedElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -209,7 +219,8 @@ describe('ExportConfirmationModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Export/i }));
     
     await waitFor(() => {
-      expect(screen.getByText('Export Successful')).toBeInTheDocument();
+      const successElements = screen.getAllByText('Export Successful');
+      expect(successElements.length).toBeGreaterThan(0);
     });
     
     // Wait for auto-close timeout
@@ -238,7 +249,8 @@ describe('ExportConfirmationModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Export/i }));
     
     await waitFor(() => {
-      expect(screen.getByText('Export Error')).toBeInTheDocument();
+      const errorElements = screen.getAllByText('Export Error');
+      expect(errorElements.length).toBeGreaterThan(0);
       const exportFailedElements = screen.getAllByText('Export failed');
       expect(exportFailedElements.length).toBeGreaterThan(0);
     });

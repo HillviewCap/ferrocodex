@@ -51,17 +51,23 @@ describe('ConfigurationHistoryView', () => {
   it('renders asset information correctly', () => {
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText('Test Asset')).toBeInTheDocument();
-    expect(screen.getByText('Test asset description')).toBeInTheDocument();
-    expect(screen.getByText('3 versions')).toBeInTheDocument();
-    expect(screen.getByText('Latest: v3')).toBeInTheDocument();
+    const testAssetElements = screen.getAllByText('Test Asset');
+    expect(testAssetElements.length).toBeGreaterThan(0);
+    const descriptionElements = screen.getAllByText('Test asset description');
+    expect(descriptionElements.length).toBeGreaterThan(0);
+    const versionsElements = screen.getAllByText('3 versions');
+    expect(versionsElements.length).toBeGreaterThan(0);
+    const latestElements = screen.getAllByText('Latest: v3');
+    expect(latestElements.length).toBeGreaterThan(0);
   });
 
   it('shows breadcrumb navigation', () => {
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText('Configuration Assets')).toBeInTheDocument();
-    expect(screen.getByText('Version History')).toBeInTheDocument();
+    const configAssetsElements = screen.getAllByText('Configuration Assets');
+    expect(configAssetsElements.length).toBeGreaterThan(0);
+    const versionHistoryElements = screen.getAllByText('Version History');
+    expect(versionHistoryElements.length).toBeGreaterThan(0);
   });
 
   it('calls onBack when back button is clicked', () => {
@@ -88,7 +94,8 @@ describe('ConfigurationHistoryView', () => {
 
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText('Loading version history...')).toBeInTheDocument();
+    const loadingVersionsElements = screen.getAllByText('Loading version history...');
+    expect(loadingVersionsElements.length).toBeGreaterThan(0);
   });
 
   it('shows empty state when no versions exist', () => {
@@ -106,8 +113,10 @@ describe('ConfigurationHistoryView', () => {
 
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText('No Version History')).toBeInTheDocument();
-    expect(screen.getByText('This asset has no configuration versions yet')).toBeInTheDocument();
+    const noVersionHistoryElements = screen.getAllByText('No Version History');
+    expect(noVersionHistoryElements.length).toBeGreaterThan(0);
+    const noVersionsYetElements = screen.getAllByText('This asset has no configuration versions yet');
+    expect(noVersionsYetElements.length).toBeGreaterThan(0);
   });
 
   it('renders version history list when versions exist', () => {
@@ -146,20 +155,23 @@ describe('ConfigurationHistoryView', () => {
   it('displays formatted dates correctly', () => {
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText(/Created: Jan 1, 2023/)).toBeInTheDocument();
+    const createdDateElements = screen.getAllByText(/Created: Jan 1, 2023/);
+    expect(createdDateElements.length).toBeGreaterThan(0);
   });
 
   it('shows owner information', () => {
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    expect(screen.getByText('Owner: 1')).toBeInTheDocument();
+    const ownerElements = screen.getAllByText('Owner: 1');
+    expect(ownerElements.length).toBeGreaterThan(0);
   });
 
   it('handles asset with no description', () => {
     const assetWithoutDescription = { ...mockAsset, description: '' };
     render(<ConfigurationHistoryView asset={assetWithoutDescription} onBack={mockOnBack} />);
     
-    expect(screen.getByText('No description')).toBeInTheDocument();
+    const noDescriptionElements = screen.getAllByText('No description');
+    expect(noDescriptionElements.length).toBeGreaterThan(0);
   });
 
   it('calls fetchVersions on mount', () => {

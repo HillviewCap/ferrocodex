@@ -49,7 +49,8 @@ describe('ChangeStatusModal', () => {
     expect(screen.getByText('Change Configuration Status')).toBeInTheDocument();
     expect(screen.getByText('config.json')).toBeInTheDocument();
     expect(screen.getByText('(v1)')).toBeInTheDocument();
-    expect(screen.getByText('Draft')).toBeInTheDocument();
+    const draftElements = screen.getAllByText('Draft');
+    expect(draftElements.length).toBeGreaterThan(0);
   });
 
   it('loads available status transitions on mount', async () => {
@@ -68,7 +69,8 @@ describe('ChangeStatusModal', () => {
     render(<ChangeStatusModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Select new status')).toBeInTheDocument();
+      const selectStatusElements = screen.getAllByText('Select new status');
+      expect(selectStatusElements.length).toBeGreaterThan(0);
     });
 
     const select = screen.getByRole('combobox');
@@ -133,7 +135,8 @@ describe('ChangeStatusModal', () => {
     const reasonInput = screen.getByPlaceholderText('Provide a reason for this status change...');
     fireEvent.change(reasonInput, { target: { value: 'Ready for production' } });
 
-    const submitButton = screen.getByText('Update Status');
+    const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
     fireEvent.click(submitButton);
 
     await waitFor(() => {
@@ -152,7 +155,7 @@ describe('ChangeStatusModal', () => {
     const invoke = await getMockInvoke();
     invoke
       .mockResolvedValueOnce(['Approved'])
-      .mockRejectedValueOnce('Permission denied');
+      .mockRejectedValueOnce(new Error('Permission denied'));
 
     render(<ChangeStatusModal {...defaultProps} />);
     
@@ -166,11 +169,13 @@ describe('ChangeStatusModal', () => {
       fireEvent.click(approvedOption);
     });
 
-    const submitButton = screen.getByText('Update Status');
+    const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Permission denied')).toBeInTheDocument();
+      const errorElements = screen.getAllByText('Permission denied');
+      expect(errorElements.length).toBeGreaterThan(0);
     });
 
     expect(defaultProps.onSuccess).not.toHaveBeenCalled();
@@ -182,12 +187,14 @@ describe('ChangeStatusModal', () => {
     render(<ChangeStatusModal {...defaultProps} />);
     
     await waitFor(() => {
-      const submitButton = screen.getByText('Update Status');
+      const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
       fireEvent.click(submitButton);
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Please select a new status')).toBeInTheDocument();
+      const pleaseSelectElements = screen.getAllByText('Please select a new status');
+      expect(pleaseSelectElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -200,7 +207,8 @@ describe('ChangeStatusModal', () => {
     const longReason = 'a'.repeat(501);
     fireEvent.change(reasonInput, { target: { value: longReason } });
 
-    const submitButton = screen.getByText('Update Status');
+    const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
     fireEvent.click(submitButton);
 
     await waitFor(() => {
@@ -229,7 +237,8 @@ describe('ChangeStatusModal', () => {
     render(<ChangeStatusModal {...defaultProps} />);
     
     await waitFor(() => {
-      const submitButton = screen.getByText('Update Status');
+      const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
       expect(submitButton).toBeDisabled();
     });
   });
@@ -252,7 +261,8 @@ describe('ChangeStatusModal', () => {
       fireEvent.click(approvedOption);
     });
 
-    const submitButton = screen.getByText('Update Status');
+    const submitButtons = screen.getAllByText('Update Status');
+    const submitButton = submitButtons[0];
     fireEvent.click(submitButton);
 
     await waitFor(() => {

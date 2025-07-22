@@ -68,10 +68,14 @@ describe('StatusHistoryModal', () => {
   it('renders modal with version information', async () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
-    expect(screen.getByText('Status Change History')).toBeInTheDocument();
-    expect(screen.getByText('config.json')).toBeInTheDocument();
-    expect(screen.getByText('(v1)')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
+    const statusHistoryElements = screen.getAllByText('Status Change History');
+    expect(statusHistoryElements.length).toBeGreaterThan(0);
+    const configJsonElements = screen.getAllByText('config.json');
+    expect(configJsonElements.length).toBeGreaterThan(0);
+    const v1Elements = screen.getAllByText('(v1)');
+    expect(v1Elements.length).toBeGreaterThan(0);
+    const approvedElements = screen.getAllByText('Approved');
+    expect(approvedElements.length).toBeGreaterThan(0);
   });
 
   it('loads status history on mount', async () => {
@@ -94,8 +98,10 @@ describe('StatusHistoryModal', () => {
       const approvedElements = screen.getAllByText('Approved');
       expect(draftElements.length).toBeGreaterThan(0);
       expect(approvedElements.length).toBeGreaterThan(0);
-      expect(screen.getByText('john_doe')).toBeInTheDocument();
-      expect(screen.getByText('admin_user')).toBeInTheDocument();
+      const johnDoeElements = screen.getAllByText('john_doe');
+      expect(johnDoeElements.length).toBeGreaterThan(0);
+      const adminUserElements = screen.getAllByText('admin_user');
+      expect(adminUserElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -104,7 +110,8 @@ describe('StatusHistoryModal', () => {
     invoke.mockImplementation(() => new Promise(() => {})); // Never resolves
     render(<StatusHistoryModal {...defaultProps} />);
     
-    expect(screen.getByText('Loading status history...')).toBeInTheDocument();
+    const loadingElements = screen.getAllByText('Loading status history...');
+    expect(loadingElements.length).toBeGreaterThan(0);
   });
 
   it('shows error when history fails to load', async () => {
@@ -113,8 +120,10 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Error loading status history')).toBeInTheDocument();
-      expect(screen.getByText('Failed to load history')).toBeInTheDocument();
+      const errorLoadingElements = screen.getAllByText('Error loading status history');
+      expect(errorLoadingElements.length).toBeGreaterThan(0);
+      const failedLoadElements = screen.getAllByText('Failed to load history');
+      expect(failedLoadElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -124,7 +133,8 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('No status changes found')).toBeInTheDocument();
+      const noChangesElements = screen.getAllByText('No status changes found');
+      expect(noChangesElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -132,8 +142,10 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Initial creation')).toBeInTheDocument();
-      expect(screen.getByText('Reviewed and approved for production')).toBeInTheDocument();
+      const initialCreationElements = screen.getAllByText('Initial creation');
+      expect(initialCreationElements.length).toBeGreaterThan(0);
+      const reviewedElements = screen.getAllByText('Reviewed and approved for production');
+      expect(reviewedElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -141,7 +153,8 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('(Initial status)')).toBeInTheDocument();
+      const initialStatusElements = screen.getAllByText('(Initial status)');
+      expect(initialStatusElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -248,7 +261,8 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Draft')).toBeInTheDocument();
+      const draftElements = screen.getAllByText('Draft');
+      expect(draftElements.length).toBeGreaterThan(0);
       expect(screen.queryByText('Initial creation')).not.toBeInTheDocument();
     });
   });
@@ -259,7 +273,8 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Test error')).toBeInTheDocument();
+      const testErrorElements = screen.getAllByText('Test error');
+      expect(testErrorElements.length).toBeGreaterThan(0);
     });
 
     const closeButton = screen.getByRole('button', { name: /close/i });

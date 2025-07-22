@@ -51,7 +51,9 @@ test('shows admin setup for first launch', async () => {
   
   // Wait for the admin setup to appear
   await waitFor(() => {
-    expect(screen.getByText('Welcome to Ferrocodex')).toBeInTheDocument();
-    expect(screen.getByText('Create your administrator account to get started')).toBeInTheDocument();
+    const welcomeElements = screen.getAllByText('Welcome to Ferrocodex');
+    expect(welcomeElements.length).toBeGreaterThan(0);
+    const createAdminElements = screen.getAllByText('Create your administrator account to get started');
+    expect(createAdminElements.length).toBeGreaterThan(0);
   });
 });

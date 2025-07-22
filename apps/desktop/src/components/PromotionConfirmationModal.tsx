@@ -134,7 +134,7 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
       onCancel={handleCancel}
       confirmLoading={loading}
       width={700}
-      destroyOnClose
+      destroyOnHidden
       okText="Promote to Golden"
       cancelText="Cancel"
       okButtonProps={{

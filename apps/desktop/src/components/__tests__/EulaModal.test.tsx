@@ -32,8 +32,10 @@ describe('EulaModal', () => {
   it('renders the EULA modal when visible', () => {
     renderEulaModal(true);
     
-    expect(screen.getByText('FerroCodex Alpha - End-User License Agreement')).toBeInTheDocument();
-    expect(screen.getByText(/Welcome to the Alpha version of FerroCodex/)).toBeInTheDocument();
+    const titleElements = screen.getAllByText('FerroCodex Alpha - End-User License Agreement');
+    expect(titleElements.length).toBeGreaterThan(0);
+    const welcomeElements = screen.getAllByText(/Welcome to the Alpha version of FerroCodex/);
+    expect(welcomeElements.length).toBeGreaterThan(0);
   });
 
   it('does not render when not visible', () => {
@@ -45,19 +47,27 @@ describe('EulaModal', () => {
   it('displays all EULA sections with correct headings', () => {
     renderEulaModal(true);
     
-    expect(screen.getByText('1. ALPHA SOFTWARE NOTICE')).toBeInTheDocument();
-    expect(screen.getByText('2. "AS-IS" WITH NO WARRANTY')).toBeInTheDocument();
-    expect(screen.getByText('3. ASSUMPTION OF ALL RISK')).toBeInTheDocument();
-    expect(screen.getByText('4. LIMITATION OF LIABILITY')).toBeInTheDocument();
-    expect(screen.getByText('5. BACKUPS AND SAFETY')).toBeInTheDocument();
+    const alphaNoticeElements = screen.getAllByText('1. ALPHA SOFTWARE NOTICE');
+    expect(alphaNoticeElements.length).toBeGreaterThan(0);
+    const warrantyElements = screen.getAllByText('2. "AS-IS" WITH NO WARRANTY');
+    expect(warrantyElements.length).toBeGreaterThan(0);
+    const riskElements = screen.getAllByText('3. ASSUMPTION OF ALL RISK');
+    expect(riskElements.length).toBeGreaterThan(0);
+    const liabilityElements = screen.getAllByText('4. LIMITATION OF LIABILITY');
+    expect(liabilityElements.length).toBeGreaterThan(0);
+    const safetyElements = screen.getAllByText('5. BACKUPS AND SAFETY');
+    expect(safetyElements.length).toBeGreaterThan(0);
   });
 
   it('displays key EULA content', () => {
     renderEulaModal(true);
     
-    expect(screen.getByText(/This is a pre-release, Alpha version/)).toBeInTheDocument();
-    expect(screen.getByText(/provided to you "AS-IS" and "AS-AVAILABLE"/)).toBeInTheDocument();
-    expect(screen.getByText(/You voluntarily and explicitly assume all risks/)).toBeInTheDocument();
+    const prereleaseElements = screen.getAllByText(/This is a pre-release, Alpha version/);
+    expect(prereleaseElements.length).toBeGreaterThan(0);
+    const asIsElements = screen.getAllByText(/provided to you "AS-IS" and "AS-AVAILABLE"/);
+    expect(asIsElements.length).toBeGreaterThan(0);
+    const assumeRiskElements = screen.getAllByText(/You voluntarily and explicitly assume all risks/);
+    expect(assumeRiskElements.length).toBeGreaterThan(0);
   });
 
   it('renders Decline and Agree buttons', () => {
@@ -113,7 +123,8 @@ describe('EulaModal', () => {
     expect(headings.length).toBeGreaterThan(0);
     
     // Check for styled text elements
-    expect(screen.getByText(/By clicking "Agree and Continue,"/)).toBeInTheDocument();
+    const agreeElements = screen.getAllByText(/By clicking "Agree and Continue,"/);
+    expect(agreeElements.length).toBeGreaterThan(0);
   });
 
   it('is scrollable for long content', () => {

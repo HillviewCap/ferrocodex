@@ -76,7 +76,7 @@ const RestoreConfirmationModal: React.FC<RestoreConfirmationModalProps> = ({
         icon: <UndoOutlined />
       }}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} onFinish={handleRestore} layout="vertical">
         <Alert

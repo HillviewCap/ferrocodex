@@ -57,7 +57,7 @@ const EulaModal: React.FC<EulaModalProps> = ({ visible, onAccept }) => {
       ]}
       width={700}
       centered
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
       <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
         <Space direction="vertical" style={{ width: '100%' }} size="large">

@@ -435,7 +435,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       open={visible}
       onCancel={handleCancel}
       width={800}
-      destroyOnClose
+      destroyOnHidden
       footer={getFooterButtons()}
       maskClosable={!loading}
       closable={!loading}

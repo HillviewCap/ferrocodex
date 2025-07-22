@@ -120,7 +120,7 @@ const StatusHistoryModal: React.FC<StatusHistoryModalProps> = ({
       onCancel={onCancel}
       footer={null}
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div>
