@@ -40,6 +40,19 @@ npm run tauri:build  # Build production desktop app
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
+### Release & Deployment
+
+```bash
+# Create a release (triggers automatic binary building):
+git tag v1.0.0
+git push origin v1.0.0
+
+# GitHub Actions will automatically:
+# - Build binaries for Windows, macOS (Intel + ARM), and Linux
+# - Run all tests across platforms
+# - Create GitHub release with downloadable assets
+```
+
 ### Running Individual Tests
 
 ```bash
