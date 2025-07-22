@@ -105,14 +105,21 @@ Uploading Configurations
 Supported File Types
 ^^^^^^^^^^^^^^^^^^^^
 
-Ferrocodex accepts all file types, including:
+Ferrocodex accepts **all file types** without restriction. This alpha build is designed to support the widest variety of industrial equipment configurations for testing purposes.
 
-* PLC programs (``.acd``, ``.rss``, ``.l5x``)
-* HMI projects (``.mer``, ``.apa``)
-* SCADA configurations
-* Text-based configs (``.xml``, ``.ini``, ``.cfg``)
-* Documentation (``.pdf``, ``.docx``)
+Common file types include:
+
+* PLC programs (``.acd``, ``.rss``, ``.l5x``, ``.apb``, ``.zpj``)
+* HMI projects (``.mer``, ``.apa``, ``.hmi``, ``.gef``)
+* SCADA configurations (``.scada``, ``.proj``, ``.s7p``)
+* Text-based configs (``.xml``, ``.ini``, ``.cfg``, ``.conf``)
+* Documentation (``.pdf``, ``.docx``, ``.xlsx``)
 * Binary files and proprietary formats
+* Compressed archives (``.zip``, ``.tar``, ``.gz``)
+* Any other file format used by your industrial equipment
+
+.. note::
+   The alpha build intentionally accepts all file types to ensure compatibility with various SCADA and industrial control systems during testing.
 
 Viewing Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
