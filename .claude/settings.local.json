@@ -26,7 +26,11 @@
       "Bash(ffmpeg:*)",
       "Bash(cp:*)",
       "Bash(where magick)",
-      "Bash(npm cache clean:*)"
+      "Bash(npm cache clean:*)",
+      "Bash(dir:*)",
+      "Bash(git config:*)",
+      "Bash(gh api:*)",
+      "Bash(gh repo edit:*)"
     ],
     "deny": []
   }
