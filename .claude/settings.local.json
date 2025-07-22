@@ -25,7 +25,8 @@
       "Bash(done)",
       "Bash(ffmpeg:*)",
       "Bash(cp:*)",
-      "Bash(where magick)"
+      "Bash(where magick)",
+      "Bash(npm cache clean:*)"
     ],
     "deny": []
   }

@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "homepage": "https://ferrocodex.readthedocs.io",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

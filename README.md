@@ -9,6 +9,7 @@
 [![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Build Status](https://github.com/ferrocodex/ferrocodex/workflows/Release/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions)
+[![Documentation Status](https://readthedocs.org/projects/ferrocodex/badge/?version=latest)](https://ferrocodex.readthedocs.io/en/latest/?badge=latest)
 
 A cross-platform desktop application for secure offline-first configuration management in operational technology (OT) environments.
 
@@ -189,7 +190,7 @@ Built with:
 
 ## 📞 Support
 
-- 📖 [Documentation](https://docs.ferrocodex.com) (coming soon)
+- 📖 [Documentation](https://ferrocodex.readthedocs.io/en/latest/)
 - 🐛 [Issue Tracker](https://github.com/ferrocodex/ferrocodex/issues)
 - 💬 [Discussions](https://github.com/ferrocodex/ferrocodex/discussions)
 

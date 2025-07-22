@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Button, Typography, Space, Card, Row, Col } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Button, Typography, Space, Card, Row, Col, message } from 'antd';
 import { 
   UserOutlined, 
   LogoutOutlined, 
@@ -10,10 +10,12 @@ import {
   SafetyOutlined,
   TeamOutlined,
   DatabaseOutlined,
-  ImportOutlined
+  ImportOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { DashboardStats } from '../types/dashboard';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
@@ -55,6 +57,15 @@ const Dashboard: React.FC = () => {
       await logout();
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleOpenDocumentation = async () => {
+    try {
+      await openUrl('https://ferrocodex.readthedocs.io');
+    } catch (error) {
+      console.error('Failed to open documentation:', error);
+      message.error('Failed to open documentation. Please visit https://ferrocodex.readthedocs.io manually.');
     }
   };
 
@@ -112,6 +123,15 @@ const Dashboard: React.FC = () => {
       icon: <TeamOutlined />,
       label: 'User Management',
     }] : []),
+    {
+      type: 'divider' as const,
+    },
+    {
+      key: 'help',
+      icon: <QuestionCircleOutlined />,
+      label: 'Help',
+      onClick: handleOpenDocumentation,
+    },
   ];
 
   return (
@@ -164,7 +184,12 @@ const Dashboard: React.FC = () => {
             mode="inline"
             selectedKeys={[selectedMenuItem]}
             items={sidebarMenuItems}
-            onClick={({ key }) => setSelectedMenuItem(key)}
+            onClick={({ key }) => {
+              // Don't change selected menu item for help
+              if (key !== 'help') {
+                setSelectedMenuItem(key);
+              }
+            }}
             style={{ 
               height: '100%', 
               borderRight: 0,
