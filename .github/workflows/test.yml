@@ -1,4 +1,4 @@
-name: 'Build'
+name: 'Test'
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  test-tauri:
+  test:
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +42,3 @@ jobs:
       - name: Run backend tests
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
-      - name: Build Tauri app
-        run: npm run tauri:build
-        working-directory: apps/desktop
