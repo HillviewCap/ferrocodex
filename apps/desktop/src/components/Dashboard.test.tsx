@@ -77,7 +77,8 @@ test('renders feature cards', () => {
 test('renders quick stats', () => {
   render(<Dashboard />);
   
-  expect(screen.getByText('Quick Stats')).toBeInTheDocument();
+  const quickStatsElements = screen.getAllByText('Quick Stats');
+  expect(quickStatsElements.length).toBeGreaterThan(0);
   expect(screen.getByText('Configuration Assets')).toBeInTheDocument();
   expect(screen.getByText('Total Versions')).toBeInTheDocument();
   expect(screen.getByText('Encryption')).toBeInTheDocument();

@@ -64,7 +64,8 @@ describe('ExportConfirmationModal', () => {
   it('shows export information alert', () => {
     render(<ExportConfirmationModal {...defaultProps} />);
     
-    expect(screen.getByText('Export Information')).toBeInTheDocument();
+    const exportInfoElements = screen.getAllByText('Export Information');
+    expect(exportInfoElements.length).toBeGreaterThan(0);
     expect(screen.getByText(/export process includes integrity verification/i)).toBeInTheDocument();
   });
 

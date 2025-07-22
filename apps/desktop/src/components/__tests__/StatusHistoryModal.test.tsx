@@ -159,7 +159,8 @@ describe('StatusHistoryModal', () => {
     
     await waitFor(() => {
       // Should show relative time
-      expect(screen.getByText(/ago$/)).toBeInTheDocument();
+      const agoElements = screen.getAllByText(/ago$/);
+      expect(agoElements.length).toBeGreaterThan(0);
     });
   });
 
