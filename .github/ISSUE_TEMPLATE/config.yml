@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Issue
+    url: mailto:security@ferrocodex.com
+    about: Please report security vulnerabilities via email
+  - name: Community Support
+    url: https://github.com/ferrocodex/ferrocodex/discussions
+    about: Please ask and answer questions here

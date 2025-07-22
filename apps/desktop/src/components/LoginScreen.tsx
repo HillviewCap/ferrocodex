@@ -2,6 +2,7 @@ import React from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Space, Checkbox } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
+import ferrocodexLogo from '../assets/ferrocodex-logo.png';
 
 const { Title, Text } = Typography;
 
@@ -40,6 +41,16 @@ const LoginScreen: React.FC = () => {
       >
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>
+            <img 
+              src={ferrocodexLogo} 
+              alt="Ferrocodex Logo" 
+              style={{ 
+                height: 80, 
+                marginBottom: 16,
+                display: 'block',
+                margin: '0 auto 16px'
+              }} 
+            />
             <Title level={2} style={{ marginBottom: 8 }}>
               Ferrocodex
             </Title>

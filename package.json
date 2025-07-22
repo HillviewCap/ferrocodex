@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "A secure desktop application for password management and digital organization",
+  "homepage": "https://ferrocodex.readthedocs.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ferrocodex/ferrocodex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ferrocodex/ferrocodex/issues"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"

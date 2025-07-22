@@ -2,6 +2,7 @@
 .bmad-infrastructure-devops
 .claude/commands
 web-bundles
+docs/all-icons/
 
 # Dependencies
 node_modules/
@@ -46,3 +47,26 @@ coverage/
 
 # Cache
 .cache/
+
+# Security and secrets
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+private/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/

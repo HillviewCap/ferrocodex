@@ -14,7 +14,22 @@ vi.mock('../store/auth', () => ({
       created_at: '2023-01-01',
       is_active: true,
     },
+    token: 'test-token',
     logout: mockLogout,
+  }),
+}));
+
+// Mock the opener plugin
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  open: vi.fn(),
+}));
+
+// Mock the Tauri API
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn().mockResolvedValue({
+    total_assets: 0,
+    total_versions: 0,
+    encryption_type: 'AES-256'
   }),
 }));
 
@@ -29,37 +44,43 @@ test('renders dashboard with user information', () => {
   expect(screen.getByText('Welcome, admin')).toBeInTheDocument();
   expect(screen.getByText('Administrator')).toBeInTheDocument();
   expect(screen.getByText('Welcome to Ferrocodex')).toBeInTheDocument();
+  expect(screen.getByText('Import Configuration')).toBeInTheDocument();
 });
 
 test('renders navigation menu', () => {
   render(<Dashboard />);
   
+  // Check for menu items
   expect(screen.getByText('Dashboard')).toBeInTheDocument();
-  expect(screen.getByText('Passwords')).toBeInTheDocument();
-  expect(screen.getByText('Secure Notes')).toBeInTheDocument();
-  expect(screen.getByText('Security')).toBeInTheDocument();
+  expect(screen.getByText('Help')).toBeInTheDocument();
+  expect(screen.getByText('Secure Notes')).toBeInTheDocument(); // Only in menu
+  
+  // For items that appear multiple times (in menu and cards), just check they exist
+  const assetsElements = screen.getAllByText('Assets');
+  const passwordsElements = screen.getAllByText('Passwords');
+  const securityElements = screen.getAllByText('Security');
+  
+  expect(assetsElements.length).toBeGreaterThan(0);
+  expect(passwordsElements.length).toBeGreaterThan(0);
+  expect(securityElements.length).toBeGreaterThan(0);
 });
 
 test('renders feature cards', () => {
   render(<Dashboard />);
   
-  // Check for the feature cards
-  const passwordCard = screen.getByText('Passwords');
-  const notesCard = screen.getByText('Secure Notes');
-  const securityCard = screen.getByText('Security');
-  
-  expect(passwordCard).toBeInTheDocument();
-  expect(notesCard).toBeInTheDocument();
-  expect(securityCard).toBeInTheDocument();
+  // Check for the descriptive text in cards
+  expect(screen.getByText('Manage configuration assets')).toBeInTheDocument();
+  expect(screen.getByText('Manage your passwords')).toBeInTheDocument();
+  expect(screen.getByText('Security settings')).toBeInTheDocument();
 });
 
 test('renders quick stats', () => {
   render(<Dashboard />);
   
   expect(screen.getByText('Quick Stats')).toBeInTheDocument();
-  expect(screen.getByText('Stored Passwords')).toBeInTheDocument();
-  expect(screen.getByText('Secure Notes')).toBeInTheDocument();
-  expect(screen.getByText('Security Level')).toBeInTheDocument();
+  expect(screen.getByText('Configuration Assets')).toBeInTheDocument();
+  expect(screen.getByText('Total Versions')).toBeInTheDocument();
+  expect(screen.getByText('Encryption')).toBeInTheDocument();
 });
 
 test('calls logout when logout is clicked', async () => {

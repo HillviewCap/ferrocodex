@@ -17,7 +17,16 @@
       "Bash(RUST_BACKTRACE=1 cargo test configurations::tests::test_restore_version -- --nocapture)",
       "Bash(npm install:*)",
       "Bash(git merge:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(mkdir:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"$file:\")",
+      "Bash(identify:*)",
+      "Bash(done)",
+      "Bash(ffmpeg:*)",
+      "Bash(cp:*)",
+      "Bash(where magick)",
+      "Bash(npm cache clean:*)"
     ],
     "deny": []
   }
