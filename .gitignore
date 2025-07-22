@@ -3,6 +3,7 @@
 .claude/commands
 web-bundles
 docs/all-icons/
+CLAUDE.md
 
 # Dependencies
 node_modules/
