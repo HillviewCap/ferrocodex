@@ -62,7 +62,7 @@ function App() {
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #003049 0%, #669bbc 100%)',
         padding: '20px'
       }}>
         <div style={{ textAlign: 'center', maxWidth: '400px' }}>
@@ -87,7 +87,10 @@ function App() {
       <ConfigProvider
         theme={{
           token: {
-            colorPrimary: '#667eea',
+            colorPrimary: '#003049',
+            colorSuccess: '#606c38',
+            colorWarning: '#dda15e',
+            colorError: '#c1121f',
           },
         }}
       >
@@ -102,7 +105,10 @@ function App() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#667eea',
+          colorPrimary: '#003049',
+          colorSuccess: '#606c38',
+          colorWarning: '#dda15e',
+          colorError: '#c1121f',
         },
       }}
     >

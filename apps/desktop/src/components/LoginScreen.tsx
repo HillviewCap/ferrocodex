@@ -4,7 +4,7 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
 import ferrocodexLogo from '../assets/ferrocodex-logo.png';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface LoginFormValues {
   username: string;

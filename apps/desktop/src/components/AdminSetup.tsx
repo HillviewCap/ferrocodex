@@ -82,7 +82,7 @@ const AdminSetup: React.FC = () => {
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #003049 0%, #669bbc 100%)'
     }}>
       <Card 
         style={{ 
@@ -204,7 +204,7 @@ const AdminSetup: React.FC = () => {
                 block
                 style={{ 
                   height: 48,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #003049 0%, #669bbc 100%)',
                   border: 'none'
                 }}
               >

@@ -282,14 +282,14 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
               )}
               {onPromoteToSilver && branch.is_active && versionCount > 1 && (
                 <Button 
-                  type="default" 
+                  type="primary"
                   size="small" 
                   icon={<TrophyOutlined />}
                   onClick={handlePromoteToSilver}
                   style={{ 
                     width: '100%',
-                    color: '#00CED1',
-                    borderColor: '#00CED1'
+                    backgroundColor: '#13c2c2',
+                    borderColor: '#13c2c2'
                   }}
                 >
                   Promote to Silver

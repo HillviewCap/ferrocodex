@@ -147,8 +147,8 @@ const Dashboard: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <LockOutlined style={{ fontSize: '24px', color: '#667eea', marginRight: '12px' }} />
-          <Title level={4} style={{ margin: 0, color: '#667eea' }}>
+          <LockOutlined style={{ fontSize: '24px', color: '#003049', marginRight: '12px' }} />
+          <Title level={4} style={{ margin: 0, color: '#003049' }}>
             Ferrocodex
           </Title>
         </div>
@@ -164,7 +164,7 @@ const Dashboard: React.FC = () => {
               <Avatar 
                 size="small" 
                 icon={<UserOutlined />} 
-                style={{ backgroundColor: '#667eea' }}
+                style={{ backgroundColor: '#003049' }}
               />
               <span style={{ marginLeft: '8px' }}>{user?.role}</span>
             </Button>

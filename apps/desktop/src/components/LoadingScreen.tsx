@@ -17,7 +17,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #003049 0%, #669bbc 100%)'
     }}>
       <Space direction="vertical" size="large" style={{ textAlign: 'center' }}>
         <LockOutlined style={{ fontSize: '64px', color: '#fff' }} />
