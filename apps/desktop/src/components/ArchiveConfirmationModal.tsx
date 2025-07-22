@@ -76,7 +76,7 @@ const ArchiveConfirmationModal: React.FC<ArchiveConfirmationModalProps> = ({
         icon: <InboxOutlined />
       }}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} onFinish={handleArchive} layout="vertical">
         <Alert

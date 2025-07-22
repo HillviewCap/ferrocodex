@@ -42,8 +42,10 @@ test('renders dashboard with user information', () => {
   
   expect(screen.getByText('Ferrocodex')).toBeInTheDocument();
   expect(screen.getByText('Welcome, admin')).toBeInTheDocument();
-  expect(screen.getByText('Administrator')).toBeInTheDocument();
-  expect(screen.getByText('Welcome to Ferrocodex')).toBeInTheDocument();
+  const administratorElements = screen.getAllByText('Administrator');
+  expect(administratorElements.length).toBeGreaterThan(0);
+  const welcomeElements = screen.getAllByText('Welcome to Ferrocodex');
+  expect(welcomeElements.length).toBeGreaterThan(0);
   expect(screen.getByText('Import Configuration')).toBeInTheDocument();
 });
 
@@ -51,9 +53,12 @@ test('renders navigation menu', () => {
   render(<Dashboard />);
   
   // Check for menu items
-  expect(screen.getByText('Dashboard')).toBeInTheDocument();
-  expect(screen.getByText('Help')).toBeInTheDocument();
-  expect(screen.getByText('Secure Notes')).toBeInTheDocument(); // Only in menu
+  const dashboardElements = screen.getAllByText('Dashboard');
+  expect(dashboardElements.length).toBeGreaterThan(0);
+  const helpElements = screen.getAllByText('Help');
+  expect(helpElements.length).toBeGreaterThan(0);
+  const secureNotesElements = screen.getAllByText('Secure Notes');
+  expect(secureNotesElements.length).toBeGreaterThan(0);
   
   // For items that appear multiple times (in menu and cards), just check they exist
   const assetsElements = screen.getAllByText('Assets');
@@ -79,9 +84,12 @@ test('renders quick stats', () => {
   
   const quickStatsElements = screen.getAllByText('Quick Stats');
   expect(quickStatsElements.length).toBeGreaterThan(0);
-  expect(screen.getByText('Configuration Assets')).toBeInTheDocument();
-  expect(screen.getByText('Total Versions')).toBeInTheDocument();
-  expect(screen.getByText('Encryption')).toBeInTheDocument();
+  const configAssetsElements = screen.getAllByText('Configuration Assets');
+  expect(configAssetsElements.length).toBeGreaterThan(0);
+  const totalVersionsElements = screen.getAllByText('Total Versions');
+  expect(totalVersionsElements.length).toBeGreaterThan(0);
+  const encryptionElements = screen.getAllByText('Encryption');
+  expect(encryptionElements.length).toBeGreaterThan(0);
 });
 
 test('calls logout when logout is clicked', async () => {

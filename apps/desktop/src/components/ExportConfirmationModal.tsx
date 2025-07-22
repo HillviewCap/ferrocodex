@@ -242,7 +242,7 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
         </Button>
       ]}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         {/* Version Information */}

@@ -112,7 +112,7 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
       onCancel={handleCancel}
       confirmLoading={loading}
       width={600}
-      destroyOnClose
+      destroyOnHidden
       okText="Update Status"
       cancelText="Cancel"
       okButtonProps={{

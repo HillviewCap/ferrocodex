@@ -158,7 +158,8 @@ describe('UserManagement', () => {
     fireEvent.click(deactivateButton);
     
     await waitFor(() => {
-      const confirmButton = screen.getByText('Yes');
+      const confirmButtons = screen.getAllByText('Yes');
+      const confirmButton = confirmButtons[0];
       fireEvent.click(confirmButton);
     });
     

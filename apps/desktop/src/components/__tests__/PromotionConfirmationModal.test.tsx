@@ -54,11 +54,16 @@ describe('PromotionConfirmationModal', () => {
   it('renders modal with version information', async () => {
     render(<PromotionConfirmationModal {...mockProps} />);
     
-    expect(screen.getByText('Promote to Golden Image')).toBeInTheDocument();
-    expect(screen.getByText('Version to Promote')).toBeInTheDocument();
-    expect(screen.getByText('config.json')).toBeInTheDocument();
-    expect(screen.getByText('v2')).toBeInTheDocument();
-    expect(screen.getByText('john.doe')).toBeInTheDocument();
+    const promoteElements = screen.getAllByText('Promote to Golden Image');
+    expect(promoteElements.length).toBeGreaterThan(0);
+    const versionPromoteElements = screen.getAllByText('Version to Promote');
+    expect(versionPromoteElements.length).toBeGreaterThan(0);
+    const configJsonElements = screen.getAllByText('config.json');
+    expect(configJsonElements.length).toBeGreaterThan(0);
+    const v2Elements = screen.getAllByText('v2');
+    expect(v2Elements.length).toBeGreaterThan(0);
+    const johnDoeElements = screen.getAllByText('john.doe');
+    expect(johnDoeElements.length).toBeGreaterThan(0);
   });
 
   it('checks promotion eligibility on mount', async () => {
@@ -87,7 +92,8 @@ describe('PromotionConfirmationModal', () => {
     render(<PromotionConfirmationModal {...mockProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -106,7 +112,8 @@ describe('PromotionConfirmationModal', () => {
     render(<PromotionConfirmationModal {...mockProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Not Eligible for Promotion')).toBeInTheDocument();
+      const notEligibleElements = screen.getAllByText('Not Eligible for Promotion');
+      expect(notEligibleElements.length).toBeGreaterThan(0);
     });
 
     // OK button should be disabled
@@ -136,8 +143,10 @@ describe('PromotionConfirmationModal', () => {
     render(<PromotionConfirmationModal {...mockProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Existing Golden Version Will Be Archived')).toBeInTheDocument();
-      expect(screen.getByText('config.json (v1)')).toBeInTheDocument();
+      const existingGoldenElements = screen.getAllByText('Existing Golden Version Will Be Archived');
+      expect(existingGoldenElements.length).toBeGreaterThan(0);
+      const configV1Elements = screen.getAllByText('config.json (v1)');
+      expect(configV1Elements.length).toBeGreaterThan(0);
     });
   });
 
@@ -145,10 +154,14 @@ describe('PromotionConfirmationModal', () => {
     render(<PromotionConfirmationModal {...mockProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Promotion Effects')).toBeInTheDocument();
-      expect(screen.getByText(/Version status will change to/)).toBeInTheDocument();
-      expect(screen.getByText(/Version will be prominently displayed/)).toBeInTheDocument();
-      expect(screen.getByText(/Audit trail will record/)).toBeInTheDocument();
+      const effectsElements = screen.getAllByText('Promotion Effects');
+      expect(effectsElements.length).toBeGreaterThan(0);
+      const statusChangeElements = screen.getAllByText(/Version status will change to/);
+      expect(statusChangeElements.length).toBeGreaterThan(0);
+      const displayElements = screen.getAllByText(/Version will be prominently displayed/);
+      expect(displayElements.length).toBeGreaterThan(0);
+      const auditElements = screen.getAllByText(/Audit trail will record/);
+      expect(auditElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -157,14 +170,16 @@ describe('PromotionConfirmationModal', () => {
     
     // Wait for eligibility check
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
 
     // Try to submit without reason
     fireEvent.click(screen.getByText('Promote to Golden'));
     
     await waitFor(() => {
-      expect(screen.getByText('Please provide a reason for this promotion')).toBeInTheDocument();
+      const reasonRequiredElements = screen.getAllByText('Please provide a reason for this promotion');
+      expect(reasonRequiredElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -173,7 +188,8 @@ describe('PromotionConfirmationModal', () => {
     
     // Wait for eligibility check
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
 
     // Fill in promotion reason
@@ -214,7 +230,8 @@ describe('PromotionConfirmationModal', () => {
     
     // Wait for eligibility check
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
 
     // Fill form and submit
@@ -224,8 +241,10 @@ describe('PromotionConfirmationModal', () => {
     fireEvent.click(screen.getByText('Promote to Golden'));
     
     await waitFor(() => {
-      expect(screen.getByText('Promotion Failed')).toBeInTheDocument();
-      expect(screen.getByText('Failed to promote version')).toBeInTheDocument();
+      const failedElements = screen.getAllByText('Promotion Failed');
+      expect(failedElements.length).toBeGreaterThan(0);
+      const failureMessageElements = screen.getAllByText('Failed to promote version');
+      expect(failureMessageElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -246,7 +265,8 @@ describe('PromotionConfirmationModal', () => {
     
     // Wait for eligibility check
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
 
     // Fill in reason that exceeds limit
@@ -257,7 +277,8 @@ describe('PromotionConfirmationModal', () => {
     fireEvent.click(screen.getByText('Promote to Golden'));
     
     await waitFor(() => {
-      expect(screen.getByText('Reason cannot exceed 500 characters')).toBeInTheDocument();
+      const characterLimitElements = screen.getAllByText('Reason cannot exceed 500 characters');
+      expect(characterLimitElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -280,7 +301,8 @@ describe('PromotionConfirmationModal', () => {
     
     // Wait for eligibility check
     await waitFor(() => {
-      expect(screen.getByText('Ready for Promotion')).toBeInTheDocument();
+      const readyElements = screen.getAllByText('Ready for Promotion');
+      expect(readyElements.length).toBeGreaterThan(0);
     });
 
     // Fill form and submit
