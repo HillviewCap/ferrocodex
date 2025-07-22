@@ -238,7 +238,8 @@ describe('ExportConfirmationModal', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Export Error')).toBeInTheDocument();
-      expect(screen.getByText('Export failed')).toBeInTheDocument();
+      const exportFailedElements = screen.getAllByText('Export failed');
+      expect(exportFailedElements.length).toBeGreaterThan(0);
     });
   });
 

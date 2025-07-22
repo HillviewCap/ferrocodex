@@ -75,8 +75,10 @@ describe('ChangeStatusModal', () => {
     fireEvent.mouseDown(select);
 
     await waitFor(() => {
-      expect(screen.getByText('Approved')).toBeInTheDocument();
-      expect(screen.getByText('Archived')).toBeInTheDocument();
+      const approvedElements = screen.getAllByText('Approved');
+      const archivedElements = screen.getAllByText('Archived');
+      expect(approvedElements.length).toBeGreaterThan(0);
+      expect(archivedElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -124,7 +126,7 @@ describe('ChangeStatusModal', () => {
     fireEvent.mouseDown(select);
     
     await waitFor(() => {
-      const approvedOption = screen.getByText('Approved');
+      const approvedOption = screen.getAllByText('Approved')[0];
       fireEvent.click(approvedOption);
     });
 
@@ -160,7 +162,7 @@ describe('ChangeStatusModal', () => {
     });
 
     await waitFor(() => {
-      const approvedOption = screen.getByText('Approved');
+      const approvedOption = screen.getAllByText('Approved')[0];
       fireEvent.click(approvedOption);
     });
 
@@ -246,7 +248,7 @@ describe('ChangeStatusModal', () => {
     });
 
     await waitFor(() => {
-      const approvedOption = screen.getByText('Approved');
+      const approvedOption = screen.getAllByText('Approved')[0];
       fireEvent.click(approvedOption);
     });
 

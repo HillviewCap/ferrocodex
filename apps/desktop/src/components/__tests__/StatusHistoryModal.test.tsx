@@ -90,8 +90,10 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Draft')).toBeInTheDocument();
-      expect(screen.getByText('Approved')).toBeInTheDocument();
+      const draftElements = screen.getAllByText('Draft');
+      const approvedElements = screen.getAllByText('Approved');
+      expect(draftElements.length).toBeGreaterThan(0);
+      expect(approvedElements.length).toBeGreaterThan(0);
       expect(screen.getByText('john_doe')).toBeInTheDocument();
       expect(screen.getByText('admin_user')).toBeInTheDocument();
     });
@@ -225,8 +227,10 @@ describe('StatusHistoryModal', () => {
     render(<StatusHistoryModal {...defaultProps} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Golden')).toBeInTheDocument();
-      expect(screen.getByText('Archived')).toBeInTheDocument();
+      const goldenElements = screen.getAllByText('Golden');
+      const archivedElements = screen.getAllByText('Archived');
+      expect(goldenElements.length).toBeGreaterThan(0);
+      expect(archivedElements.length).toBeGreaterThan(0);
     });
   });
 

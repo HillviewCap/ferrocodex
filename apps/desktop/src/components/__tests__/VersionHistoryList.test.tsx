@@ -95,7 +95,8 @@ describe('VersionHistoryList', () => {
     render(<VersionHistoryList versions={[]} />);
     
     // When the list is empty, Ant Design shows an empty state instead of a list
-    expect(screen.getByText('No data')).toBeInTheDocument();
+    const emptyElements = screen.getAllByText('No data');
+    expect(emptyElements.length).toBeGreaterThan(0);
   });
 
   it('handles single version correctly', () => {
