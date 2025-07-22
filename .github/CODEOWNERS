@@ -1,0 +1,19 @@
+# This file defines code owners for the repository.
+# Code owners are automatically requested for review when someone opens a pull request that modifies code that they own.
+# For Dependabot PRs, this replaces the reviewers field in dependabot.yml.
+
+# Global fallback - all files
+* @HillviewCap
+
+# Frontend dependencies and configuration
+package.json @HillviewCap
+package-lock.json @HillviewCap
+apps/desktop/package.json @HillviewCap
+apps/desktop/package-lock.json @HillviewCap
+
+# Rust backend dependencies
+apps/desktop/src-tauri/Cargo.toml @HillviewCap
+apps/desktop/src-tauri/Cargo.lock @HillviewCap
+
+# CI/CD configuration
+.github/ @HillviewCap
