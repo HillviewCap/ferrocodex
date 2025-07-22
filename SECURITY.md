@@ -16,7 +16,7 @@ We take the security of Ferrocodex seriously, especially given its use in operat
 ### How to Report
 
 1. **DO NOT** open a public issue
-2. Email security vulnerabilities to: <zach@transformitadvisers.com>
+2. Email security vulnerabilities to: security@ferrocodex.com
 3. Include the following information:
    - Description of the vulnerability
    - Steps to reproduce the issue

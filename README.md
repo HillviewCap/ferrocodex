@@ -1,17 +1,33 @@
 # Ferrocodex
 
-A secure cross-platform desktop application for password management and encrypted storage built with Tauri 2.0, React, and Rust.
+<div align="center">
 
-## Architecture
+🏗️ **Secure OT Configuration Management Platform**
 
-- **Frontend**: React 18 with TypeScript and Ant Design
-- **Backend**: Rust with Tauri 2.0 framework
-- **Database**: SQLite with rusqlite
-- **State Management**: Zustand
-- **Build System**: Turborepo monorepo
-- **Testing**: Vitest (frontend) + Rust built-in testing (backend)
+[![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://GitHub.com/ferrocodex/ferrocodex/releases/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+[![Build Status](https://github.com/ferrocodex/ferrocodex/workflows/Release/badge.svg)](https://github.com/ferrocodex/ferrocodex/actions)
 
-## Prerequisites
+A cross-platform desktop application for secure offline-first configuration management in operational technology (OT) environments.
+
+</div>
+
+## 🚀 Overview
+
+Ferrocodex is a secure configuration management platform designed specifically for industrial equipment and operational technology environments. Built with Tauri 2.0, it combines the power of Rust's security and performance with React's modern UI capabilities to deliver an offline-first solution for managing critical infrastructure configurations.
+
+### Key Features
+
+- 🔒 **Enterprise-grade Security**: Role-based access control, session management, and audit trails
+- 💾 **Offline-First Architecture**: Full functionality without internet connectivity
+- 🔐 **Data Protection**: AES-256 encryption for all stored configurations (coming in v2.0)
+- 🌐 **Cross-Platform**: Native desktop apps for Windows, macOS, and Linux
+- 🎯 **OT-Focused**: Designed for industrial control systems and equipment
+- 📝 **Comprehensive Audit Trail**: Track all configuration changes and access
+- 🌳 **Version Control**: Built-in branching and versioning for configurations
+- 👥 **Multi-User Support**: Administrator and Engineer role separation
+
+## 📋 Prerequisites
 
 - **Node.js**: 18+ 
 - **Rust**: 1.78.0+
@@ -20,11 +36,13 @@ A secure cross-platform desktop application for password management and encrypte
   - **macOS**: Xcode Command Line Tools
   - **Windows**: Microsoft Visual Studio C++ Build Tools
 
-## Installation
+## 🛠️ Installation
+
+### From Source
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ferrocodex/ferrocodex.git
    cd ferrocodex
    ```
 
@@ -39,7 +57,11 @@ A secure cross-platform desktop application for password management and encrypte
    sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libgtk-3-dev librsvg2-dev
    ```
 
-## Development
+### Pre-built Binaries
+
+Download the latest release for your platform from the [releases page](https://github.com/ferrocodex/ferrocodex/releases).
+
+## 💻 Development
 
 ### Running in Development Mode
 
@@ -47,7 +69,8 @@ A secure cross-platform desktop application for password management and encrypte
 # Start the development server (both frontend and backend)
 npm run dev
 
-# Or run Tauri development mode directly
+# Or from the desktop app directory
+cd apps/desktop
 npm run tauri:dev
 ```
 
@@ -56,104 +79,120 @@ The application will start with hot reload enabled for both the React frontend a
 ### Building for Production
 
 ```bash
-# Build the application
+# Build all packages
 npm run build
 
-# Build Tauri application (creates platform-specific bundles)
+# Build platform-specific binary
+cd apps/desktop
 npm run tauri:build
 ```
 
 ### Testing
 
 ```bash
-# Run frontend tests
+# Run all tests
 npm run test
 
-# Run frontend tests once
-npm run test:run
+# Frontend tests with coverage
+cd apps/desktop
+npm run test:coverage
 
-# Run backend tests
-cargo test --manifest-path src-tauri/Cargo.toml
-
-# Run all tests
-npm run test && cargo test --manifest-path src-tauri/Cargo.toml
+# Backend tests
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ferrocodex/
 ├── apps/
 │   └── desktop/              # Main Tauri application
-│       ├── src/              # React frontend source
-│       │   ├── components/   # React components
+│       ├── src/              # React frontend
+│       │   ├── components/   # UI components
 │       │   ├── store/        # Zustand state management
-│       │   └── ...
-│       ├── src-tauri/        # Rust backend source
-│       │   ├── src/          # Rust source code
-│       │   │   ├── database/ # Database module
-│       │   │   └── ...
-│       │   └── Cargo.toml    # Rust dependencies
-│       ├── package.json      # Frontend dependencies
-│       └── vite.config.ts    # Vite configuration
+│       │   ├── types/        # TypeScript types
+│       │   └── utils/        # Utility functions
+│       ├── src-tauri/        # Rust backend
+│       │   └── src/
+│       │       ├── assets/        # Equipment management
+│       │       ├── audit/         # Audit logging
+│       │       ├── auth/          # Authentication
+│       │       ├── branches/      # Configuration branching
+│       │       ├── configurations/# Config file management
+│       │       ├── database/      # SQLite layer
+│       │       ├── encryption/    # AES-256 encryption
+│       │       ├── users/         # User management
+│       │       └── validation/    # Input validation
+│       └── package.json      
 ├── packages/
 │   └── shared-types/         # Shared TypeScript types
-├── package.json              # Root workspace configuration
-├── turbo.json               # Turborepo configuration
-└── tsconfig.json            # Root TypeScript configuration
+├── .github/
+│   └── workflows/           # GitHub Actions
+├── CLAUDE.md                # AI assistant instructions
+├── SECURITY.md              # Security policy
+└── package.json             # Workspace configuration
 ```
 
-## Key Features
+## 🔧 Configuration
 
-- **Cross-platform**: Builds for Windows, macOS, and Linux
-- **Secure**: Rust backend ensures memory safety
-- **Local-first**: SQLite database for offline functionality
-- **Modern UI**: Ant Design components with React
-- **Type-safe**: Full TypeScript support
-- **Testing**: Comprehensive test coverage
-- **Hot Reload**: Fast development experience
+Ferrocodex stores its data in platform-specific locations:
 
-## Database
+- **Windows**: `%APPDATA%/com.ferrocodex.app/`
+- **macOS**: `~/Library/Application Support/com.ferrocodex.app/`
+- **Linux**: `~/.config/com.ferrocodex.app/`
 
-The application uses SQLite for local data storage with the following features:
+The SQLite database is automatically initialized on first run with:
+- WAL mode for better concurrency
+- Optimized pragma settings
+- Automatic schema migrations
 
-- **Location**: Stored in the user's application data directory
-- **Schema**: Automatic initialization with version tracking
-- **Performance**: WAL mode and optimized settings
-- **Encryption**: Infrastructure prepared for future implementation
+## 🤝 Contributing
 
-### Database Commands
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-The Tauri backend exposes the following commands for database operations:
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-- `initialize_database()`: Initialize the database connection
-- `database_health_check()`: Verify database connectivity
+### Development Guidelines
 
-## Contributing
+- Follow the existing code style
+- Add tests for new functionality
+- Update documentation as needed
+- Ensure all tests pass before submitting
 
-1. Ensure all tests pass before submitting changes
-2. Follow the existing code style and conventions
-3. Add tests for new functionality
-4. Update documentation as needed
+## 🔒 Security
 
-## Troubleshooting
+Security is paramount for OT environments. Please report vulnerabilities responsibly:
 
-### Common Issues
+- **DO NOT** open public issues for security vulnerabilities
+- Email security@ferrocodex.com with details
+- See [SECURITY.md](SECURITY.md) for more information
 
-1. **Build fails on Linux**: Ensure all system dependencies are installed
-2. **Tauri dev mode doesn't start**: Check that ports 1420-1421 are available
-3. **Database initialization fails**: Verify write permissions to app data directory
+## 📜 License
 
-### Platform-specific Notes
+This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
-- **macOS**: Bundle identifier should not end with `.app` (warning will be shown)
-- **Linux**: Requires WebKit2GTK for web view functionality
-- **Windows**: May require specific Visual Studio components
+This means that any modifications or derivative works must also be released under the AGPL-3.0 license, and if you run a modified version on a server, you must offer the source code to users of that server.
 
-## License
+## 🙏 Acknowledgments
 
-[License information]
+Built with:
+- [Tauri](https://tauri.app/) - Build smaller, faster, and more secure desktop applications
+- [React](https://reactjs.org/) - A JavaScript library for building user interfaces
+- [Ant Design](https://ant.design/) - Enterprise-class UI design language
+- [Rust](https://www.rust-lang.org/) - Performance, reliability, and productivity
 
-## Support
+## 📞 Support
 
-[Support information]
+- 📖 [Documentation](https://docs.ferrocodex.com) (coming soon)
+- 🐛 [Issue Tracker](https://github.com/ferrocodex/ferrocodex/issues)
+- 💬 [Discussions](https://github.com/ferrocodex/ferrocodex/discussions)
+
+---
+
+<div align="center">
+Made with ❤️ for the OT community
+</div>
