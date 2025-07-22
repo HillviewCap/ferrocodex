@@ -2,6 +2,8 @@
 
 <div align="center">
 
+![Ferrocodex Logo](apps/desktop/src/assets/ferrocodex-logo.png)
+
 🏗️ **Secure OT Configuration Management Platform**
 
 [![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
