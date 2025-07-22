@@ -31,12 +31,13 @@ const LoginScreen: React.FC = () => {
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #003049 0%, #669bbc 100%)'
     }}>
       <Card 
         style={{ 
           width: 400, 
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)' 
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          backgroundColor: '#fdf0d5'
         }}
       >
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -45,15 +46,14 @@ const LoginScreen: React.FC = () => {
               src={ferrocodexLogo} 
               alt="Ferrocodex Logo" 
               style={{ 
-                height: 80, 
-                marginBottom: 16,
+                height: 'auto', 
+                maxWidth: '80%',
+                width: 'auto', 
+                marginBottom: 0,
                 display: 'block',
-                margin: '0 auto 16px'
+                margin: '0 auto 0px'
               }} 
             />
-            <Title level={2} style={{ marginBottom: 8 }}>
-              Ferrocodex
-            </Title>
             <Text type="secondary">
               Sign in to your account
             </Text>
@@ -122,7 +122,7 @@ const LoginScreen: React.FC = () => {
                 block
                 style={{ 
                   height: 48,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundColor: '#003049',
                   border: 'none'
                 }}
               >

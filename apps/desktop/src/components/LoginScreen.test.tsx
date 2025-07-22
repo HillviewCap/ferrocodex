@@ -22,7 +22,7 @@ beforeEach(() => {
 test('renders login form', () => {
   render(<LoginScreen />);
   
-  expect(screen.getByText('Ferrocodex')).toBeInTheDocument();
+  expect(screen.getByAltText('Ferrocodex Logo')).toBeInTheDocument();
   expect(screen.getByText('Sign in to your account')).toBeInTheDocument();
   expect(screen.getByLabelText('Username')).toBeInTheDocument();
   expect(screen.getByLabelText('Password')).toBeInTheDocument();
