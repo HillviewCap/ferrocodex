@@ -4,9 +4,9 @@
 
 🏗️ **Secure OT Configuration Management Platform**
 
-[![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://GitHub.com/ferrocodex/ferrocodex/releases/)
+[![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Build Status](https://github.com/ferrocodex/ferrocodex/workflows/Release/badge.svg)](https://github.com/ferrocodex/ferrocodex/actions)
+[![Build Status](https://github.com/ferrocodex/ferrocodex/workflows/Release/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions)
 
 A cross-platform desktop application for secure offline-first configuration management in operational technology (OT) environments.
 
