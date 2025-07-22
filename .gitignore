@@ -2,6 +2,7 @@
 .bmad-infrastructure-devops
 .claude/commands
 web-bundles
+docs/all-icons/
 
 # Dependencies
 node_modules/

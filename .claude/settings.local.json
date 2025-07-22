@@ -18,7 +18,14 @@
       "Bash(npm install:*)",
       "Bash(git merge:*)",
       "Bash(git branch:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"$file:\")",
+      "Bash(identify:*)",
+      "Bash(done)",
+      "Bash(ffmpeg:*)",
+      "Bash(cp:*)",
+      "Bash(where magick)"
     ],
     "deny": []
   }
