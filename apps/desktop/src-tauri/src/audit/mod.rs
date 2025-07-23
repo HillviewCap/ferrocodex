@@ -22,6 +22,8 @@ pub enum AuditEventType {
     SystemShutdown,
     DatabaseOperation,
     SecurityViolation,
+    FirmwareUpload,
+    FirmwareDelete,
 }
 
 impl fmt::Display for AuditEventType {
@@ -43,6 +45,8 @@ impl fmt::Display for AuditEventType {
             AuditEventType::SystemShutdown => write!(f, "SYS_002"),
             AuditEventType::DatabaseOperation => write!(f, "DB_001"),
             AuditEventType::SecurityViolation => write!(f, "SEC_001"),
+            AuditEventType::FirmwareUpload => write!(f, "FW_001"),
+            AuditEventType::FirmwareDelete => write!(f, "FW_002"),
         }
     }
 }

@@ -7,6 +7,7 @@ use crate::audit::{SqliteAuditRepository, AuditRepository};
 use crate::assets::SqliteAssetRepository;
 use crate::configurations::SqliteConfigurationRepository;
 use crate::branches::SqliteBranchRepository;
+use crate::firmware::SqliteFirmwareRepository;
 
 pub struct Database {
     conn: Connection,
@@ -75,6 +76,10 @@ impl Database {
         // Initialize branches schema
         let branch_repo = SqliteBranchRepository::new(&self.conn);
         branch_repo.initialize_schema()?;
+
+        // Initialize firmware schema
+        let firmware_repo = SqliteFirmwareRepository::new(&self.conn);
+        firmware_repo.initialize_schema()?;
 
         info!("Database schema initialized");
         Ok(())
