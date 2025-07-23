@@ -1879,11 +1879,19 @@ async fn upload_firmware(
     model: Option<String>,
     version: String,
     notes: Option<String>,
-    file_data: Vec<u8>,
+    file_path: String,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
     audit_state: State<'_, DatabaseState>,
+    rate_limiter: State<'_, RateLimiterState>,
 ) -> Result<FirmwareVersionInfo, String> {
+    // Check rate limiting - limit firmware uploads per user
+    let rate_limiter_guard = rate_limiter.lock().unwrap();
+    if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("firmware_upload_{}", token)) {
+        return Err(e);
+    }
+    drop(rate_limiter_guard);
+
     // Validate session
     let session_manager_guard = session_manager.lock().unwrap();
     let session = match session_manager_guard.validate_session(&token) {
@@ -1900,6 +1908,17 @@ async fn upload_firmware(
     if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
         warn!("User without sufficient permissions attempted to upload firmware: {}", session.username);
         return Err("Only Engineers and Administrators can upload firmware".to_string());
+    }
+
+    // Validate file path first
+    let file_path = file_path.trim();
+    if file_path.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    
+    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
     }
 
     // Validate inputs
@@ -1927,6 +1946,68 @@ async fn upload_firmware(
     if let Some(ref n) = notes {
         if n.len() > 500 {
             return Err("Notes cannot exceed 500 characters".to_string());
+        }
+    }
+    
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&version) || 
+       vendor.as_ref().map_or(false, |v| InputSanitizer::is_potentially_malicious(v)) ||
+       model.as_ref().map_or(false, |m| InputSanitizer::is_potentially_malicious(m)) ||
+       notes.as_ref().map_or(false, |n| InputSanitizer::is_potentially_malicious(n)) {
+        error!("Potentially malicious input detected in upload_firmware");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+    
+    // Validate file extension
+    let allowed_extensions = vec![
+        "bin", "hex", "img", "rom", "fw", "elf", "dfu", "upd", 
+        "dat", "firmware", "update", "pkg", "ipk", "tar", "gz",
+        "bz2", "xz", "zip", "rar", "7z", "cab", "iso", "dmg"
+    ];
+    
+    let file_extension = std::path::Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+        .unwrap_or_default();
+    
+    if file_extension.is_empty() {
+        error!("Firmware file has no extension: {}", file_path);
+        return Err("Firmware file must have a valid extension".to_string());
+    }
+    
+    if !allowed_extensions.contains(&file_extension.as_str()) {
+        error!("Invalid firmware file type: .{}", file_extension);
+        return Err(format!(
+            "File type .{} is not allowed. Allowed types: {}", 
+            file_extension, 
+            allowed_extensions.join(", ")
+        ));
+    }
+    
+    info!("Validated firmware file extension: .{}", file_extension);
+    
+    // Read file content
+    let file_data = match file_utils::read_file_content(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            error!("Failed to read file {}: {}", file_path, e);
+            return Err(format!("Failed to read file: {}", e));
+        }
+    };
+
+    // Basic MIME type validation - check for common executable signatures
+    if file_data.len() >= 2 {
+        let header = &file_data[0..2];
+        // Check for Windows executable (MZ header)
+        if header == b"MZ" {
+            error!("Detected Windows executable file signature");
+            return Err("Executable files are not allowed as firmware".to_string());
+        }
+        // Check for ELF executable (common on Linux)
+        if file_data.len() >= 4 && &file_data[0..4] == b"\x7FELF" {
+            // ELF is actually allowed for firmware, so we'll permit this
+            info!("Detected ELF format firmware file");
         }
     }
 
