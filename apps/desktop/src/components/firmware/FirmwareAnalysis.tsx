@@ -185,7 +185,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
                       <Space direction="vertical" style={{ width: '100%' }}>
                         <Text strong>{finding.findingType}</Text>
                         <Text type="secondary">{finding.description}</Text>
-                        {finding.offset !== undefined && (
+                        {finding.offset !== undefined && finding.offset !== null && (
                           <Text code>Offset: 0x{finding.offset.toString(16)}</Text>
                         )}
                       </Space>
