@@ -7,15 +7,17 @@ mod assets;
 mod configurations;
 mod encryption;
 mod branches;
+mod firmware;
 
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
 use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
-use audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
+use audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
 use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils, FileMetadata};
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
+use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
@@ -1868,6 +1870,390 @@ async fn restore_version(
     }
 }
 
+#[tauri::command]
+async fn upload_firmware(
+    app: AppHandle,
+    token: String,
+    asset_id: i64,
+    vendor: Option<String>,
+    model: Option<String>,
+    version: String,
+    notes: Option<String>,
+    file_path: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+    rate_limiter: State<'_, RateLimiterState>,
+) -> Result<FirmwareVersionInfo, String> {
+    // Check rate limiting - limit firmware uploads per user
+    let rate_limiter_guard = rate_limiter.lock().unwrap();
+    if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("firmware_upload_{}", token)) {
+        return Err(e);
+    }
+    drop(rate_limiter_guard);
+
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can upload firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to upload firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can upload firmware".to_string());
+    }
+
+    // Validate file path first
+    let file_path = file_path.trim();
+    if file_path.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    
+    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
+    }
+
+    // Validate inputs
+    let version = InputSanitizer::sanitize_string(&version);
+    let vendor = vendor.map(|v| InputSanitizer::sanitize_string(&v));
+    let model = model.map(|m| InputSanitizer::sanitize_string(&m));
+    let notes = notes.map(|n| InputSanitizer::sanitize_string(&n));
+    
+    if version.is_empty() {
+        return Err("Version cannot be empty".to_string());
+    }
+    
+    if let Some(ref v) = vendor {
+        if v.len() > 100 {
+            return Err("Vendor name cannot exceed 100 characters".to_string());
+        }
+    }
+    
+    if let Some(ref m) = model {
+        if m.len() > 100 {
+            return Err("Model name cannot exceed 100 characters".to_string());
+        }
+    }
+    
+    if let Some(ref n) = notes {
+        if n.len() > 500 {
+            return Err("Notes cannot exceed 500 characters".to_string());
+        }
+    }
+    
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&version) || 
+       vendor.as_ref().map_or(false, |v| InputSanitizer::is_potentially_malicious(v)) ||
+       model.as_ref().map_or(false, |m| InputSanitizer::is_potentially_malicious(m)) ||
+       notes.as_ref().map_or(false, |n| InputSanitizer::is_potentially_malicious(n)) {
+        error!("Potentially malicious input detected in upload_firmware");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+    
+    // Validate file extension
+    let allowed_extensions = vec![
+        "bin", "hex", "img", "rom", "fw", "elf", "dfu", "upd", 
+        "dat", "firmware", "update", "pkg", "ipk", "tar", "gz",
+        "bz2", "xz", "zip", "rar", "7z", "cab", "iso", "dmg"
+    ];
+    
+    let file_extension = std::path::Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+        .unwrap_or_default();
+    
+    if file_extension.is_empty() {
+        error!("Firmware file has no extension: {}", file_path);
+        return Err("Firmware file must have a valid extension".to_string());
+    }
+    
+    if !allowed_extensions.contains(&file_extension.as_str()) {
+        error!("Invalid firmware file type: .{}", file_extension);
+        return Err(format!(
+            "File type .{} is not allowed. Allowed types: {}", 
+            file_extension, 
+            allowed_extensions.join(", ")
+        ));
+    }
+    
+    info!("Validated firmware file extension: .{}", file_extension);
+    
+    // Read file content
+    let file_data = match file_utils::read_file_content(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            error!("Failed to read file {}: {}", file_path, e);
+            return Err(format!("Failed to read file: {}", e));
+        }
+    };
+
+    // Basic MIME type validation - check for common executable signatures
+    if file_data.len() >= 2 {
+        let header = &file_data[0..2];
+        // Check for Windows executable (MZ header)
+        if header == b"MZ" {
+            error!("Detected Windows executable file signature");
+            return Err("Executable files are not allowed as firmware".to_string());
+        }
+        // Check for ELF executable (common on Linux)
+        if file_data.len() >= 4 && &file_data[0..4] == b"\x7FELF" {
+            // ELF is actually allowed for firmware, so we'll permit this
+            info!("Detected ELF format firmware file");
+        }
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            // Generate a temporary firmware ID for file storage
+            let temp_firmware_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            
+            // Store the firmware file
+            let (file_path, file_hash, file_size) = match FirmwareFileStorage::store_firmware_file(
+                &app,
+                asset_id,
+                temp_firmware_id,
+                &file_data,
+                session.user_id,
+                &session.username,
+            ) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("Failed to store firmware file: {}", e);
+                    return Err(format!("Failed to store firmware file: {}", e));
+                }
+            };
+            
+            // Create firmware record
+            let request = CreateFirmwareRequest {
+                asset_id,
+                vendor,
+                model,
+                version,
+                notes,
+            };
+            
+            match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size) {
+                Ok(firmware) => {
+                    // Update the file with the actual firmware ID
+                    let new_file_path = format!("{}/{}.enc", asset_id, firmware.id);
+                    if file_path != new_file_path {
+                        // Rename the file if needed
+                        let firmware_dir = firmware::get_firmware_storage_dir(&app).unwrap();
+                        let old_path = firmware_dir.join(&file_path);
+                        let new_path = firmware_dir.join(&new_file_path);
+                        if let Err(e) = std::fs::rename(old_path, new_path) {
+                            error!("Failed to rename firmware file: {}", e);
+                            // Clean up on failure
+                            let _ = firmware_repo.delete_firmware(firmware.id);
+                            let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
+                            return Err("Failed to finalize firmware storage".to_string());
+                        }
+                    }
+                    
+                    // Log audit event
+                    if let Some(audit_db) = audit_state.lock().unwrap().as_ref() {
+                        let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                        let audit_event = audit::AuditEventRequest {
+                            event_type: audit::AuditEventType::FirmwareUpload,
+                            user_id: Some(session.user_id),
+                            username: Some(session.username.clone()),
+                            admin_user_id: None,
+                            admin_username: None,
+                            target_user_id: None,
+                            target_username: None,
+                            description: format!("Uploaded firmware v{} for asset {}", firmware.version, asset_id),
+                            metadata: Some(serde_json::json!({
+                                "asset_id": asset_id,
+                                "firmware_id": firmware.id,
+                                "version": firmware.version,
+                                "file_size": file_size,
+                            }).to_string()),
+                            ip_address: None,
+                            user_agent: None,
+                        };
+                        if let Err(e) = audit_repo.log_event(&audit_event) {
+                            error!("Failed to log audit event: {}", e);
+                        }
+                    }
+                    
+                    info!("Firmware uploaded by {}: v{} for asset {} (ID: {})", 
+                         session.username, firmware.version, asset_id, firmware.id);
+                    
+                    // Convert to FirmwareVersionInfo
+                    Ok(FirmwareVersionInfo {
+                        id: firmware.id,
+                        asset_id: firmware.asset_id,
+                        author_id: firmware.author_id,
+                        author_username: session.username.clone(),
+                        vendor: firmware.vendor,
+                        model: firmware.model,
+                        version: firmware.version,
+                        notes: firmware.notes,
+                        status: firmware.status,
+                        file_path: new_file_path,
+                        file_hash: firmware.file_hash,
+                        file_size,
+                        created_at: firmware.created_at,
+                    })
+                }
+                Err(e) => {
+                    // Clean up file on database error
+                    let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
+                    error!("Failed to create firmware record: {}", e);
+                    Err(format!("Failed to create firmware record: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_firmware_list(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_firmware_by_asset(asset_id) {
+                Ok(firmwares) => {
+                    info!("Retrieved {} firmware versions for asset {} by {}", 
+                         firmwares.len(), asset_id, session.username);
+                    Ok(firmwares)
+                }
+                Err(e) => {
+                    error!("Failed to get firmware list: {}", e);
+                    Err(format!("Failed to get firmware list: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn delete_firmware(
+    app: AppHandle,
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock().unwrap();
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can delete firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to delete firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can delete firmware".to_string());
+    }
+
+    let db_guard = db_state.lock().unwrap();
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            // Get firmware details before deletion for audit
+            let firmware_info = match firmware_repo.get_firmware_by_id(firmware_id) {
+                Ok(Some(fw)) => fw,
+                Ok(None) => return Err("Firmware not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get firmware info: {}", e);
+                    return Err("Failed to get firmware info".to_string());
+                }
+            };
+            
+            // Delete firmware record and get file path
+            match firmware_repo.delete_firmware(firmware_id) {
+                Ok(Some(file_path)) => {
+                    // Delete the actual file
+                    if let Err(e) = FirmwareFileStorage::delete_firmware_file(&app, &file_path) {
+                        error!("Failed to delete firmware file: {}", e);
+                        // Continue anyway - the database record is already deleted
+                    }
+                    
+                    // Log audit event
+                    if let Some(audit_db) = audit_state.lock().unwrap().as_ref() {
+                        let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                        let audit_event = audit::AuditEventRequest {
+                            event_type: audit::AuditEventType::FirmwareDelete,
+                            user_id: Some(session.user_id),
+                            username: Some(session.username.clone()),
+                            admin_user_id: None,
+                            admin_username: None,
+                            target_user_id: None,
+                            target_username: None,
+                            description: format!("Deleted firmware v{} for asset {}", firmware_info.version, firmware_info.asset_id),
+                            metadata: Some(serde_json::json!({
+                                "asset_id": firmware_info.asset_id,
+                                "firmware_id": firmware_id,
+                                "version": firmware_info.version,
+                            }).to_string()),
+                            ip_address: None,
+                            user_agent: None,
+                        };
+                        if let Err(e) = audit_repo.log_event(&audit_event) {
+                            error!("Failed to log audit event: {}", e);
+                        }
+                    }
+                    
+                    info!("Firmware deleted by {}: ID {} (v{} for asset {})", 
+                         session.username, firmware_id, firmware_info.version, firmware_info.asset_id);
+                    Ok(())
+                }
+                Ok(None) => Err("Firmware not found".to_string()),
+                Err(e) => {
+                    error!("Failed to delete firmware: {}", e);
+                    Err(format!("Failed to delete firmware: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -1916,7 +2302,10 @@ pub fn run() {
             get_branch_latest_version,
             compare_branch_versions,
             archive_version,
-            restore_version
+            restore_version,
+            upload_firmware,
+            get_firmware_list,
+            delete_firmware
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

@@ -21,7 +21,8 @@ import {
   CalendarOutlined,
   UserOutlined,
   FileOutlined,
-  BranchesOutlined
+  BranchesOutlined,
+  CloudServerOutlined
 } from '@ant-design/icons';
 import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -32,6 +33,7 @@ import VersionHistoryList from './VersionHistoryList';
 import CreateBranchModal from './CreateBranchModal';
 import BranchManagement from './BranchManagement';
 import GoldenVersionIndicator from './GoldenVersionIndicator';
+import FirmwareManagement from './FirmwareManagement';
 import { invoke } from '@tauri-apps/api/core';
 
 const { Title, Text } = Typography;
@@ -366,6 +368,18 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                 showCreateButton={false}
                 showSelectActions={false}
               />
+            )
+          },
+          {
+            key: 'firmware',
+            label: (
+              <span>
+                <CloudServerOutlined />
+                Firmware
+              </span>
+            ),
+            children: (
+              <FirmwareManagement asset={asset} />
             )
           }
         ]}
