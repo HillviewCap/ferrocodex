@@ -9,6 +9,7 @@ mod encryption;
 mod branches;
 mod firmware;
 mod firmware_analysis;
+mod recovery;
 
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
@@ -20,6 +21,7 @@ use configurations::{ConfigurationRepository, SqliteConfigurationRepository, Cre
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
 use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
 use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
+use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, State, Manager};
@@ -2563,17 +2565,18 @@ async fn get_firmware_analysis(
     }
 }
 
+
 #[tauri::command]
-async fn export_recovery_package(
+async fn export_complete_recovery(
     app: AppHandle,
     token: String,
     asset_id: i64,
-    config_id: i64,
-    firmware_id: i64,
-    export_path: String,
+    config_version_id: i64,
+    firmware_version_id: i64,
+    export_directory: String,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
-) -> Result<String, String> {
+) -> Result<RecoveryManifest, String> {
     // Validate session
     let session_manager_guard = session_manager.lock()
         .map_err(|_| "Failed to acquire session lock".to_string())?;
@@ -2587,24 +2590,6 @@ async fn export_recovery_package(
     };
     drop(session_manager_guard);
 
-    // Only Engineers and Administrators can export recovery packages
-    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
-        warn!("User without sufficient permissions attempted to export recovery package: {}", session.username);
-        return Err("Only Engineers and Administrators can export recovery packages".to_string());
-    }
-
-    // Validate export path
-    let export_path = export_path.trim();
-    
-    if export_path.is_empty() {
-        return Err("Export path cannot be empty".to_string());
-    }
-    
-    if let Err(e) = InputSanitizer::validate_file_path(&export_path) {
-        error!("Invalid export path: {}", e);
-        return Err(format!("Invalid export path: {}", e));
-    }
-
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
@@ -2612,180 +2597,35 @@ async fn export_recovery_package(
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
             let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
             let audit_repo = SqliteAuditRepository::new(db.get_connection());
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
             
-            // Verify that configuration and firmware belong to the same asset
-            let config = match config_repo.get_configuration_by_id(config_id) {
-                Ok(Some(c)) => c,
-                Ok(None) => return Err("Configuration not found".to_string()),
-                Err(e) => return Err(format!("Failed to get configuration: {}", e)),
+            // Get asset name for proper filename generation
+            let asset = match asset_repo.get_asset_by_id(asset_id) {
+                Ok(Some(asset)) => asset,
+                Ok(None) => return Err("Asset not found".to_string()),
+                Err(e) => return Err(format!("Failed to get asset: {}", e)),
             };
+
+            let exporter = RecoveryExporter::new(&config_repo, &firmware_repo, &audit_repo);
             
-            let firmware = match firmware_repo.get_firmware_by_id(firmware_id) {
-                Ok(Some(f)) => f,
-                Ok(None) => return Err("Firmware not found".to_string()),
-                Err(e) => return Err(format!("Failed to get firmware: {}", e)),
+            let request = RecoveryExportRequest {
+                asset_id,
+                config_version_id,
+                firmware_version_id,
+                export_directory,
             };
-            
-            if config.asset_id != asset_id || firmware.asset_id != asset_id {
-                return Err("Configuration and firmware must belong to the specified asset".to_string());
-            }
-            
-            // Verify that firmware is linked to this configuration
-            if config.firmware_version_id != Some(firmware_id) {
-                return Err("Firmware is not linked to this configuration version".to_string());
-            }
-            
-            // Create export directory
-            let export_dir = std::path::Path::new(&export_path);
-            
-            // Track created files for cleanup on error
-            let mut created_files: Vec<std::path::PathBuf> = Vec::new();
-            let mut export_dir_created = false;
-            
-            // Helper closure for cleanup
-            let cleanup = || {
-                for file in &created_files {
-                    let _ = std::fs::remove_file(file);
-                }
-                if export_dir_created && created_files.is_empty() {
-                    // Only remove directory if we created it and it's empty
-                    let _ = std::fs::remove_dir(&export_dir);
-                }
-            };
-            
-            // Create export directory
-            if !export_dir.exists() {
-                if let Err(e) = std::fs::create_dir_all(&export_dir) {
-                    return Err(format!("Failed to create export directory: {}", e));
-                }
-                export_dir_created = true;
-            }
-            
-            // Export configuration
-            let config_extension = std::path::Path::new(&config.file_name)
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or("bin");
-            let config_filename = format!("config_{}_v{}.{}", 
-                asset_id, 
-                config.version_number,
-                config_extension
-            );
-            let config_export_path = export_dir.join(&config_filename);
-            
-            let config_export_path_str = config_export_path.to_str()
-                .ok_or_else(|| {
-                    cleanup();
-                    "Invalid configuration export path".to_string()
-                })?;
-                
-            match config_repo.export_configuration_version(config_id, config_export_path_str) {
-                Ok(_) => {
-                    created_files.push(config_export_path.clone());
-                },
-                Err(e) => {
-                    cleanup();
-                    return Err(format!("Failed to export configuration: {}", e));
-                }
-            };
-            
-            // Export firmware
-            let firmware_filename = format!("firmware_{}_v{}.bin", asset_id, firmware.version);
-            let firmware_export_path = export_dir.join(&firmware_filename);
-            
-            // Read and decrypt firmware file
-            let firmware_data = match FirmwareFileStorage::read_firmware_file(
+
+            match exporter.export_complete_recovery(
                 &app,
-                &firmware.file_path,
+                request,
                 session.user_id,
                 &session.username,
+                &session.role,
+                &asset.name,
             ) {
-                Ok(data) => data,
-                Err(e) => {
-                    cleanup();
-                    return Err(format!("Failed to read firmware file: {}", e));
-                }
-            };
-            
-            // Write firmware file
-            if let Err(e) = std::fs::write(&firmware_export_path, &firmware_data) {
-                cleanup();
-                return Err(format!("Failed to write firmware file: {}", e));
+                Ok(manifest) => Ok(manifest),
+                Err(e) => Err(e.to_string()),
             }
-            created_files.push(firmware_export_path.clone());
-            
-            // Create manifest
-            let export_date = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs().to_string())
-                .unwrap_or_else(|_| "0".to_string());
-                
-            let manifest = serde_json::json!({
-                "asset_id": asset_id,
-                "export_date": export_date,
-                "exported_by": session.username,
-                "configuration": {
-                    "version_id": config.id,
-                    "version_number": config.version_number,
-                    "filename": config_filename,
-                    "checksum": config.content_hash,
-                    "file_size": config.file_size
-                },
-                "firmware": {
-                    "version_id": firmware.id,
-                    "version": firmware.version,
-                    "filename": firmware_filename,
-                    "checksum": firmware.file_hash,
-                    "vendor": firmware.vendor,
-                    "model": firmware.model
-                },
-                "compatibility_verified": true
-            });
-            
-            let manifest_path = export_dir.join("recovery_manifest.json");
-            let manifest_json = match serde_json::to_string_pretty(&manifest) {
-                Ok(json) => json,
-                Err(e) => {
-                    cleanup();
-                    return Err(format!("Failed to serialize manifest: {}", e));
-                }
-            };
-            
-            if let Err(e) = std::fs::write(&manifest_path, manifest_json) {
-                cleanup();
-                return Err(format!("Failed to write manifest: {}", e));
-            }
-            
-            // Log audit event
-            let audit_event = audit::AuditEventRequest {
-                event_type: audit::AuditEventType::DatabaseOperation,
-                user_id: Some(session.user_id),
-                username: Some(session.username.clone()),
-                admin_user_id: None,
-                admin_username: None,
-                target_user_id: None,
-                target_username: None,
-                description: format!("Recovery package exported for asset {}", asset_id),
-                metadata: Some(serde_json::json!({
-                    "asset_id": asset_id,
-                    "config_id": config_id,
-                    "firmware_id": firmware_id,
-                    "export_path": export_path,
-                    "exported_by": session.username
-                }).to_string()),
-                ip_address: None,
-                user_agent: None,
-            };
-            
-            if let Err(e) = audit_repo.log_event(&audit_event) {
-                error!("Failed to log audit event: {}", e);
-            }
-            
-            info!("Recovery package exported by {}: Asset {} to {}", session.username, asset_id, export_path);
-            
-            manifest_path.to_str()
-                .map(|s| s.to_string())
-                .ok_or_else(|| "Failed to convert manifest path to string".to_string())
         }
         None => Err("Database not initialized".to_string()),
     }
@@ -3258,7 +3098,7 @@ pub fn run() {
             link_firmware_to_configuration,
             unlink_firmware_from_configuration,
             get_configurations_by_firmware,
-            export_recovery_package,
+            export_complete_recovery,
             upload_firmware,
             get_firmware_list,
             delete_firmware,

@@ -1294,6 +1294,7 @@ dependencies = [
  "anyhow",
  "bcrypt",
  "binwalk",
+ "chrono",
  "flate2",
  "once_cell",
  "regex",

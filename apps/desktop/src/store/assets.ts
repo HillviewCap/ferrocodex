@@ -12,6 +12,7 @@ interface AssetState {
   currentView: 'dashboard' | 'history';
   goldenVersions: Record<number, ConfigurationVersionInfo | null>; // Map asset_id to golden version
   goldenVersionsLoading: Record<number, boolean>; // Track loading state per asset
+  recoveryAvailable: Record<number, boolean>; // Track assets with both firmware and config
   
   // Actions
   fetchAssets: (token: string) => Promise<void>;
@@ -31,6 +32,10 @@ interface AssetState {
   
   // Export actions
   exportConfiguration: (token: string, versionId: number, exportPath: string) => Promise<void>;
+  
+  // Recovery actions
+  updateRecoveryAvailability: (assetId: number, available: boolean) => void;
+  checkRecoveryAvailability: (token: string, assetId: number) => Promise<boolean>;
 }
 
 const useAssetStore = create<AssetState>((set, get) => ({
@@ -43,6 +48,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
   currentView: 'dashboard',
   goldenVersions: {},
   goldenVersionsLoading: {},
+  recoveryAvailable: {},
 
   fetchAssets: async (token: string) => {
     set({ isLoading: true, error: null });
@@ -203,6 +209,39 @@ const useAssetStore = create<AssetState>((set, get) => ({
       const errorMessage = error instanceof Error ? error.message : 'Failed to export configuration';
       set({ error: errorMessage });
       throw error;
+    }
+  },
+
+  updateRecoveryAvailability: (assetId: number, available: boolean) => {
+    set(state => ({
+      recoveryAvailable: {
+        ...state.recoveryAvailable,
+        [assetId]: available
+      }
+    }));
+  },
+
+  checkRecoveryAvailability: async (token: string, assetId: number) => {
+    try {
+      // Check if asset has both configuration and firmware versions
+      const [configVersions, firmwareVersions] = await Promise.all([
+        invoke<ConfigurationVersionInfo[]>('get_configuration_versions', { token, assetId }),
+        invoke<any[]>('get_firmware_list', { token, assetId })
+      ]);
+      
+      const available = configVersions.length > 0 && firmwareVersions.length > 0;
+      
+      set(state => ({
+        recoveryAvailable: {
+          ...state.recoveryAvailable,
+          [assetId]: available
+        }
+      }));
+      
+      return available;
+    } catch (error) {
+      console.error('Failed to check recovery availability:', error);
+      return false;
     }
   }
 }));

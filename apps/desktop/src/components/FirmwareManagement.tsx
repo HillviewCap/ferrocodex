@@ -4,17 +4,22 @@ import {
   Button,
   Spin,
   Empty,
-  message
+  message,
+  Space
 } from 'antd';
 import {
   UploadOutlined,
-  CloudUploadOutlined
+  CloudUploadOutlined,
+  ExportOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo } from '../types/assets';
+import { ConfigurationVersionInfo, FirmwareVersionInfo } from '../types/recovery';
 import useAuthStore from '../store/auth';
 import useFirmwareStore from '../store/firmware';
 import FirmwareUploadModal from './FirmwareUploadModal';
 import FirmwareVersionList from './FirmwareVersionList';
+import { CompleteRecoveryModal } from './recovery/CompleteRecoveryModal';
 
 const { Title, Text } = Typography;
 
@@ -23,7 +28,7 @@ interface FirmwareManagementProps {
 }
 
 const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { 
     firmwareVersions,
     isLoading,
@@ -33,8 +38,12 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
   } = useFirmwareStore();
   
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [recoveryModalVisible, setRecoveryModalVisible] = useState(false);
+  const [configurationVersions, setConfigurationVersions] = useState<ConfigurationVersionInfo[]>([]);
+  const [configVersionsLoading, setConfigVersionsLoading] = useState(false);
+  
   const assetFirmware = firmwareVersions[asset.id] || [];
-  const isEngineer = user?.role === 'Engineer';
+  const isEngineer = user?.role === 'Engineer' || user?.role === 'Administrator';
 
   useEffect(() => {
     loadFirmwareVersions(asset.id).catch(err => {
@@ -49,10 +58,52 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
     }
   }, [error, clearError]);
 
+  const canShowRecoveryOption = (): boolean => {
+    return assetFirmware.length > 0 && isEngineer;
+  };
+
   const handleUploadSuccess = () => {
     setUploadModalVisible(false);
     message.success('Firmware uploaded successfully!');
   };
+
+  const loadConfigurationVersions = async () => {
+    if (!token) return;
+    
+    setConfigVersionsLoading(true);
+    try {
+      const configs = await invoke<ConfigurationVersionInfo[]>('get_configuration_versions', {
+        token,
+        assetId: asset.id,
+      });
+      setConfigurationVersions(configs);
+    } catch (error) {
+      console.error('Failed to load configuration versions:', error);
+      message.error('Failed to load configuration versions');
+    } finally {
+      setConfigVersionsLoading(false);
+    }
+  };
+
+  const handleOpenRecoveryModal = async () => {
+    await loadConfigurationVersions();
+    setRecoveryModalVisible(true);
+  };
+
+  // Keyboard shortcut for complete recovery (Ctrl+E)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e' && canShowRecoveryOption()) {
+        event.preventDefault();
+        handleOpenRecoveryModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [assetFirmware.length, isEngineer]);
 
   return (
     <div>
@@ -61,16 +112,29 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
           <Text type="secondary">
             Manage firmware files for crash recovery and maintenance procedures
           </Text>
-          {isEngineer && (
-            <Button
-              type="primary"
-              icon={<UploadOutlined />}
-              onClick={() => setUploadModalVisible(true)}
-              size="large"
-            >
-              Upload Firmware
-            </Button>
-          )}
+          <Space>
+            {canShowRecoveryOption() && (
+              <Button
+                icon={<ExportOutlined />}
+                onClick={handleOpenRecoveryModal}
+                size="large"
+                loading={configVersionsLoading}
+                title="Export complete recovery package with firmware and configuration"
+              >
+                Complete Recovery
+              </Button>
+            )}
+            {isEngineer && (
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => setUploadModalVisible(true)}
+                size="large"
+              >
+                Upload Firmware
+              </Button>
+            )}
+          </Space>
         </div>
       </div>
 
@@ -121,6 +185,17 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
           onCancel={() => setUploadModalVisible(false)}
           onSuccess={handleUploadSuccess}
           assetId={asset.id}
+        />
+      )}
+
+      {recoveryModalVisible && (
+        <CompleteRecoveryModal
+          visible={recoveryModalVisible}
+          onClose={() => setRecoveryModalVisible(false)}
+          assetId={asset.id}
+          assetName={asset.name}
+          configurationVersions={configurationVersions}
+          firmwareVersions={assetFirmware as FirmwareVersionInfo[]}
         />
       )}
     </div>
