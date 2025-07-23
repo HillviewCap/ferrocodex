@@ -152,7 +152,12 @@ export const formatFirmwareFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-export const formatFirmwareHash = (hash: string): string => {
+export const formatFirmwareHash = (hash: string | null | undefined): string => {
+  // Handle undefined/null hash values
+  if (!hash) {
+    return 'N/A';
+  }
+  
   // Show first 8 characters of hash
   return hash.length > 8 ? `${hash.substring(0, 8)}...` : hash;
 };

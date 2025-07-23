@@ -95,7 +95,7 @@ const useAssetStore = create<AssetState>((set, get) => ({
     try {
       const versions = await invoke<ConfigurationVersionInfo[]>('get_configuration_versions', {
         token,
-        assetId: assetId
+        assetId
       });
       set({ versions, versionsLoading: false });
     } catch (error) {

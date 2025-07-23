@@ -5,7 +5,7 @@ import {
   Space,
   Spin,
   Empty,
-  message,
+  App,
   Input,
   Button,
   Row,
@@ -59,6 +59,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   showCreateButton = true,
   showSelectActions = true
 }) => {
+  const { message } = App.useApp();
   const { token } = useAuthStore();
   const { versions } = useAssetStore();
   const { branchVersions, fetchBranchVersions } = useBranchStore();

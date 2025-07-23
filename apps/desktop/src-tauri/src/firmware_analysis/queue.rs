@@ -154,6 +154,9 @@ impl AnalysisQueue {
             let firmware = firmware_repo.get_firmware_by_id(job.firmware_id)?
                 .ok_or_else(|| anyhow::anyhow!("Firmware not found"))?;
             
+            // Debug logging
+            tracing::info!("Retrieved firmware record for ID {}: file_path = '{}'", job.firmware_id, firmware.file_path);
+            
             (analysis_id, firmware.file_path)
         }; // Drop db_guard here
         

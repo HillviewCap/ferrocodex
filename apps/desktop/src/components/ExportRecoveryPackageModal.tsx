@@ -19,7 +19,7 @@ import {
   FolderOpenOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons';
-import { dialog } from '@tauri-apps/plugin-dialog';
+import * as dialog from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { FirmwareVersionInfo } from '../types/firmware';
@@ -42,7 +42,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
   onCancel,
   onSuccess,
   assetId,
-  assetName,
+  assetName: _assetName,
   configuration,
   linkedFirmwareId
 }) => {

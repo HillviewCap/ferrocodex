@@ -20,7 +20,7 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
   availableTransitions,
   onConfirm,
   onCancel,
-  isPromotingToGolden = false
+  isPromotingToGolden: _isPromotingToGolden = false
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);

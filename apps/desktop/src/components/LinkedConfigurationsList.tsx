@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Space, Tag, Tooltip, Button, message } from 'antd';
+import { Space, Tag, Tooltip, message } from 'antd';
 import { LinkOutlined, FileOutlined } from '@ant-design/icons';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { invoke } from '@tauri-apps/api/core';

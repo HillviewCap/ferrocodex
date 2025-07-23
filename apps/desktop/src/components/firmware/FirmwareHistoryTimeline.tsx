@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Timeline, Typography, Tag, Space, Empty, Spin, message, Button } from 'antd';
 import { UserOutlined, ClockCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import { FirmwareStatusHistory, FirmwareStatus } from '../../types/firmware';
+import { FirmwareStatusHistory } from '../../types/firmware';
 import useAuthStore from '../../store/auth';
 
 const { Text, Paragraph } = Typography;
@@ -14,7 +14,7 @@ interface FirmwareHistoryTimelineProps {
 
 const FirmwareHistoryTimeline: React.FC<FirmwareHistoryTimelineProps> = ({ 
   firmwareVersionId,
-  onRefresh 
+  onRefresh: _onRefresh 
 }) => {
   const { token } = useAuthStore();
   const [history, setHistory] = useState<FirmwareStatusHistory[]>([]);

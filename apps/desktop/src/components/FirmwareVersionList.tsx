@@ -27,7 +27,6 @@ import {
   CloudServerOutlined,
   BarcodeOutlined,
   FileSearchOutlined,
-  LinkOutlined,
   EditOutlined,
   SwapOutlined,
   CrownOutlined,
@@ -40,10 +39,9 @@ import FirmwareAnalysis from './firmware/FirmwareAnalysis';
 import LinkedConfigurationsList from './LinkedConfigurationsList';
 import FirmwareHistoryTimeline from './firmware/FirmwareHistoryTimeline';
 import FirmwareStatusDialog from './firmware/FirmwareStatusDialog';
-import { canChangeFirmwareStatus, canPromoteFirmwareToGolden, canUpdateFirmwareNotes } from '../utils/roleUtils';
+import { canChangeFirmwareStatus, canUpdateFirmwareNotes } from '../utils/roleUtils';
 
 const { Text } = Typography;
-const { Panel } = Collapse;
 const { TextArea } = Input;
 
 interface FirmwareVersionListProps {
@@ -468,7 +466,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
         }}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         {selectedFirmwareId && (
           <FirmwareAnalysis firmwareId={selectedFirmwareId} />

@@ -10,7 +10,8 @@ import {
   Divider,
   Button,
   Dropdown,
-  MenuProps
+  MenuProps,
+  message
 } from 'antd';
 import {
   UserOutlined,
@@ -375,7 +376,7 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
                   configId={version.id}
                   currentFirmwareId={version.firmware_version_id}
                   token={token}
-                  onLink={(firmwareId) => {
+                  onLink={(_firmwareId) => {
                     if (onFirmwareLinked) onFirmwareLinked();
                   }}
                   onUnlink={() => {
