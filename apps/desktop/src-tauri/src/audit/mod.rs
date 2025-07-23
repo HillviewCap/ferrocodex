@@ -24,6 +24,9 @@ pub enum AuditEventType {
     SecurityViolation,
     FirmwareUpload,
     FirmwareDelete,
+    FirmwareAnalysisStarted,
+    FirmwareAnalysisCompleted,
+    FirmwareAnalysisFailed,
 }
 
 impl fmt::Display for AuditEventType {
@@ -47,6 +50,9 @@ impl fmt::Display for AuditEventType {
             AuditEventType::SecurityViolation => write!(f, "SEC_001"),
             AuditEventType::FirmwareUpload => write!(f, "FW_001"),
             AuditEventType::FirmwareDelete => write!(f, "FW_002"),
+            AuditEventType::FirmwareAnalysisStarted => write!(f, "FW_003"),
+            AuditEventType::FirmwareAnalysisCompleted => write!(f, "FW_004"),
+            AuditEventType::FirmwareAnalysisFailed => write!(f, "FW_005"),
         }
     }
 }

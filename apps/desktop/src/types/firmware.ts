@@ -160,3 +160,37 @@ export const validateFirmwareFileExtension = (filename: string): string | null =
   
   return null;
 };
+
+// Firmware Analysis Types
+export type AnalysisStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+export type SecuritySeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+
+export interface SecurityFinding {
+  severity: SecuritySeverity;
+  findingType: string;
+  description: string;
+  offset?: number;
+}
+
+export interface FirmwareAnalysisResult {
+  id: number;
+  firmwareVersionId: number;
+  analysisStatus: AnalysisStatus;
+  fileType?: string;
+  detectedVersions?: string[];
+  entropyScore?: number;
+  securityFindings?: SecurityFinding[];
+  rawResults?: string;
+  startedAt?: string;
+  completedAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface AnalysisEvent {
+  firmwareId: number;
+  status: string;
+  progress?: number;
+  message?: string;
+}

@@ -23,11 +23,15 @@ import {
   DeleteOutlined,
   LockOutlined,
   CloudServerOutlined,
-  BarcodeOutlined
+  BarcodeOutlined,
+  FileSearchOutlined,
+  LinkOutlined
 } from '@ant-design/icons';
 import { FirmwareVersionInfo, formatFirmwareFileSize, formatFirmwareHash, sortFirmwareVersions } from '../types/firmware';
 import useAuthStore from '../store/auth';
 import useFirmwareStore from '../store/firmware';
+import FirmwareAnalysis from './firmware/FirmwareAnalysis';
+import LinkedConfigurationsList from './LinkedConfigurationsList';
 
 const { Text } = Typography;
 
@@ -43,6 +47,8 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   const { user } = useAuthStore();
   const { deleteFirmware } = useFirmwareStore();
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
+  const [selectedFirmwareId, setSelectedFirmwareId] = useState<number | null>(null);
   
   const isEngineer = user?.role === 'Engineer';
   const sortedVersions = sortFirmwareVersions(versions);
@@ -126,8 +132,21 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     }
   };
 
+  const showAnalysis = (firmwareId: number) => {
+    setSelectedFirmwareId(firmwareId);
+    setAnalysisModalVisible(true);
+  };
+
   const FirmwareCard: React.FC<{ firmware: FirmwareVersionInfo }> = ({ firmware }) => {
     const menuItems = [];
+
+    // Analysis option available to all users
+    menuItems.push({
+      key: 'analysis',
+      label: 'View Analysis',
+      icon: <FileSearchOutlined />,
+      onClick: () => showAnalysis(firmware.id)
+    });
 
     if (isEngineer) {
       menuItems.push({
@@ -186,6 +205,13 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                   </Space>
                 </Tooltip>
               </Space>
+              
+              <Divider style={{ margin: '8px 0' }} />
+              
+              <LinkedConfigurationsList 
+                firmwareId={firmware.id}
+                assetId={firmware.asset_id}
+              />
 
               {firmware.notes && (
                 <>
@@ -257,11 +283,29 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   }
 
   return (
-    <div>
-      {sortedVersions.map(firmware => (
-        <FirmwareCard key={firmware.id} firmware={firmware} />
-      ))}
-    </div>
+    <>
+      <div>
+        {sortedVersions.map(firmware => (
+          <FirmwareCard key={firmware.id} firmware={firmware} />
+        ))}
+      </div>
+      
+      <Modal
+        title="Firmware Analysis"
+        open={analysisModalVisible}
+        onCancel={() => {
+          setAnalysisModalVisible(false);
+          setSelectedFirmwareId(null);
+        }}
+        footer={null}
+        width={800}
+        destroyOnClose
+      >
+        {selectedFirmwareId && (
+          <FirmwareAnalysis firmwareId={selectedFirmwareId} />
+        )}
+      </Modal>
+    </>
   );
 };
 

@@ -74,6 +74,7 @@ pub trait FirmwareRepository {
     fn get_firmware_by_asset(&self, asset_id: i64) -> Result<Vec<FirmwareVersionInfo>>;
     fn get_firmware_by_id(&self, firmware_id: i64) -> Result<Option<FirmwareVersion>>;
     fn delete_firmware(&self, firmware_id: i64) -> Result<Option<String>>;
+    fn get_linked_configuration_count(&self, firmware_id: i64) -> Result<i64>;
 }
 
 pub struct SqliteFirmwareRepository<'a> {
@@ -254,6 +255,14 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
         }
 
         Ok(file_path)
+    }
+    
+    fn get_linked_configuration_count(&self, firmware_id: i64) -> Result<i64> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*) FROM configuration_versions WHERE firmware_version_id = ?1"
+        )?;
+        let count: i64 = stmt.query_row([firmware_id], |row| row.get(0))?;
+        Ok(count)
     }
 }
 
