@@ -2208,8 +2208,15 @@ async fn upload_firmware(
     info!("Validated firmware file extension: .{}", file_extension);
     
     // Read file content
+    let file_size = std::fs::metadata(&file_path)
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?
+        .len();
+    info!("Reading file content: {} bytes expected", file_size);
     let file_data = match file_utils::read_file_content(&file_path) {
-        Ok(content) => content,
+        Ok(content) => {
+            info!("Successfully read file content: {} bytes", content.len());
+            content
+        },
         Err(e) => {
             error!("Failed to read file {}: {}", file_path, e);
             return Err(format!("Failed to read file: {}", e));
@@ -2246,6 +2253,7 @@ async fn upload_firmware(
                 .as_millis() as i64;
             
             // Store the firmware file
+            info!("Starting firmware file storage process for {} bytes", file_data.len());
             let (file_path, file_hash, file_size) = match FirmwareFileStorage::store_firmware_file(
                 &app,
                 asset_id,
@@ -2254,7 +2262,10 @@ async fn upload_firmware(
                 session.user_id,
                 &session.username,
             ) {
-                Ok(result) => result,
+                Ok(result) => {
+                    info!("Successfully stored firmware file: path={}, hash={}, size={}", result.0, result.1, result.2);
+                    result
+                },
                 Err(e) => {
                     error!("Failed to store firmware file: {}", e);
                     return Err(format!("Failed to store firmware file: {}", e));
@@ -2270,52 +2281,47 @@ async fn upload_firmware(
                 notes,
             };
             
+            info!("Creating firmware database record");
             match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size) {
                 Ok(firmware) => {
+                    info!("Successfully created firmware record with ID: {}", firmware.id);
                     // Update the file with the actual firmware ID
-                    let new_file_path = format!("{}/{}.enc", asset_id, firmware.id);
+                    info!("Checking if file rename is needed");
+                    let new_file_path = std::path::PathBuf::from(asset_id.to_string())
+                        .join(format!("{}.enc", firmware.id))
+                        .to_string_lossy()
+                        .to_string();
+                    info!("Comparing paths - old: '{}', new: '{}'", file_path, new_file_path);
                     if file_path != new_file_path {
                         // Rename the file if needed
                         let firmware_dir = firmware::get_firmware_storage_dir(&app).unwrap();
                         let old_path = firmware_dir.join(&file_path);
                         let new_path = firmware_dir.join(&new_file_path);
-                        if let Err(e) = std::fs::rename(old_path, new_path) {
+                        if let Err(e) = std::fs::rename(&old_path, &new_path) {
                             error!("Failed to rename firmware file: {}", e);
                             // Clean up on failure
                             let _ = firmware_repo.delete_firmware(firmware.id);
                             let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
                             return Err("Failed to finalize firmware storage".to_string());
                         }
-                    }
-                    
-                    // Log audit event
-                    if let Ok(audit_guard) = audit_state.lock() {
-                        if let Some(audit_db) = audit_guard.as_ref() {
-                        let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
-                        let audit_event = audit::AuditEventRequest {
-                            event_type: audit::AuditEventType::FirmwareUpload,
-                            user_id: Some(session.user_id),
-                            username: Some(session.username.clone()),
-                            admin_user_id: None,
-                            admin_username: None,
-                            target_user_id: None,
-                            target_username: None,
-                            description: format!("Uploaded firmware v{} for asset {}", firmware.version, asset_id),
-                            metadata: Some(serde_json::json!({
-                                "asset_id": asset_id,
-                                "firmware_id": firmware.id,
-                                "version": firmware.version,
-                                "file_size": file_size,
-                            }).to_string()),
-                            ip_address: None,
-                            user_agent: None,
-                        };
-                        if let Err(e) = audit_repo.log_event(&audit_event) {
-                            error!("Failed to log audit event: {}", e);
+                        info!("File renamed successfully from {:?} to {:?}", old_path, new_path);
+                        
+                        // Update the database with the new file path
+                        if let Err(e) = firmware_repo.update_firmware_file_path(firmware.id, new_file_path.clone()) {
+                            error!("Failed to update firmware file path in database: {}", e);
+                            // Try to rename back on failure
+                            let _ = std::fs::rename(&new_path, &old_path);
+                            let _ = firmware_repo.delete_firmware(firmware.id);
+                            return Err("Failed to update firmware file path".to_string());
                         }
-                    }
+                        info!("Database updated with new file path");
+                    } else {
+                        info!("File rename not needed, paths match");
                     }
                     
+                    // Note: Audit logging moved outside database transaction to prevent deadlock
+                    
+                    info!("Creating FirmwareVersionInfo");
                     info!("Firmware uploaded by {}: v{} for asset {} (ID: {})", 
                          session.username, firmware.version, asset_id, firmware.id);
                     
@@ -2336,6 +2342,7 @@ async fn upload_firmware(
                         created_at: firmware.created_at,
                     };
                     
+                    info!("Returning from database scope with firmware info");
                     Ok((firmware_info, firmware.id))
                 }
                 Err(e) => {
@@ -2353,6 +2360,39 @@ async fn upload_firmware(
     // Handle the result and queue analysis if successful
     match firmware_result {
         Ok((firmware_info, firmware_id)) => {
+            // Log audit event (moved here to avoid deadlock)
+            info!("Logging audit event");
+            if let Ok(audit_guard) = audit_state.lock() {
+                if let Some(audit_db) = audit_guard.as_ref() {
+                    let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                    let audit_event = audit::AuditEventRequest {
+                        event_type: audit::AuditEventType::FirmwareUpload,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!("Uploaded firmware v{} for asset {}", firmware_info.version, asset_id),
+                        metadata: Some(serde_json::json!({
+                            "asset_id": asset_id,
+                            "firmware_id": firmware_id,
+                            "version": firmware_info.version,
+                            "file_size": firmware_info.file_size,
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    if let Err(e) = audit_repo.log_event(&audit_event) {
+                        error!("Failed to log audit event: {}", e);
+                    } else {
+                        info!("Audit event logged successfully");
+                    }
+                }
+            } else {
+                warn!("Could not acquire audit lock for logging");
+            }
+            
             // Queue firmware analysis
             let queue = get_or_create_analysis_queue(&app);
             
@@ -2362,6 +2402,7 @@ async fn upload_firmware(
                 username: session.username.clone(),
             };
             
+            info!("Attempting to queue firmware analysis for firmware ID: {}", firmware_id);
             if let Err(e) = queue.queue_analysis(analysis_job).await {
                 warn!("Failed to queue firmware analysis: {}", e);
                 // Don't fail the upload if analysis queueing fails
@@ -2369,6 +2410,7 @@ async fn upload_firmware(
                 info!("Firmware analysis queued for firmware ID: {}", firmware_id);
             }
             
+            info!("Upload process completed successfully, returning firmware info");
             Ok(firmware_info)
         }
         Err(e) => Err(e),

@@ -287,7 +287,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
           </Descriptions.Item>
         )}
         
-        {analysis.entropyScore !== undefined && (
+        {analysis.entropyScore !== undefined && analysis.entropyScore !== null && (
           <Descriptions.Item label="Entropy Score">
             <Progress 
               percent={Math.round((analysis.entropyScore / 8) * 100)} 
