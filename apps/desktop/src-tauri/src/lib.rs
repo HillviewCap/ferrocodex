@@ -18,7 +18,7 @@ use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimit
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
 use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils, FileMetadata};
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
-use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage};
+use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
 use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -1979,19 +1979,25 @@ async fn link_firmware_to_configuration(
             match config_repo.link_firmware_to_configuration(config_id, firmware_id) {
                 Ok(_) => {
                     // Create audit event
-                    let event_type = "firmware_linked";
-                    let event_data = serde_json::json!({
-                        "config_id": config_id,
-                        "firmware_id": firmware_id,
-                        "linked_by": session.username
-                    });
+                    let audit_event = audit::AuditEventRequest {
+                        event_type: audit::AuditEventType::DatabaseOperation,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!("Firmware {} linked to configuration {}", firmware_id, config_id),
+                        metadata: Some(serde_json::json!({
+                            "config_id": config_id,
+                            "firmware_id": firmware_id,
+                            "linked_by": session.username
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
                     
-                    if let Err(e) = audit_repo.log_event(
-                        event_type,
-                        Some(session.user_id),
-                        Some(config_id),
-                        serde_json::to_string(&event_data).ok(),
-                    ) {
+                    if let Err(e) = audit_repo.log_event(&audit_event) {
                         error!("Failed to log audit event: {}", e);
                     }
                     
@@ -2044,18 +2050,24 @@ async fn unlink_firmware_from_configuration(
             match config_repo.unlink_firmware_from_configuration(config_id) {
                 Ok(_) => {
                     // Create audit event
-                    let event_type = "firmware_unlinked";
-                    let event_data = serde_json::json!({
-                        "config_id": config_id,
-                        "unlinked_by": session.username
-                    });
+                    let audit_event = audit::AuditEventRequest {
+                        event_type: audit::AuditEventType::DatabaseOperation,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!("Firmware unlinked from configuration {}", config_id),
+                        metadata: Some(serde_json::json!({
+                            "config_id": config_id,
+                            "unlinked_by": session.username
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
                     
-                    if let Err(e) = audit_repo.log_event(
-                        event_type,
-                        Some(session.user_id),
-                        Some(config_id),
-                        serde_json::to_string(&event_data).ok(),
-                    ) {
+                    if let Err(e) = audit_repo.log_event(&audit_event) {
                         error!("Failed to log audit event: {}", e);
                     }
                     
@@ -2551,12 +2563,6 @@ async fn get_firmware_analysis(
     }
 }
 
-fn get_or_create_analysis_queue(app: &AppHandle) -> AnalysisQueue {
-    // For now, create a new queue each time. In a production system,
-    // you might want to store this in app state to avoid creating multiple queues
-    AnalysisQueue::new(app.clone())
-}
-
 #[tauri::command]
 async fn export_recovery_package(
     app: AppHandle,
@@ -2751,21 +2757,27 @@ async fn export_recovery_package(
             }
             
             // Log audit event
-            let event_type = "recovery_package_exported";
-            let event_data = serde_json::json!({
-                "asset_id": asset_id,
-                "config_id": config_id,
-                "firmware_id": firmware_id,
-                "export_path": export_path,
-                "exported_by": session.username
-            });
+            let audit_event = audit::AuditEventRequest {
+                event_type: audit::AuditEventType::DatabaseOperation,
+                user_id: Some(session.user_id),
+                username: Some(session.username.clone()),
+                admin_user_id: None,
+                admin_username: None,
+                target_user_id: None,
+                target_username: None,
+                description: format!("Recovery package exported for asset {}", asset_id),
+                metadata: Some(serde_json::json!({
+                    "asset_id": asset_id,
+                    "config_id": config_id,
+                    "firmware_id": firmware_id,
+                    "export_path": export_path,
+                    "exported_by": session.username
+                }).to_string()),
+                ip_address: None,
+                user_agent: None,
+            };
             
-            if let Err(e) = audit_repo.log_event(
-                event_type,
-                Some(session.user_id),
-                Some(asset_id),
-                serde_json::to_string(&event_data).ok(),
-            ) {
+            if let Err(e) = audit_repo.log_event(&audit_event) {
                 error!("Failed to log audit event: {}", e);
             }
             
@@ -2869,6 +2881,331 @@ async fn retry_firmware_analysis(
     }
 }
 
+#[tauri::command]
+async fn update_firmware_status(
+    token: String,
+    firmware_id: i64,
+    new_status: FirmwareStatus,
+    reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can update firmware status
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to update firmware status: {}", session.username);
+        return Err("Only Engineers and Administrators can update firmware status".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.update_firmware_status(firmware_id, new_status.clone(), session.user_id, reason.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareStatusChange,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} status updated to {}", firmware_id, new_status),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "new_status": new_status.to_string(),
+                                    "reason": reason,
+                                    "changed_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} status updated to {} by {}", firmware_id, new_status, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update firmware status: {}", e);
+                    Err(format!("Failed to update firmware status: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_firmware_status_history(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareStatusHistory>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_firmware_status_history(firmware_id) {
+                Ok(history) => {
+                    info!("Retrieved firmware status history for firmware {} by {}", firmware_id, session.username);
+                    Ok(history)
+                }
+                Err(e) => {
+                    error!("Failed to get firmware status history: {}", e);
+                    Err(format!("Failed to get firmware status history: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_available_firmware_status_transitions(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareStatus>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_available_firmware_status_transitions(firmware_id, &session.role.to_string()) {
+                Ok(transitions) => {
+                    info!("Retrieved available firmware status transitions for firmware {} by {}", firmware_id, session.username);
+                    Ok(transitions)
+                }
+                Err(e) => {
+                    error!("Failed to get available firmware status transitions: {}", e);
+                    Err(format!("Failed to get available firmware status transitions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn promote_firmware_to_golden(
+    token: String,
+    firmware_id: i64,
+    reason: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Administrators can promote firmware to Golden
+    if session.role != UserRole::Administrator {
+        warn!("Non-administrator attempted to promote firmware to Golden: {}", session.username);
+        return Err("Only Administrators can promote firmware to Golden status".to_string());
+    }
+
+    // Validate reason
+    if reason.trim().is_empty() {
+        return Err("Reason is required for Golden promotion".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.promote_firmware_to_golden(firmware_id, session.user_id, reason.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareGoldenPromotion,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} promoted to Golden status", firmware_id),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "reason": reason,
+                                    "promoted_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} promoted to Golden by {}", firmware_id, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to promote firmware to Golden: {}", e);
+                    Err(format!("Failed to promote firmware to Golden: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_firmware_notes(
+    token: String,
+    firmware_id: i64,
+    notes: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can update firmware notes
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to update firmware notes: {}", session.username);
+        return Err("Only Engineers and Administrators can update firmware notes".to_string());
+    }
+
+    // Sanitize notes
+    let sanitized_notes = InputSanitizer::sanitize_string(&notes);
+    
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&sanitized_notes) {
+        error!("Potentially malicious input detected in firmware notes");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.update_firmware_notes(firmware_id, sanitized_notes.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareNotesUpdate,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} notes updated", firmware_id),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "updated_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} notes updated by {}", firmware_id, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update firmware notes: {}", e);
+                    Err(format!("Failed to update firmware notes: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -2926,7 +3263,12 @@ pub fn run() {
             get_firmware_list,
             delete_firmware,
             get_firmware_analysis,
-            retry_firmware_analysis
+            retry_firmware_analysis,
+            update_firmware_status,
+            get_firmware_status_history,
+            get_available_firmware_status_transitions,
+            promote_firmware_to_golden,
+            update_firmware_notes
         ])
         .setup(|app| {
             info!("Ferrocodex application starting up...");

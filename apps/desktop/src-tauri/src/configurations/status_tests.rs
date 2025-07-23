@@ -72,6 +72,7 @@ fn test_configuration_version_info_structure() {
         status: "Draft".to_string(),
         status_changed_by: Some(5),
         status_changed_at: Some("2023-01-01T12:00:00Z".to_string()),
+        firmware_version_id: None,
         created_at: "2023-01-01T12:00:00Z".to_string(),
     };
 
@@ -133,6 +134,7 @@ fn test_version_info_with_different_statuses() {
             status: status.to_string(),
             status_changed_by: Some(5),
             status_changed_at: Some("2023-01-01T12:00:00Z".to_string()),
+            firmware_version_id: None,
             created_at: "2023-01-01T12:00:00Z".to_string(),
         };
 

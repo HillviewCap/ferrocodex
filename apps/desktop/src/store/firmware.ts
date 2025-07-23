@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { FirmwareVersionInfo, UploadFirmwareRequest, FirmwareUploadProgress } from '../types/firmware';
+import { FirmwareVersionInfo, UploadFirmwareRequest, FirmwareUploadProgress, FirmwareStatus } from '../types/firmware';
 import useAuthStore from './auth';
 
 interface FirmwareState {
@@ -16,6 +16,10 @@ interface FirmwareActions {
   loadFirmwareVersions: (assetId: number) => Promise<void>;
   uploadFirmware: (request: UploadFirmwareRequest) => Promise<void>;
   deleteFirmware: (firmwareId: number) => Promise<void>;
+  updateFirmwareStatus: (firmwareId: number, newStatus: FirmwareStatus, reason?: string) => Promise<void>;
+  getAvailableStatusTransitions: (firmwareId: number) => Promise<FirmwareStatus[]>;
+  promoteFirmwareToGolden: (firmwareId: number, reason: string) => Promise<void>;
+  updateFirmwareNotes: (firmwareId: number, notes: string) => Promise<void>;
   setSelectedFirmware: (firmware: FirmwareVersionInfo | null) => void;
   clearError: () => void;
   resetUploadProgress: () => void;
@@ -158,6 +162,118 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
 
   setSelectedFirmware: (firmware: FirmwareVersionInfo | null) => {
     set({ selectedFirmware: firmware });
+  },
+
+  updateFirmwareStatus: async (firmwareId: number, newStatus: FirmwareStatus, reason?: string) => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      set({ error: null });
+      
+      await invoke('update_firmware_status', {
+        token,
+        firmwareId,
+        newStatus,
+        reason,
+      });
+
+      // Update the firmware in state
+      const firmwareVersions = get().firmwareVersions;
+      const updatedVersions: Record<number, FirmwareVersionInfo[]> = {};
+      
+      for (const [assetId, versions] of Object.entries(firmwareVersions)) {
+        updatedVersions[Number(assetId)] = versions.map(v => 
+          v.id === firmwareId 
+            ? { ...v, status: newStatus, status_changed_at: new Date().toISOString() }
+            : v
+        );
+      }
+
+      set({ firmwareVersions: updatedVersions });
+    } catch (error) {
+      set({ error: error as string });
+      throw error;
+    }
+  },
+
+  getAvailableStatusTransitions: async (firmwareId: number): Promise<FirmwareStatus[]> => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      const transitions = await invoke<FirmwareStatus[]>('get_available_firmware_status_transitions', {
+        token,
+        firmwareId,
+      });
+      return transitions;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  promoteFirmwareToGolden: async (firmwareId: number, reason: string) => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      set({ error: null });
+      
+      await invoke('promote_firmware_to_golden', {
+        token,
+        firmwareId,
+        reason,
+      });
+
+      // Reload all firmware versions as Golden promotion affects multiple versions
+      const firmwareVersions = get().firmwareVersions;
+      for (const assetId of Object.keys(firmwareVersions)) {
+        await get().loadFirmwareVersions(Number(assetId));
+      }
+    } catch (error) {
+      set({ error: error as string });
+      throw error;
+    }
+  },
+
+  updateFirmwareNotes: async (firmwareId: number, notes: string) => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      set({ error: null });
+      
+      await invoke('update_firmware_notes', {
+        token,
+        firmwareId,
+        notes,
+      });
+
+      // Update the firmware in state
+      const firmwareVersions = get().firmwareVersions;
+      const updatedVersions: Record<number, FirmwareVersionInfo[]> = {};
+      
+      for (const [assetId, versions] of Object.entries(firmwareVersions)) {
+        updatedVersions[Number(assetId)] = versions.map(v => 
+          v.id === firmwareId 
+            ? { ...v, notes }
+            : v
+        );
+      }
+
+      set({ firmwareVersions: updatedVersions });
+    } catch (error) {
+      set({ error: error as string });
+      throw error;
+    }
   },
 
   clearError: () => set({ error: null }),
