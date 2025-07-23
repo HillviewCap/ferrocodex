@@ -47,6 +47,7 @@ export interface ConfigurationVersionInfo {
   status: ConfigurationStatus;
   status_changed_by?: number;
   status_changed_at?: string;
+  firmware_version_id?: number;
   created_at: string;
 }
 

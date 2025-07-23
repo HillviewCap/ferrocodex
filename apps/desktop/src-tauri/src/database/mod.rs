@@ -8,6 +8,7 @@ use crate::assets::SqliteAssetRepository;
 use crate::configurations::SqliteConfigurationRepository;
 use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
+use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
 
 pub struct Database {
     conn: Connection,
@@ -80,6 +81,10 @@ impl Database {
         // Initialize firmware schema
         let firmware_repo = SqliteFirmwareRepository::new(&self.conn);
         firmware_repo.initialize_schema()?;
+
+        // Initialize firmware analysis schema
+        let firmware_analysis_repo = SqliteFirmwareAnalysisRepository::new(&self.conn);
+        firmware_analysis_repo.initialize_schema()?;
 
         info!("Database schema initialized");
         Ok(())
