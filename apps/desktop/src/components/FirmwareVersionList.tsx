@@ -12,7 +12,9 @@ import {
   Dropdown,
   Modal,
   message,
-  Empty
+  Empty,
+  Input,
+  Collapse
 } from 'antd';
 import {
   UserOutlined,
@@ -25,15 +27,24 @@ import {
   CloudServerOutlined,
   BarcodeOutlined,
   FileSearchOutlined,
-  LinkOutlined
+  LinkOutlined,
+  EditOutlined,
+  SwapOutlined,
+  CrownOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
-import { FirmwareVersionInfo, formatFirmwareFileSize, formatFirmwareHash, sortFirmwareVersions } from '../types/firmware';
+import { FirmwareVersionInfo, FirmwareStatus, formatFirmwareFileSize, formatFirmwareHash, sortFirmwareVersions } from '../types/firmware';
 import useAuthStore from '../store/auth';
 import useFirmwareStore from '../store/firmware';
 import FirmwareAnalysis from './firmware/FirmwareAnalysis';
 import LinkedConfigurationsList from './LinkedConfigurationsList';
+import FirmwareHistoryTimeline from './firmware/FirmwareHistoryTimeline';
+import FirmwareStatusDialog from './firmware/FirmwareStatusDialog';
+import { canChangeFirmwareStatus, canPromoteFirmwareToGolden, canUpdateFirmwareNotes } from '../utils/roleUtils';
 
 const { Text } = Typography;
+const { Panel } = Collapse;
+const { TextArea } = Input;
 
 interface FirmwareVersionListProps {
   versions: FirmwareVersionInfo[];
@@ -45,10 +56,16 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   onDelete 
 }) => {
   const { user } = useAuthStore();
-  const { deleteFirmware } = useFirmwareStore();
+  const { deleteFirmware, updateFirmwareStatus, getAvailableStatusTransitions, promoteFirmwareToGolden, updateFirmwareNotes } = useFirmwareStore();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
   const [selectedFirmwareId, setSelectedFirmwareId] = useState<number | null>(null);
+  const [statusDialogVisible, setStatusDialogVisible] = useState(false);
+  const [selectedFirmwareForStatus, setSelectedFirmwareForStatus] = useState<FirmwareVersionInfo | null>(null);
+  const [availableTransitions, setAvailableTransitions] = useState<FirmwareStatus[]>([]);
+  const [editingNotesId, setEditingNotesId] = useState<number | null>(null);
+  const [tempNotes, setTempNotes] = useState<string>('');
+  const [expandedHistory, setExpandedHistory] = useState<string[]>([]);
   
   const isEngineer = user?.role === 'Engineer';
   const sortedVersions = sortFirmwareVersions(versions);
@@ -123,6 +140,8 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     switch (status) {
       case 'Golden':
         return 'gold';
+      case 'Approved':
+        return 'green';
       case 'Draft':
         return 'default';
       case 'Archived':
@@ -137,6 +156,60 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     setAnalysisModalVisible(true);
   };
 
+  const handleStatusChange = async (firmware: FirmwareVersionInfo) => {
+    try {
+      const transitions = await getAvailableStatusTransitions(firmware.id);
+      setAvailableTransitions(transitions);
+      setSelectedFirmwareForStatus(firmware);
+      setStatusDialogVisible(true);
+    } catch (error) {
+      message.error(`Failed to get available status transitions: ${error}`);
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: FirmwareStatus, reason?: string) => {
+    if (!selectedFirmwareForStatus) return;
+
+    try {
+      if (newStatus === 'Golden') {
+        await promoteFirmwareToGolden(selectedFirmwareForStatus.id, reason || '');
+      } else {
+        await updateFirmwareStatus(selectedFirmwareForStatus.id, newStatus, reason);
+      }
+      
+      message.success(`Firmware status updated to ${newStatus}`);
+      setStatusDialogVisible(false);
+      setSelectedFirmwareForStatus(null);
+      
+      if (onDelete) {
+        onDelete(); // Refresh the list
+      }
+    } catch (error) {
+      message.error(`Failed to update firmware status: ${error}`);
+    }
+  };
+
+  const handleNotesEdit = (firmware: FirmwareVersionInfo) => {
+    setEditingNotesId(firmware.id);
+    setTempNotes(firmware.notes || '');
+  };
+
+  const handleNotesSave = async (firmware: FirmwareVersionInfo) => {
+    try {
+      await updateFirmwareNotes(firmware.id, tempNotes);
+      message.success('Notes updated successfully');
+      setEditingNotesId(null);
+      setTempNotes('');
+    } catch (error) {
+      message.error(`Failed to update notes: ${error}`);
+    }
+  };
+
+  const handleNotesCancel = () => {
+    setEditingNotesId(null);
+    setTempNotes('');
+  };
+
   const FirmwareCard: React.FC<{ firmware: FirmwareVersionInfo }> = ({ firmware }) => {
     const menuItems = [];
 
@@ -146,6 +219,30 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       label: 'View Analysis',
       icon: <FileSearchOutlined />,
       onClick: () => showAnalysis(firmware.id)
+    });
+
+    // Status change option based on permissions
+    if (canChangeFirmwareStatus(user)) {
+      menuItems.push({
+        key: 'status',
+        label: 'Change Status',
+        icon: <SwapOutlined />,
+        onClick: () => handleStatusChange(firmware)
+      });
+    }
+
+    // History option available to all users
+    menuItems.push({
+      key: 'history',
+      label: 'View History',
+      icon: <HistoryOutlined />,
+      onClick: () => {
+        setExpandedHistory(prev => 
+          prev.includes(`history-${firmware.id}`)
+            ? prev.filter(id => id !== `history-${firmware.id}`)
+            : [...prev, `history-${firmware.id}`]
+        );
+      }
     });
 
     if (isEngineer) {
@@ -159,6 +256,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     }
 
     return (
+      <>
       <Card 
         style={{ marginBottom: '16px' }}
         loading={deletingId === firmware.id}
@@ -174,7 +272,10 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                   </Text>
                   <div>
                     <Tag color="blue">{firmware.version}</Tag>
-                    <Tag color={getStatusColor(firmware.status)}>{firmware.status}</Tag>
+                    <Tag color={getStatusColor(firmware.status)}>
+                      {firmware.status === 'Golden' && <CrownOutlined style={{ marginRight: '4px' }} />}
+                      {firmware.status}
+                    </Tag>
                   </div>
                 </div>
               </Space>
@@ -213,15 +314,49 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 assetId={firmware.asset_id}
               />
 
-              {firmware.notes && (
+              {(firmware.notes || canUpdateFirmwareNotes(user)) && (
                 <>
                   <Divider style={{ margin: '8px 0' }} />
-                  <Space size={4}>
-                    <CommentOutlined style={{ color: '#8c8c8c' }} />
-                    <Text type="secondary" style={{ fontSize: '13px' }}>
-                      {firmware.notes}
-                    </Text>
-                  </Space>
+                  {editingNotesId === firmware.id ? (
+                    <div style={{ width: '100%' }}>
+                      <TextArea
+                        value={tempNotes}
+                        onChange={(e) => setTempNotes(e.target.value)}
+                        rows={3}
+                        maxLength={1000}
+                        showCount
+                        style={{ marginBottom: '8px' }}
+                      />
+                      <Space>
+                        <Button size="small" type="primary" onClick={() => handleNotesSave(firmware)}>
+                          Save
+                        </Button>
+                        <Button size="small" onClick={handleNotesCancel}>
+                          Cancel
+                        </Button>
+                      </Space>
+                    </div>
+                  ) : (
+                    <Space size={4} align="start" style={{ width: '100%' }}>
+                      <CommentOutlined style={{ color: '#8c8c8c', marginTop: '2px' }} />
+                      <div style={{ flex: 1 }}>
+                        <Text type="secondary" style={{ fontSize: '13px' }}>
+                          {firmware.notes || 'No notes'}
+                        </Text>
+                        {canUpdateFirmwareNotes(user) && (
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => handleNotesEdit(firmware)}
+                            style={{ marginLeft: '8px', padding: '0 4px' }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    </Space>
+                  )}
                 </>
               )}
             </Space>
@@ -270,6 +405,40 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
           </Col>
         </Row>
       </Card>
+      
+      {expandedHistory.includes(`history-${firmware.id}`) && (
+        <Card 
+          style={{ 
+            marginTop: '-16px', 
+            marginBottom: '16px',
+            borderTop: 'none',
+            borderTopLeftRadius: 0,
+            borderTopRightRadius: 0
+          }}
+          size="small"
+        >
+          <Collapse 
+            activeKey={[`history-${firmware.id}`]}
+            ghost
+            items={[{
+              key: `history-${firmware.id}`,
+              label: (
+                <Space>
+                  <HistoryOutlined />
+                  <Text strong>Status History</Text>
+                </Space>
+              ),
+              children: (
+                <FirmwareHistoryTimeline 
+                  firmwareVersionId={firmware.id}
+                  onRefresh={onDelete}
+                />
+              )
+            }]}
+          />
+        </Card>
+      )}
+      </>
     );
   };
 
@@ -305,6 +474,20 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
           <FirmwareAnalysis firmwareId={selectedFirmwareId} />
         )}
       </Modal>
+      
+      {selectedFirmwareForStatus && (
+        <FirmwareStatusDialog
+          visible={statusDialogVisible}
+          currentStatus={selectedFirmwareForStatus.status}
+          availableTransitions={availableTransitions}
+          onConfirm={handleStatusUpdate}
+          onCancel={() => {
+            setStatusDialogVisible(false);
+            setSelectedFirmwareForStatus(null);
+          }}
+          isPromotingToGolden={availableTransitions.includes('Golden')}
+        />
+      )}
     </>
   );
 };

@@ -1,4 +1,4 @@
-export type FirmwareStatus = 'Draft' | 'Golden' | 'Archived';
+export type FirmwareStatus = 'Draft' | 'Approved' | 'Golden' | 'Archived';
 
 export interface FirmwareVersion {
   id: number;
@@ -9,6 +9,8 @@ export interface FirmwareVersion {
   version: string;
   notes: string | null;
   status: FirmwareStatus;
+  status_changed_at?: string;
+  status_changed_by?: number;
   file_path: string;
   file_hash: string;
   file_size: number;
@@ -25,10 +27,24 @@ export interface FirmwareVersionInfo {
   version: string;
   notes: string | null;
   status: FirmwareStatus;
+  status_changed_at?: string;
+  status_changed_by?: number;
+  status_changed_by_username?: string;
   file_path: string;
   file_hash: string;
   file_size: number;
   created_at: string;
+}
+
+export interface FirmwareStatusHistory {
+  id: number;
+  firmware_version_id: number;
+  old_status: string;
+  new_status: string;
+  changed_by: number;
+  changed_by_username?: string;
+  changed_at: string;
+  reason?: string;
 }
 
 export interface UploadFirmwareRequest {
