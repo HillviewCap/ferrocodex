@@ -7,11 +7,12 @@
 |**UI Component Lib**|Ant Design (AntD)|`~5.17.4`|Pre-built UI components|Provides a professional, data-dense look and feel out of the box, accelerating development.|
 |**State Management**|Zustand|`~4.5.2`|Manages UI state|A simple, lightweight, and unopinionated state management solution that avoids boilerplate.|
 |**Backend Language**|Rust|`~1.78.0`|Core application logic, security|Guarantees memory safety and world-class performance, ideal for a security-critical app.|
-|**App Framework**|Tauri|`~2.0.0-beta`|Cross-platform desktop app shell|Unifies Rust backend and web frontend into a small, secure, and fast native binary.|
+|**App Framework**|Tauri|`~2.0.0`|Cross-platform desktop app shell|Unifies Rust backend and web frontend into a small, secure, and fast native binary.|
 |**API Style**|Tauri IPC / REST|`N/A`|FE/BE Communication|Tauri's Inter-Process Communication for the desktop app; REST for the optional cloud sync.|
 |**Database**|SQLite|`~3.45.3`|Local, embedded data storage|A serverless, self-contained, and reliable database perfect for offline desktop applications.|
 |**DB Access (Rust)**|`rusqlite` crate|`~0.31.0`|Rust interface for SQLite|Provides a safe and idiomatic way to interact with the SQLite database from the Rust core.|
-|**Password Hashing**|`bcrypt` crate|`~0.15.1`|Securely hash user passwords|Industry-standard library for securing user credentials at rest.|
+|**Password Hashing**|`bcrypt` crate|`~0.17.0`|Securely hash user passwords|Industry-standard library for securing user credentials at rest.|
+|**Firmware Analysis**|`binwalk` crate|`~3.1.0`|Firmware analysis & metadata extraction|Enables automated firmware analysis and metadata extraction for v0.3.0 features.|
 |**Frontend Testing**|Vitest|`~1.6.0`|Unit & Integration testing for UI|Modern, fast, and Jest-compatible test runner that integrates seamlessly with Vite.|
 |**Backend Testing**|Rust Test Suite|`(built-in)`|Unit & Integration testing for core|Rust's powerful, built-in testing capabilities are sufficient and idiomatic.|
 |**IaC Tool**|AWS CDK|`~2.144.0`|Infrastructure as Code for AWS|Define cloud infrastructure programmatically in TypeScript for reliability and repeatability.|

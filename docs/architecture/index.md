@@ -1,4 +1,4 @@
-# Secure OT Configuration Management Platform Fullstack Architecture Document
+# FerroCodex Fullstack Architecture Document
 
 ## Sections
 

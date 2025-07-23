@@ -83,3 +83,33 @@ export const canRestoreVersion = (user: UserInfo | null): boolean => {
   // Both Engineers and Administrators can restore archived versions
   return (isAdministrator(user) || isEngineer(user));
 };
+
+export const canLinkFirmware = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can link firmware to configurations
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canChangeFirmwareStatus = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can change firmware status
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canPromoteFirmwareToGolden = (user: UserInfo | null): boolean => {
+  // Only Administrators can promote firmware to Golden status
+  return isAdministrator(user);
+};
+
+export const canApproveFirmware = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can approve firmware
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canArchiveFirmware = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can archive firmware
+  return (isAdministrator(user) || isEngineer(user));
+};
+
+export const canUpdateFirmwareNotes = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can update firmware notes
+  return (isAdministrator(user) || isEngineer(user));
+};

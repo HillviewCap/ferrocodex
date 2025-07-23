@@ -1,17 +1,18 @@
-# Secure OT Configuration Management Platform Fullstack Architecture Document
+# FerroCodex Fullstack Architecture Document
 
 ### 1. Introduction
 
-This document outlines the complete fullstack architecture for the Secure OT Configuration Management Platform, including the backend systems, frontend implementation, and their integration. It serves as the single source of truth for AI-driven development, ensuring consistency across the entire technology stack.
+This document outlines the complete fullstack architecture for FerroCodex (Secure OT Configuration Management Platform), including the backend systems, frontend implementation, and their integration. The v0.3.0 release introduces the Integrated Firmware Management feature set, evolving the platform into a comprehensive asset recovery solution. It serves as the single source of truth for AI-driven development, ensuring consistency across the entire technology stack.
 
 #### Starter Template or Existing Project
 
-The project will be built using the Tauri framework, which integrates a Rust-based backend with a web-based frontend. This choice was finalized in the PRD and serves as our foundational "starter," providing a secure, performant, and cross-platform application shell from the outset.
+The project is built using the Tauri framework, which integrates a Rust-based backend with a web-based frontend. This choice was finalized in the PRD and serves as our foundational "starter," providing a secure, performant, and cross-platform application shell from the outset.
 
 #### Change Log
 
 |Date|Version|Description|Author|
 |---|---|---|---|
+|2025-07-22|0.3.0|Architectural updates for Firmware Management.|Winston (Architect)|
 |2025-07-18|1.0|Initial draft based on PRD and UI/UX Spec.|Winston (Architect)|
 
 ---
@@ -20,7 +21,11 @@ The project will be built using the Tauri framework, which integrates a Rust-bas
 
 #### Technical Summary
 
-The system is a cross-platform desktop application built using the Tauri framework, which features a Rust backend for maximum security and performance, and a React frontend for a polished user interface. It operates primarily as a modular monolith in an offline-first model, storing all data in a local, encrypted SQLite database. A monorepo structure will manage the codebase. For the optional, intermittent sync feature, the application will communicate with a secure, serverless backend hosted on AWS, ensuring scalability and cost-efficiency. The architecture prioritizes security, data integrity, and a responsive, intuitive experience for OT engineers.
+The system is a cross-platform desktop application built using the Tauri framework, which features a Rust backend for maximum security and performance, and a React frontend for a polished user interface. It operates primarily as a modular monolith in an offline-first model, storing all data in a local, encrypted SQLite database.
+
+The primary architectural evolution in v0.3.0 is the adoption of a hybrid storage model. All structured metadata will continue to be stored in the local, encrypted SQLite database, while large binary files (firmware) will be stored as individual encrypted files on the native file system. This ensures the application remains highly performant and scalable. The Rust core will also integrate the binwalk library for automated firmware analysis.
+
+A monorepo structure will manage the codebase. For the optional, intermittent sync feature, the application will communicate with a secure, serverless backend hosted on AWS, ensuring scalability and cost-efficiency. The architecture prioritizes security, data integrity, and a responsive, intuitive experience for OT engineers.
 
 #### Platform and Infrastructure Choice
 
@@ -42,20 +47,19 @@ The system is a cross-platform desktop application built using the Tauri framewo
 
 #### High Level Architecture Diagram
 
-Code snippet
-
-```
+```mermaid
 graph TD
     subgraph User's Environment
         A[User: OT Engineer] -- Interacts with --> B[Tauri Desktop App];
         B -- Contains --> C[React UI];
         B -- Contains --> D[Rust Core Logic];
-        D -- Reads/Writes --> E[Encrypted SQLite DB];
+        D -- Reads/Writes Metadata --> E[Encrypted SQLite DB];
+        D -- Reads/Writes Large Files --> G[Encrypted File Storage (Firmware)];
     end
 
     subgraph AWS Cloud (Optional Sync)
-        F[API Gateway] --> G[AWS Lambda];
-        G --> H[Amazon S3];
+        F[API Gateway] --> H[AWS Lambda];
+        H --> I[Amazon S3];
     end
 
     B -- User-Initiated Sync --> F;
@@ -63,6 +67,10 @@ graph TD
 
 #### Architectural Patterns
 
+- **Hybrid Storage Model:** Using a transactional SQL database for structured metadata and the native file system for storing large, unstructured binary files.
+    
+- **Firmware Analysis Engine:** The Rust core will integrate the binwalk library to perform automated analysis on uploaded firmware files.
+    
 - **Modular Monolith (Desktop App):** The core application is a single deployable unit, but its internal code will be structured in a modular way to ensure maintainability and separation of concerns.
     
 - **Serverless (Cloud Sync):** The backend for handling software updates and optional telemetry will be built using serverless functions to ensure it is scalable and cost-effective.
@@ -83,11 +91,12 @@ graph TD
 |**UI Component Lib**|Ant Design (AntD)|`~5.17.4`|Pre-built UI components|Provides a professional, data-dense look and feel out of the box, accelerating development.|
 |**State Management**|Zustand|`~4.5.2`|Manages UI state|A simple, lightweight, and unopinionated state management solution that avoids boilerplate.|
 |**Backend Language**|Rust|`~1.78.0`|Core application logic, security|Guarantees memory safety and world-class performance, ideal for a security-critical app.|
-|**App Framework**|Tauri|`~2.0.0-beta`|Cross-platform desktop app shell|Unifies Rust backend and web frontend into a small, secure, and fast native binary.|
+|**App Framework**|Tauri|`~2.0.0`|Cross-platform desktop app shell|Unifies Rust backend and web frontend into a small, secure, and fast native binary.|
 |**API Style**|Tauri IPC / REST|`N/A`|FE/BE Communication|Tauri's Inter-Process Communication for the desktop app; REST for the optional cloud sync.|
 |**Database**|SQLite|`~3.45.3`|Local, embedded data storage|A serverless, self-contained, and reliable database perfect for offline desktop applications.|
 |**DB Access (Rust)**|`rusqlite` crate|`~0.31.0`|Rust interface for SQLite|Provides a safe and idiomatic way to interact with the SQLite database from the Rust core.|
-|**Password Hashing**|`bcrypt` crate|`~0.15.1`|Securely hash user passwords|Industry-standard library for securing user credentials at rest.|
+|**Password Hashing**|`bcrypt` crate|`~0.17.0`|Securely hash user passwords|Industry-standard library for securing user credentials at rest.|
+|**Firmware Analysis**|`binwalk` crate|`~3.1.0`|Firmware analysis & metadata extraction|Enables automated firmware analysis and metadata extraction for v0.3.0 features.|
 |**Frontend Testing**|Vitest|`~1.6.0`|Unit & Integration testing for UI|Modern, fast, and Jest-compatible test runner that integrates seamlessly with Vite.|
 |**Backend Testing**|Rust Test Suite|`(built-in)`|Unit & Integration testing for core|Rust's powerful, built-in testing capabilities are sufficient and idiomatic.|
 |**IaC Tool**|AWS CDK|`~2.144.0`|Infrastructure as Code for AWS|Define cloud infrastructure programmatically in TypeScript for reliability and repeatability.|
@@ -99,19 +108,30 @@ graph TD
 
 ### 4. Data Models
 
-_(This section contains the detailed definitions for the User, Asset, Branch, and ConfigurationVersion models, including their purposes, attributes, relationships, and TypeScript interfaces.)_
+_(This section contains the detailed definitions for the User, Asset, Branch, ConfigurationVersion, and the new FirmwareVersion models, including their purposes, attributes, relationships, and TypeScript interfaces.)_
 
 ---
 
 ### 5. API Specification
 
-_(This section contains the definitions for the Local API via Tauri IPC, including all core commands and events, and the OpenAPI 3.0 specification for the optional Cloud Sync REST API.)_
+_(This section contains the definitions for the Local API via Tauri IPC, including all core commands and events, and the OpenAPI 3.0 specification for the optional Cloud Sync REST API. New commands for firmware management will be added.)_
 
 ---
 
 ### 6. Components
 
+#### Existing Components
+
 _(This section details the logical components of the application: UI (React), IPC Handler (Rust), Core Logic (Rust), Database Module (Rust), and Security Module (Rust), complete with an interaction diagram.)_
+
+#### New Component: Firmware Analyzer (Rust)
+
+- **Responsibility:** To analyze firmware binaries using the binwalk crate to extract metadata.
+- **Dependencies:** The binwalk Rust crate.
+
+#### Core Logic (Rust) - Updated Dependencies
+
+- **Dependencies:** Database Module, Security Module, Firmware Analyzer.
 
 ---
 
@@ -123,7 +143,52 @@ _(This section contains the sequence diagram illustrating the "Restore Golden Im
 
 ### 8. Database Schema
 
-_(This section provides the complete SQL DDL `CREATE TABLE` statements for the `users`, `assets`, `branches`, and `configuration_versions` tables for the SQLite database, including indexes and constraints.)_
+#### v0.3.0 Schema Updates
+
+This schema adds the firmware_versions table and updates the configuration_versions table to support the hybrid storage model.
+
+```sql
+-- Existing tables remain unchanged
+CREATE TABLE users (
+    -- ... existing schema ...
+);
+
+CREATE TABLE assets (
+    -- ... existing schema ...
+);
+
+CREATE TABLE branches (
+    -- ... existing schema ...
+);
+
+CREATE TABLE configuration_versions (
+    -- ... existing schema with addition below ...
+);
+
+-- New table for firmware management
+CREATE TABLE firmware_versions (
+    id TEXT PRIMARY KEY NOT NULL,
+    asset_id TEXT NOT NULL,
+    author_id TEXT NOT NULL,
+    vendor TEXT,
+    model TEXT,
+    version TEXT NOT NULL,
+    notes TEXT,
+    status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
+    file_path TEXT NOT NULL, -- Path to the encrypted file on the file system
+    file_hash TEXT NOT NULL, -- SHA-256 hash of the encrypted file
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+-- Add column to link configurations to firmware
+ALTER TABLE configuration_versions
+ADD COLUMN firmware_version_id TEXT
+REFERENCES firmware_versions(id) ON DELETE SET NULL;
+```
+
+_(The complete SQL DDL `CREATE TABLE` statements for all tables including indexes and constraints.)_
 
 ---
 
@@ -175,8 +240,6 @@ _(This section defines the strategy for monitoring the application, using local 
 
 ---
 
-This concludes the `greenfield-fullstack` planning workflow. All required artifacts—the Project Brief, PRD, UI/UX Specification, and this Architecture Document—are now complete.
+This concludes the FerroCodex Fullstack Architecture Document v0.3.0. All required artifacts—the Project Brief, PRD, UI/UX Specification, and this Architecture Document—are now complete and updated to include the Integrated Firmware Management features.
 
 The project is fully specified and ready to transition from planning to the development phase. The next step is to move to an IDE environment where a **Scrum Master** will begin creating user stories for the **Developer** to implement, starting with Epic 1.
-
-Thank you for your collaboration. The BMad team is ready for the next phase when you are.

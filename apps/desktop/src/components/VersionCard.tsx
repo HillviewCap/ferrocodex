@@ -25,7 +25,8 @@ import {
   TrophyOutlined,
   DownloadOutlined,
   InboxOutlined,
-  UndoOutlined
+  UndoOutlined,
+  RocketOutlined
 } from '@ant-design/icons';
 import { ConfigurationVersionInfo, formatVersion, formatFileSize } from '../types/assets';
 import ConfigurationStatusBadge from './ConfigurationStatusBadge';
@@ -35,6 +36,8 @@ import PromoteToGoldenWizard from './PromoteToGoldenWizard';
 import ExportConfirmationModal from './ExportConfirmationModal';
 import ArchiveConfirmationModal from './ArchiveConfirmationModal';
 import RestoreConfirmationModal from './RestoreConfirmationModal';
+import FirmwareSelector from './FirmwareSelector';
+import ExportRecoveryPackageModal from './ExportRecoveryPackageModal';
 
 const { Text } = Typography;
 
@@ -51,6 +54,9 @@ interface VersionCardProps {
   onExport?: (exportPath: string) => void;
   canArchive?: boolean;
   canRestore?: boolean;
+  canLinkFirmware?: boolean;
+  onFirmwareLinked?: () => void;
+  onFirmwareUnlinked?: () => void;
 }
 
 const VersionCard: React.FC<VersionCardProps> = React.memo(({ 
@@ -65,7 +71,10 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
   canExport = false,
   onExport,
   canArchive = false,
-  canRestore = false
+  canRestore = false,
+  canLinkFirmware = false,
+  onFirmwareLinked,
+  onFirmwareUnlinked
 }) => {
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
   const [showStatusHistoryModal, setShowStatusHistoryModal] = useState(false);
@@ -73,6 +82,7 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
   const [showExportModal, setShowExportModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [showRecoveryPackageModal, setShowRecoveryPackageModal] = useState(false);
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -215,6 +225,14 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
         onClick: handleExport
       }
     ] : []),
+    ...(canExport && token && version.firmware_version_id ? [
+      {
+        key: 'export-recovery',
+        label: 'Export Recovery Package',
+        icon: <RocketOutlined />,
+        onClick: () => setShowRecoveryPackageModal(true)
+      }
+    ] : []),
     ...(canShowPromoteToGolden ? [
       {
         key: 'promote-to-golden',
@@ -342,6 +360,32 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
               </div>
             </>
           )}
+          
+          {/* Firmware Linking Section */}
+          {canLinkFirmware && token && !isArchived && (
+            <>
+              <Divider style={{ margin: '8px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <RocketOutlined style={{ fontSize: '14px', color: '#1890ff' }} />
+                <Text style={{ fontSize: '13px', marginRight: '8px' }}>
+                  Firmware:
+                </Text>
+                <FirmwareSelector
+                  assetId={version.asset_id}
+                  configId={version.id}
+                  currentFirmwareId={version.firmware_version_id}
+                  token={token}
+                  onLink={(firmwareId) => {
+                    if (onFirmwareLinked) onFirmwareLinked();
+                  }}
+                  onUnlink={() => {
+                    if (onFirmwareUnlinked) onFirmwareUnlinked();
+                  }}
+                  disabled={isArchived}
+                />
+              </div>
+            </>
+          )}
         </Col>
         
         <Col flex="none">
@@ -424,6 +468,22 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
             onSuccess={handleRestoreSuccess}
             version={version}
             token={token}
+          />
+          
+          <ExportRecoveryPackageModal
+            visible={showRecoveryPackageModal}
+            onCancel={() => setShowRecoveryPackageModal(false)}
+            onSuccess={(manifestPath) => {
+              setShowRecoveryPackageModal(false);
+              message.success(`Recovery package exported successfully!`);
+              if (onExport) {
+                onExport(manifestPath);
+              }
+            }}
+            assetId={version.asset_id}
+            assetName="" // Will be filled by the store if needed
+            configuration={version}
+            linkedFirmwareId={version.firmware_version_id}
           />
         </>
       )}

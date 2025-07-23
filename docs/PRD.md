@@ -1,4 +1,4 @@
-# Secure OT Configuration Management Platform Product Requirements Document (PRD)
+# FerroCodex Product Requirements Document (PRD)
 
 ### 1. Goals and Background Context
 
@@ -12,15 +12,22 @@
 
 - Increase engineer confidence in the integrity of their configurations and change management processes.
 
+- **[v0.3.0]** Enable comprehensive asset recovery by managing both configurations and firmware in a unified platform.
+
 #### Background Context
 
-The platform addresses a critical gap in the Operational Technology (OT) and Industrial Control Systems (ICS) space. Engineers currently rely on risky, inefficient methods like USB drives and network shares for managing vital equipment configurations. This leads to extended downtime during failures and lacks the security and auditability required in modern industrial environments. This PRD outlines the requirements for an offline-first, secure, and user-friendly platform to solve this problem.
+The platform addresses a critical gap in the Operational Technology (OT) and Industrial Control Systems (ICS) space. Engineers currently rely on risky, inefficient methods like USB drives and network shares for managing vital equipment configurations. This leads to extended downtime during failures and lacks the security and auditability required in modern industrial environments. 
+
+**[v0.3.0 Update]** The platform evolves beyond configuration management to become a comprehensive asset recovery solution by integrating firmware management capabilities. This addresses the complete recovery scenario where both firmware and configuration may need to be restored.
+
+This PRD outlines the requirements for an offline-first, secure, and user-friendly platform to solve this problem.
 
 #### Change Log
 
-| Date       | Version | Description                           | Author    |
-| ---------- | ------- | ------------------------------------- | --------- |
-| 2025-07-17 | 1.0     | Initial draft based on Project Brief. | John (PM) |
+| Date       | Version | Description                                      | Author    |
+| ---------- | ------- | ------------------------------------------------ | --------- |
+| 2025-07-22 | 0.3.0   | Added Integrated Firmware Management requirements | John (PM) |
+| 2025-07-17 | 1.0     | Initial draft based on Project Brief.            | John (PM) |
 
 ---
 
@@ -50,6 +57,14 @@ The platform addresses a critical gap in the Operational Technology (OT) and Ind
 
 11. **FR11:** An `Administrator` MUST be able to create, manage, and deactivate `Engineer` user accounts locally within the application.
 
+12. **[v0.3.0] FR12:** The system MUST provide secure storage and management for firmware files associated with assets.
+
+13. **[v0.3.0] FR13:** The system MUST automatically analyze firmware files upon upload to extract metadata using integrated analysis tools.
+
+14. **[v0.3.0] FR14:** Users MUST be able to link firmware versions to configuration versions for complete asset recovery scenarios.
+
+15. **[v0.3.0] FR15:** The system MUST support the same versioning and status workflow for firmware as for configurations.
+
 #### Non-Functional
 
 1. **NFR1:** The system MUST be fully functional in a completely disconnected, offline environment.
@@ -66,6 +81,10 @@ The platform addresses a critical gap in the Operational Technology (OT) and Ind
 
 7. **NFR7:** All user passwords MUST be securely stored using a modern, salt-based hashing algorithm (e.g., Argon2 or bcrypt).
 
+8. **[v0.3.0] NFR8:** Large firmware files MUST be stored efficiently on the native file system while maintaining encryption and performance standards.
+
+9. **[v0.3.0] NFR9:** Firmware analysis operations MUST not block the UI and should complete within reasonable time based on file size.
+
 ---
 
 ### 3. User Interface Design Goals
@@ -73,6 +92,8 @@ The platform addresses a critical gap in the Operational Technology (OT) and Ind
 #### Overall UX Vision
 
 The UX vision is to create a calm, clear, and trustworthy tool that empowers OT engineers, especially when they are under pressure. The interface must prioritize safety and simplicity over feature density, guiding users through complex version control concepts with an intuitive, step-by-step approach. The user should always feel confident and in control.
+
+**[v0.3.0 Addition]** The integrated firmware management features must maintain the same level of simplicity and clarity, presenting firmware and configuration as complementary aspects of asset management rather than separate systems.
 
 #### Key Interaction Paradigms
 
@@ -83,6 +104,8 @@ The UX vision is to create a calm, clear, and trustworthy tool that empowers OT 
 - **"Single Pane of Glass" Dashboard:** A main dashboard will provide an at-a-glance overview of all managed devices and the status of their configurations.
 
 - **Strong Status Cues:** The status of any configuration (`Golden`, `Approved`, `Draft`, etc.) will be immediately obvious through prominent labels and color-coding.
+
+- **[v0.3.0] Unified Asset View:** Firmware and configuration information will be presented in a unified interface that shows the complete recovery state of an asset.
 
 #### Core Screens and Views
 
@@ -95,6 +118,10 @@ The UX vision is to create a calm, clear, and trustworthy tool that empowers OT 
 - **Version Details Pane:** Displays the metadata for a specific version (author, notes, test results, etc.).
 
 - **User Management Screen:** A simple interface for administrators to manage user accounts.
+
+- **[v0.3.0] Firmware Management Tab:** Integrated into the Device Detail View to manage firmware versions alongside configurations.
+
+- **[v0.3.0] Firmware Analysis Results:** Display automated analysis results from firmware uploads in a clear, actionable format.
 
 #### Accessibility: WCAG AA
 
@@ -124,6 +151,8 @@ The desktop application itself will be a modular monolith. The optional, intermi
 
 - **Rationale:** The desktop app is naturally a self-contained unit (a monolith), but enforcing modularity internally will make it easier to maintain and extend. A serverless backend for the sync feature is highly cost-effective and scalable, perfectly suited for infrequent connections.
 
+- **[v0.3.0 Update]:** The modular architecture will be extended to include a firmware analysis module that integrates with the binwalk library for automated firmware inspection.
+
 #### Testing Requirements: Unit + Integration
 
 The MVP will require comprehensive unit tests for individual components and integration tests to ensure these components work together correctly.
@@ -133,6 +162,8 @@ The MVP will require comprehensive unit tests for individual components and inte
 #### Additional Technical Assumptions and Requests
 
 The application will be built using the Tauri framework. The core backend logic ("Engine") will be written in Rust for maximum security and performance. The user interface ("Dashboard") will be built with React and TypeScript to ensure a polished and modern user experience. An embedded, encrypted local database (e.g., SQLite via a Rust crate) will be used for storage.
+
+**[v0.3.0 Addition]** A hybrid storage model will be implemented where metadata remains in SQLite while large firmware files are stored as encrypted files on the native file system. The binwalk library will be integrated for firmware analysis capabilities.
 
 ---
 
@@ -145,6 +176,10 @@ The application will be built using the Tauri framework. The core backend logic 
 #### Epic 2: Advanced Configuration Management
 
 - **Goal:** Empower engineers with advanced workflows to safely manage configuration changes using branching, status promotion, and one-click restore capabilities.
+
+#### Epic 3: Integrated Firmware Management [v0.3.0]
+
+- **Goal:** Transform the platform into a comprehensive asset recovery solution by adding secure firmware storage, automated analysis, and integrated management capabilities.
 
 ---
 
@@ -307,3 +342,89 @@ As an Engineer, I want to quickly restore any previous configuration version, so
     3. Upon confirmation, the system exports the exact file for that selected version to a location the user chooses on their local machine.
 
     4. The export process is completed in under 2 seconds.
+
+---
+
+### Epic 3 Integrated Firmware Management [v0.3.0]
+
+**Epic Goal:** Transform the platform into a comprehensive asset recovery solution by adding secure firmware storage, automated analysis, and integrated management capabilities. This epic extends the platform's value proposition from configuration-only to complete asset recovery.
+
+#### Story 3.1: Import and Store Firmware
+
+As an Engineer, I want to import firmware files for my assets, so that I have a complete recovery solution including both firmware and configuration.
+
+- **Acceptance Criteria:**
+
+    1. From an asset's detail view, users can access a "Firmware" tab.
+
+    2. Users can upload firmware files of any size (up to system limits).
+
+    3. The system stores firmware files encrypted on the native file system.
+
+    4. Firmware metadata is stored in the database with version tracking.
+
+    5. Upload progress is displayed for large files.
+
+#### Story 3.2: Automated Firmware Analysis
+
+As an Engineer, I want the system to automatically analyze uploaded firmware, so that I can understand its contents and verify integrity.
+
+- **Acceptance Criteria:**
+
+    1. Upon firmware upload, the system automatically initiates analysis.
+
+    2. Analysis runs in the background without blocking the UI.
+
+    3. Results include file type detection, embedded version information, and basic security checks.
+
+    4. Analysis results are displayed in a clear, readable format.
+
+    5. Users can view analysis results for any firmware version.
+
+#### Story 3.3: Link Firmware to Configuration
+
+As an Engineer, I want to associate firmware versions with configuration versions, so that I can manage complete asset recovery packages.
+
+- **Acceptance Criteria:**
+
+    1. When viewing a configuration version, users can link it to a firmware version.
+
+    2. The link is bidirectional and visible from both firmware and configuration views.
+
+    3. The system tracks which firmware/configuration combinations are known to work together.
+
+    4. Linked versions can be exported together as a recovery package.
+
+#### Story 3.4: Firmware Version Management
+
+As an Engineer, I want to manage firmware versions with the same workflow as configurations, so that I have consistent version control across all asset components.
+
+- **Acceptance Criteria:**
+
+    1. Firmware versions support the same status workflow (Draft, Approved, Golden, Archived).
+
+    2. Users can add notes to firmware versions.
+
+    3. Firmware history is displayed in a timeline similar to configurations.
+
+    4. The same role-based permissions apply to firmware management.
+
+#### Story 3.5: Complete Asset Recovery
+
+As an Engineer, I want to export both firmware and configuration for an asset, so that I can perform complete recovery in a single operation.
+
+- **Acceptance Criteria:**
+
+    1. A "Complete Recovery" option is available for assets with both firmware and configuration.
+
+    2. Users can select specific versions of both firmware and configuration to export.
+
+    3. The system exports both files to a user-selected location.
+
+    4. Export includes a manifest file documenting versions and checksums.
+
+    5. The entire export process maintains sub-2-second performance for configurations (firmware may take longer based on size).
+
+---
+
+This concludes the FerroCodex Product Requirements Document v0.3.0. The platform now addresses the complete asset recovery scenario, providing engineers with a comprehensive, secure, and user-friendly solution for managing both configurations and firmware in critical OT environments.

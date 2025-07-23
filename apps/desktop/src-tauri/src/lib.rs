@@ -7,6 +7,9 @@ mod assets;
 mod configurations;
 mod encryption;
 mod branches;
+mod firmware;
+mod firmware_analysis;
+mod recovery;
 
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
@@ -16,11 +19,14 @@ use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimit
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
 use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils, FileMetadata};
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
-use std::sync::Mutex;
+use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
+use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
+use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State, Manager};
 use tracing::{error, info, warn};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 
 type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
@@ -58,7 +64,9 @@ async fn initialize_database(app: AppHandle, db_state: State<'_, DatabaseState>)
                 .map_err(|e| format!("Database health check failed: {}", e))?;
             
             if health_check {
-                *db_state.lock().unwrap() = Some(database);
+                let mut db_guard = db_state.lock()
+                    .map_err(|_| "Failed to acquire database lock".to_string())?;
+                *db_guard = Some(database);
                 info!("Database initialized successfully");
                 Ok(true)
             } else {
@@ -75,7 +83,8 @@ async fn initialize_database(app: AppHandle, db_state: State<'_, DatabaseState>)
 
 #[tauri::command]
 async fn database_health_check(db_state: State<'_, DatabaseState>) -> Result<bool, String> {
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => db.health_check().map_err(|e| e.to_string()),
         None => Err("Database not initialized".to_string()),
@@ -85,7 +94,8 @@ async fn database_health_check(db_state: State<'_, DatabaseState>) -> Result<boo
 #[tauri::command]
 async fn is_first_launch(db_state: State<'_, DatabaseState>) -> Result<bool, String> {
     info!("Checking if this is first launch");
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -106,7 +116,8 @@ async fn create_admin_account(
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<LoginResponse, String> {
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -128,7 +139,8 @@ async fn create_admin_account(
             let user = user_repo.create_user(request)
                 .map_err(|e| format!("Failed to create admin account: {}", e))?;
 
-            let session_manager = session_manager.lock().unwrap();
+            let session_manager = session_manager.lock()
+                .map_err(|_| "Failed to acquire session manager lock".to_string())?;
             let session = session_manager.create_session(&user)
                 .map_err(|e| format!("Failed to create session: {}", e))?;
 
@@ -151,11 +163,13 @@ async fn login(
     session_manager: State<'_, SessionManagerState>,
     attempt_tracker: State<'_, LoginAttemptTrackerState>,
 ) -> Result<LoginResponse, String> {
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             // Check if account is locked
-            let tracker = attempt_tracker.lock().unwrap();
+            let tracker = attempt_tracker.lock()
+                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
             if tracker.is_locked(&username).map_err(|e| e.to_string())? {
                 warn!("Login attempt for locked account: {}", username);
                 return Err("Account is temporarily locked due to too many failed attempts".to_string());
@@ -169,12 +183,14 @@ async fn login(
                     match verify_password(&password, &user.password_hash) {
                         Ok(true) => {
                             // Successful login
-                            let tracker = attempt_tracker.lock().unwrap();
+                            let tracker = attempt_tracker.lock()
+                                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
                             tracker.record_successful_attempt(&username)
                                 .map_err(|e| e.to_string())?;
                             drop(tracker);
 
-                            let session_manager = session_manager.lock().unwrap();
+                            let session_manager = session_manager.lock()
+                                .map_err(|_| "Failed to acquire session manager lock".to_string())?;
                             let session = session_manager.create_session(&user)
                                 .map_err(|e| format!("Failed to create session: {}", e))?;
 
@@ -187,7 +203,8 @@ async fn login(
                         }
                         Ok(false) => {
                             // Wrong password
-                            let tracker = attempt_tracker.lock().unwrap();
+                            let tracker = attempt_tracker.lock()
+                                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
                             tracker.record_failed_attempt(&username)
                                 .map_err(|e| e.to_string())?;
                             warn!("Invalid password for user: {}", username);
@@ -201,7 +218,8 @@ async fn login(
                 }
                 Ok(None) => {
                     // User not found
-                    let tracker = attempt_tracker.lock().unwrap();
+                    let tracker = attempt_tracker.lock()
+                        .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
                     tracker.record_failed_attempt(&username)
                         .map_err(|e| e.to_string())?;
                     warn!("Login attempt for non-existent user: {}", username);
@@ -222,7 +240,8 @@ async fn logout(
     token: String,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
-    let session_manager = session_manager.lock().unwrap();
+    let session_manager = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     session_manager.invalidate_session(&token)
         .map_err(|e| format!("Failed to logout: {}", e))?;
     
@@ -235,7 +254,8 @@ async fn check_session(
     token: String,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<UserInfo, String> {
-    let session_manager = session_manager.lock().unwrap();
+    let session_manager = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     match session_manager.validate_session(&token) {
         Ok(Some(session)) => {
             Ok(UserInfo {
@@ -264,7 +284,8 @@ async fn create_engineer_user(
     rate_limiter: State<'_, RateLimiterState>,
 ) -> Result<UserInfo, String> {
     // Check rate limiting
-    let rate_limiter_guard = rate_limiter.lock().unwrap();
+    let rate_limiter_guard = rate_limiter.lock()
+        .map_err(|_| "Failed to acquire rate limiter lock".to_string())?;
     if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("create_user_{}", token)) {
         return Err(e);
     }
@@ -291,7 +312,8 @@ async fn create_engineer_user(
     }
 
     // Validate session and get user info
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -309,7 +331,8 @@ async fn create_engineer_user(
 
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -348,7 +371,8 @@ async fn list_users(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<UserInfo>, String> {
     // Validate session and get user info
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -366,7 +390,8 @@ async fn list_users(
 
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -394,7 +419,8 @@ async fn deactivate_user(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session and get user info
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -417,7 +443,8 @@ async fn deactivate_user(
 
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -464,7 +491,8 @@ async fn reactivate_user(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session and get user info
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -482,7 +510,8 @@ async fn reactivate_user(
 
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
@@ -532,7 +561,8 @@ async fn create_asset(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<AssetInfo, String> {
     // Validate session and get user info
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -560,7 +590,8 @@ async fn create_asset(
         return Err("Description cannot exceed 500 characters".to_string());
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let asset_repo = SqliteAssetRepository::new(db.get_connection());
@@ -593,7 +624,8 @@ async fn get_dashboard_assets(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<AssetInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -604,7 +636,8 @@ async fn get_dashboard_assets(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let asset_repo = SqliteAssetRepository::new(db.get_connection());
@@ -631,7 +664,8 @@ async fn get_dashboard_stats(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<DashboardStats, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -642,7 +676,8 @@ async fn get_dashboard_stats(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
@@ -684,7 +719,8 @@ async fn get_asset_details(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<AssetInfo, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -695,7 +731,8 @@ async fn get_asset_details(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let asset_repo = SqliteAssetRepository::new(db.get_connection());
@@ -727,14 +764,16 @@ async fn import_configuration(
     rate_limiter: State<'_, RateLimiterState>,
 ) -> Result<AssetInfo, String> {
     // Check rate limiting
-    let rate_limiter_guard = rate_limiter.lock().unwrap();
+    let rate_limiter_guard = rate_limiter.lock()
+        .map_err(|_| "Failed to acquire rate limiter lock".to_string())?;
     if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("import_config_{}", token)) {
         return Err(e);
     }
     drop(rate_limiter_guard);
 
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -794,7 +833,8 @@ async fn import_configuration(
         Ok(true) => {}
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let asset_repo = SqliteAssetRepository::new(db.get_connection());
@@ -849,7 +889,8 @@ async fn get_configuration_versions(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<ConfigurationVersionInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -860,7 +901,8 @@ async fn get_configuration_versions(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -893,7 +935,8 @@ async fn create_branch(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<BranchInfo, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -920,7 +963,8 @@ async fn create_branch(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -967,7 +1011,8 @@ async fn get_branches(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<BranchInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -978,7 +1023,8 @@ async fn get_branches(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1006,7 +1052,8 @@ async fn get_branch_details(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<BranchInfo, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1017,7 +1064,8 @@ async fn get_branch_details(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1050,7 +1098,8 @@ async fn import_version_to_branch(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<BranchVersionInfo, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1073,7 +1122,8 @@ async fn import_version_to_branch(
         return Err("Notes cannot exceed 1000 characters".to_string());
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1120,7 +1170,8 @@ async fn get_branch_versions(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<BranchVersionInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1131,7 +1182,8 @@ async fn get_branch_versions(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1159,7 +1211,8 @@ async fn get_branch_latest_version(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Option<BranchVersionInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1170,7 +1223,8 @@ async fn get_branch_latest_version(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1200,7 +1254,8 @@ async fn compare_branch_versions(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<String, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1211,7 +1266,8 @@ async fn compare_branch_versions(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1249,7 +1305,8 @@ async fn update_configuration_status(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1282,7 +1339,8 @@ async fn update_configuration_status(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1318,7 +1376,8 @@ async fn get_configuration_status_history(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<StatusChangeRecord>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1329,7 +1388,8 @@ async fn get_configuration_status_history(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1357,7 +1417,8 @@ async fn get_available_status_transitions(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<String>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1368,7 +1429,8 @@ async fn get_available_status_transitions(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1400,7 +1462,8 @@ async fn promote_to_golden(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1430,7 +1493,8 @@ async fn promote_to_golden(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1467,7 +1531,8 @@ async fn promote_branch_to_silver(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<i64, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1497,7 +1562,8 @@ async fn promote_branch_to_silver(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
@@ -1587,7 +1653,8 @@ async fn get_golden_version(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Option<ConfigurationVersionInfo>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1598,7 +1665,8 @@ async fn get_golden_version(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1626,7 +1694,8 @@ async fn get_promotion_eligibility(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<bool, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1637,7 +1706,8 @@ async fn get_promotion_eligibility(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1666,7 +1736,8 @@ async fn export_configuration_version(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1690,7 +1761,8 @@ async fn export_configuration_version(
         return Err(format!("Invalid export path: {}", e));
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1759,7 +1831,8 @@ async fn archive_version(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1789,7 +1862,8 @@ async fn archive_version(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1818,7 +1892,8 @@ async fn restore_version(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock().unwrap();
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
     let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
@@ -1848,7 +1923,8 @@ async fn restore_version(
         }
     }
 
-    let db_guard = db_state.lock().unwrap();
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let config_repo = SqliteConfigurationRepository::new(db.get_connection());
@@ -1861,6 +1937,1108 @@ async fn restore_version(
                 Err(e) => {
                     error!("Failed to restore version: {}", e);
                     Err(format!("Failed to restore version: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn link_firmware_to_configuration(
+    token: String,
+    config_id: i64,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can link firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to link firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can link firmware to configurations".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            let audit_repo = SqliteAuditRepository::new(db.get_connection());
+            
+            match config_repo.link_firmware_to_configuration(config_id, firmware_id) {
+                Ok(_) => {
+                    // Create audit event
+                    let audit_event = audit::AuditEventRequest {
+                        event_type: audit::AuditEventType::DatabaseOperation,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!("Firmware {} linked to configuration {}", firmware_id, config_id),
+                        metadata: Some(serde_json::json!({
+                            "config_id": config_id,
+                            "firmware_id": firmware_id,
+                            "linked_by": session.username
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    
+                    if let Err(e) = audit_repo.log_event(&audit_event) {
+                        error!("Failed to log audit event: {}", e);
+                    }
+                    
+                    info!("Firmware linked by {}: Config {} <-> Firmware {}", session.username, config_id, firmware_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to link firmware to configuration: {}", e);
+                    Err(format!("Failed to link firmware to configuration: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn unlink_firmware_from_configuration(
+    token: String,
+    config_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can unlink firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to unlink firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can unlink firmware from configurations".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            let audit_repo = SqliteAuditRepository::new(db.get_connection());
+            
+            match config_repo.unlink_firmware_from_configuration(config_id) {
+                Ok(_) => {
+                    // Create audit event
+                    let audit_event = audit::AuditEventRequest {
+                        event_type: audit::AuditEventType::DatabaseOperation,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!("Firmware unlinked from configuration {}", config_id),
+                        metadata: Some(serde_json::json!({
+                            "config_id": config_id,
+                            "unlinked_by": session.username
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    
+                    if let Err(e) = audit_repo.log_event(&audit_event) {
+                        error!("Failed to log audit event: {}", e);
+                    }
+                    
+                    info!("Firmware unlinked by {}: Config {}", session.username, config_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to unlink firmware from configuration: {}", e);
+                    Err(format!("Failed to unlink firmware from configuration: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn upload_firmware(
+    app: AppHandle,
+    token: String,
+    asset_id: i64,
+    vendor: Option<String>,
+    model: Option<String>,
+    version: String,
+    notes: Option<String>,
+    file_path: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+    rate_limiter: State<'_, RateLimiterState>,
+) -> Result<FirmwareVersionInfo, String> {
+    // Check rate limiting - limit firmware uploads per user
+    {
+        let rate_limiter_guard = rate_limiter.lock()
+            .map_err(|_| "Failed to acquire rate limiter lock".to_string())?;
+        if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("firmware_upload_{}", token)) {
+            return Err(e);
+        }
+    }
+
+    // Validate session
+    let session = {
+        let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+        match session_manager_guard.validate_session(&token) {
+            Ok(Some(session)) => session,
+            Ok(None) => return Err("Invalid or expired session".to_string()),
+            Err(e) => {
+                error!("Session validation error: {}", e);
+                return Err("Session validation error".to_string());
+            }
+        }
+    };
+
+    // Only Engineers and Administrators can upload firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to upload firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can upload firmware".to_string());
+    }
+
+    // Validate file path first
+    let file_path = file_path.trim();
+    if file_path.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    
+    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
+    }
+
+    // Validate inputs
+    let version = InputSanitizer::sanitize_string(&version);
+    let vendor = vendor.map(|v| InputSanitizer::sanitize_string(&v));
+    let model = model.map(|m| InputSanitizer::sanitize_string(&m));
+    let notes = notes.map(|n| InputSanitizer::sanitize_string(&n));
+    
+    if version.is_empty() {
+        return Err("Version cannot be empty".to_string());
+    }
+    
+    if let Some(ref v) = vendor {
+        if v.len() > 100 {
+            return Err("Vendor name cannot exceed 100 characters".to_string());
+        }
+    }
+    
+    if let Some(ref m) = model {
+        if m.len() > 100 {
+            return Err("Model name cannot exceed 100 characters".to_string());
+        }
+    }
+    
+    if let Some(ref n) = notes {
+        if n.len() > 500 {
+            return Err("Notes cannot exceed 500 characters".to_string());
+        }
+    }
+    
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&version) || 
+       vendor.as_ref().map_or(false, |v| InputSanitizer::is_potentially_malicious(v)) ||
+       model.as_ref().map_or(false, |m| InputSanitizer::is_potentially_malicious(m)) ||
+       notes.as_ref().map_or(false, |n| InputSanitizer::is_potentially_malicious(n)) {
+        error!("Potentially malicious input detected in upload_firmware");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+    
+    // Validate file extension
+    let allowed_extensions = vec![
+        "bin", "hex", "img", "rom", "fw", "elf", "dfu", "upd", 
+        "dat", "firmware", "update", "pkg", "ipk", "tar", "gz",
+        "bz2", "xz", "zip", "rar", "7z", "cab", "iso", "dmg"
+    ];
+    
+    let file_extension = std::path::Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+        .unwrap_or_default();
+    
+    if file_extension.is_empty() {
+        error!("Firmware file has no extension: {}", file_path);
+        return Err("Firmware file must have a valid extension".to_string());
+    }
+    
+    if !allowed_extensions.contains(&file_extension.as_str()) {
+        error!("Invalid firmware file type: .{}", file_extension);
+        return Err(format!(
+            "File type .{} is not allowed. Allowed types: {}", 
+            file_extension, 
+            allowed_extensions.join(", ")
+        ));
+    }
+    
+    info!("Validated firmware file extension: .{}", file_extension);
+    
+    // Read file content
+    let file_data = match file_utils::read_file_content(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            error!("Failed to read file {}: {}", file_path, e);
+            return Err(format!("Failed to read file: {}", e));
+        }
+    };
+
+    // Basic MIME type validation - check for common executable signatures
+    if file_data.len() >= 2 {
+        let header = &file_data[0..2];
+        // Check for Windows executable (MZ header)
+        if header == b"MZ" {
+            error!("Detected Windows executable file signature");
+            return Err("Executable files are not allowed as firmware".to_string());
+        }
+        // Check for ELF executable (common on Linux)
+        if file_data.len() >= 4 && &file_data[0..4] == b"\x7FELF" {
+            // ELF is actually allowed for firmware, so we'll permit this
+            info!("Detected ELF format firmware file");
+        }
+    }
+
+    // Store values needed for analysis before acquiring lock
+    let firmware_result = {
+        let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+        match db_guard.as_ref() {
+            Some(db) => {
+                let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+                
+                // Generate a temporary firmware ID for file storage
+            let temp_firmware_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            
+            // Store the firmware file
+            let (file_path, file_hash, file_size) = match FirmwareFileStorage::store_firmware_file(
+                &app,
+                asset_id,
+                temp_firmware_id,
+                &file_data,
+                session.user_id,
+                &session.username,
+            ) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("Failed to store firmware file: {}", e);
+                    return Err(format!("Failed to store firmware file: {}", e));
+                }
+            };
+            
+            // Create firmware record
+            let request = CreateFirmwareRequest {
+                asset_id,
+                vendor,
+                model,
+                version,
+                notes,
+            };
+            
+            match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size) {
+                Ok(firmware) => {
+                    // Update the file with the actual firmware ID
+                    let new_file_path = format!("{}/{}.enc", asset_id, firmware.id);
+                    if file_path != new_file_path {
+                        // Rename the file if needed
+                        let firmware_dir = firmware::get_firmware_storage_dir(&app).unwrap();
+                        let old_path = firmware_dir.join(&file_path);
+                        let new_path = firmware_dir.join(&new_file_path);
+                        if let Err(e) = std::fs::rename(old_path, new_path) {
+                            error!("Failed to rename firmware file: {}", e);
+                            // Clean up on failure
+                            let _ = firmware_repo.delete_firmware(firmware.id);
+                            let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
+                            return Err("Failed to finalize firmware storage".to_string());
+                        }
+                    }
+                    
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                        let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                        let audit_event = audit::AuditEventRequest {
+                            event_type: audit::AuditEventType::FirmwareUpload,
+                            user_id: Some(session.user_id),
+                            username: Some(session.username.clone()),
+                            admin_user_id: None,
+                            admin_username: None,
+                            target_user_id: None,
+                            target_username: None,
+                            description: format!("Uploaded firmware v{} for asset {}", firmware.version, asset_id),
+                            metadata: Some(serde_json::json!({
+                                "asset_id": asset_id,
+                                "firmware_id": firmware.id,
+                                "version": firmware.version,
+                                "file_size": file_size,
+                            }).to_string()),
+                            ip_address: None,
+                            user_agent: None,
+                        };
+                        if let Err(e) = audit_repo.log_event(&audit_event) {
+                            error!("Failed to log audit event: {}", e);
+                        }
+                    }
+                    }
+                    
+                    info!("Firmware uploaded by {}: v{} for asset {} (ID: {})", 
+                         session.username, firmware.version, asset_id, firmware.id);
+                    
+                    // Convert to FirmwareVersionInfo
+                    let firmware_info = FirmwareVersionInfo {
+                        id: firmware.id,
+                        asset_id: firmware.asset_id,
+                        author_id: firmware.author_id,
+                        author_username: session.username.clone(),
+                        vendor: firmware.vendor,
+                        model: firmware.model,
+                        version: firmware.version,
+                        notes: firmware.notes,
+                        status: firmware.status,
+                        file_path: new_file_path,
+                        file_hash: firmware.file_hash,
+                        file_size,
+                        created_at: firmware.created_at,
+                    };
+                    
+                    Ok((firmware_info, firmware.id))
+                }
+                Err(e) => {
+                    // Clean up file on database error
+                    let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
+                    error!("Failed to create firmware record: {}", e);
+                    Err(format!("Failed to create firmware record: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+        }
+    };
+    
+    // Handle the result and queue analysis if successful
+    match firmware_result {
+        Ok((firmware_info, firmware_id)) => {
+            // Queue firmware analysis
+            let queue = get_or_create_analysis_queue(&app);
+            
+            let analysis_job = AnalysisJob {
+                firmware_id,
+                user_id: session.user_id,
+                username: session.username.clone(),
+            };
+            
+            if let Err(e) = queue.queue_analysis(analysis_job).await {
+                warn!("Failed to queue firmware analysis: {}", e);
+                // Don't fail the upload if analysis queueing fails
+            } else {
+                info!("Firmware analysis queued for firmware ID: {}", firmware_id);
+            }
+            
+            Ok(firmware_info)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
+async fn get_firmware_list(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_firmware_by_asset(asset_id) {
+                Ok(firmwares) => {
+                    info!("Retrieved {} firmware versions for asset {} by {}", 
+                         firmwares.len(), asset_id, session.username);
+                    Ok(firmwares)
+                }
+                Err(e) => {
+                    error!("Failed to get firmware list: {}", e);
+                    Err(format!("Failed to get firmware list: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn delete_firmware(
+    app: AppHandle,
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can delete firmware
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to delete firmware: {}", session.username);
+        return Err("Only Engineers and Administrators can delete firmware".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            // Get firmware details before deletion for audit
+            let firmware_info = match firmware_repo.get_firmware_by_id(firmware_id) {
+                Ok(Some(fw)) => fw,
+                Ok(None) => return Err("Firmware not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get firmware info: {}", e);
+                    return Err("Failed to get firmware info".to_string());
+                }
+            };
+            
+            // Delete firmware record and get file path
+            match firmware_repo.delete_firmware(firmware_id) {
+                Ok(Some(file_path)) => {
+                    // Delete the actual file
+                    if let Err(e) = FirmwareFileStorage::delete_firmware_file(&app, &file_path) {
+                        error!("Failed to delete firmware file: {}", e);
+                        // Continue anyway - the database record is already deleted
+                    }
+                    
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                        let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                        let audit_event = audit::AuditEventRequest {
+                            event_type: audit::AuditEventType::FirmwareDelete,
+                            user_id: Some(session.user_id),
+                            username: Some(session.username.clone()),
+                            admin_user_id: None,
+                            admin_username: None,
+                            target_user_id: None,
+                            target_username: None,
+                            description: format!("Deleted firmware v{} for asset {}", firmware_info.version, firmware_info.asset_id),
+                            metadata: Some(serde_json::json!({
+                                "asset_id": firmware_info.asset_id,
+                                "firmware_id": firmware_id,
+                                "version": firmware_info.version,
+                            }).to_string()),
+                            ip_address: None,
+                            user_agent: None,
+                        };
+                        if let Err(e) = audit_repo.log_event(&audit_event) {
+                            error!("Failed to log audit event: {}", e);
+                        }
+                    }
+                    }
+                    
+                    info!("Firmware deleted by {}: ID {} (v{} for asset {})", 
+                         session.username, firmware_id, firmware_info.version, firmware_info.asset_id);
+                    Ok(())
+                }
+                Ok(None) => Err("Firmware not found".to_string()),
+                Err(e) => {
+                    error!("Failed to delete firmware: {}", e);
+                    Err(format!("Failed to delete firmware: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+fn get_or_create_analysis_queue(app: &AppHandle) -> Arc<AnalysisQueue> {
+    match app.try_state::<Arc<AnalysisQueue>>() {
+        Some(queue) => queue.inner().clone(),
+        None => {
+            // Initialize the queue on first use
+            let new_queue = Arc::new(AnalysisQueue::new(app.clone()));
+            app.manage(new_queue.clone());
+            new_queue
+        }
+    }
+}
+
+#[tauri::command]
+async fn get_firmware_analysis(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Option<FirmwareAnalysisResult>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let analysis_repo = SqliteFirmwareAnalysisRepository::new(db.get_connection());
+            
+            match analysis_repo.get_analysis_by_firmware_id(firmware_id) {
+                Ok(analysis) => {
+                    info!("Firmware analysis retrieved by {}: Firmware ID {}", session.username, firmware_id);
+                    Ok(analysis)
+                }
+                Err(e) => {
+                    error!("Failed to get firmware analysis: {}", e);
+                    Err(format!("Failed to get firmware analysis: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+
+#[tauri::command]
+async fn export_complete_recovery(
+    app: AppHandle,
+    token: String,
+    asset_id: i64,
+    config_version_id: i64,
+    firmware_version_id: i64,
+    export_directory: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<RecoveryManifest, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            let audit_repo = SqliteAuditRepository::new(db.get_connection());
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            
+            // Get asset name for proper filename generation
+            let asset = match asset_repo.get_asset_by_id(asset_id) {
+                Ok(Some(asset)) => asset,
+                Ok(None) => return Err("Asset not found".to_string()),
+                Err(e) => return Err(format!("Failed to get asset: {}", e)),
+            };
+
+            let exporter = RecoveryExporter::new(&config_repo, &firmware_repo, &audit_repo);
+            
+            let request = RecoveryExportRequest {
+                asset_id,
+                config_version_id,
+                firmware_version_id,
+                export_directory,
+            };
+
+            match exporter.export_complete_recovery(
+                &app,
+                request,
+                session.user_id,
+                &session.username,
+                &session.role,
+                &asset.name,
+            ) {
+                Ok(manifest) => Ok(manifest),
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_configurations_by_firmware(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<ConfigurationVersionInfo>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            match config_repo.get_configurations_by_firmware(firmware_id) {
+                Ok(configs) => {
+                    info!("Linked configurations accessed by {}: Firmware ID {}", session.username, firmware_id);
+                    Ok(configs)
+                }
+                Err(e) => {
+                    error!("Failed to get linked configurations: {}", e);
+                    Err(format!("Failed to get linked configurations: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn retry_firmware_analysis(
+    token: String,
+    firmware_id: i64,
+    session_manager: State<'_, SessionManagerState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    // Validate session
+    let session = {
+        let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+        match session_manager_guard.validate_session(&token) {
+            Ok(Some(session)) => session,
+            Ok(None) => return Err("Invalid or expired session".to_string()),
+            Err(e) => {
+                error!("Session validation error: {}", e);
+                return Err("Session validation error".to_string());
+            }
+        }
+    };
+
+    // Only Engineers and Administrators can retry analysis
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to retry firmware analysis: {}", session.username);
+        return Err("Only Engineers and Administrators can retry firmware analysis".to_string());
+    }
+
+    // Queue the analysis job
+    let job = AnalysisJob {
+        firmware_id,
+        user_id: session.user_id,
+        username: session.username.clone(),
+    };
+
+    // Get or create the analysis queue
+    let queue = get_or_create_analysis_queue(&app);
+
+    match queue.queue_analysis(job).await {
+        Ok(_) => {
+            info!("Firmware analysis retry queued by {}: Firmware ID {}", session.username, firmware_id);
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to queue firmware analysis: {}", e);
+            Err(format!("Failed to queue firmware analysis: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn update_firmware_status(
+    token: String,
+    firmware_id: i64,
+    new_status: FirmwareStatus,
+    reason: Option<String>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can update firmware status
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to update firmware status: {}", session.username);
+        return Err("Only Engineers and Administrators can update firmware status".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.update_firmware_status(firmware_id, new_status.clone(), session.user_id, reason.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareStatusChange,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} status updated to {}", firmware_id, new_status),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "new_status": new_status.to_string(),
+                                    "reason": reason,
+                                    "changed_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} status updated to {} by {}", firmware_id, new_status, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update firmware status: {}", e);
+                    Err(format!("Failed to update firmware status: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_firmware_status_history(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareStatusHistory>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_firmware_status_history(firmware_id) {
+                Ok(history) => {
+                    info!("Retrieved firmware status history for firmware {} by {}", firmware_id, session.username);
+                    Ok(history)
+                }
+                Err(e) => {
+                    error!("Failed to get firmware status history: {}", e);
+                    Err(format!("Failed to get firmware status history: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_available_firmware_status_transitions(
+    token: String,
+    firmware_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<FirmwareStatus>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.get_available_firmware_status_transitions(firmware_id, &session.role.to_string()) {
+                Ok(transitions) => {
+                    info!("Retrieved available firmware status transitions for firmware {} by {}", firmware_id, session.username);
+                    Ok(transitions)
+                }
+                Err(e) => {
+                    error!("Failed to get available firmware status transitions: {}", e);
+                    Err(format!("Failed to get available firmware status transitions: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn promote_firmware_to_golden(
+    token: String,
+    firmware_id: i64,
+    reason: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Administrators can promote firmware to Golden
+    if session.role != UserRole::Administrator {
+        warn!("Non-administrator attempted to promote firmware to Golden: {}", session.username);
+        return Err("Only Administrators can promote firmware to Golden status".to_string());
+    }
+
+    // Validate reason
+    if reason.trim().is_empty() {
+        return Err("Reason is required for Golden promotion".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.promote_firmware_to_golden(firmware_id, session.user_id, reason.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareGoldenPromotion,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} promoted to Golden status", firmware_id),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "reason": reason,
+                                    "promoted_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} promoted to Golden by {}", firmware_id, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to promote firmware to Golden: {}", e);
+                    Err(format!("Failed to promote firmware to Golden: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_firmware_notes(
+    token: String,
+    firmware_id: i64,
+    notes: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    audit_state: State<'_, DatabaseState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Only Engineers and Administrators can update firmware notes
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to update firmware notes: {}", session.username);
+        return Err("Only Engineers and Administrators can update firmware notes".to_string());
+    }
+
+    // Sanitize notes
+    let sanitized_notes = InputSanitizer::sanitize_string(&notes);
+    
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&sanitized_notes) {
+        error!("Potentially malicious input detected in firmware notes");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            
+            match firmware_repo.update_firmware_notes(firmware_id, sanitized_notes.clone()) {
+                Ok(_) => {
+                    // Log audit event
+                    if let Ok(audit_guard) = audit_state.lock() {
+                        if let Some(audit_db) = audit_guard.as_ref() {
+                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                            let audit_event = audit::AuditEventRequest {
+                                event_type: audit::AuditEventType::FirmwareNotesUpdate,
+                                user_id: Some(session.user_id),
+                                username: Some(session.username.clone()),
+                                admin_user_id: None,
+                                admin_username: None,
+                                target_user_id: None,
+                                target_username: None,
+                                description: format!("Firmware {} notes updated", firmware_id),
+                                metadata: Some(serde_json::json!({
+                                    "firmware_id": firmware_id,
+                                    "updated_by": session.username
+                                }).to_string()),
+                                ip_address: None,
+                                user_agent: None,
+                            };
+                            if let Err(e) = audit_repo.log_event(&audit_event) {
+                                error!("Failed to log audit event: {}", e);
+                            }
+                        }
+                    }
+                    
+                    info!("Firmware {} notes updated by {}", firmware_id, session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update firmware notes: {}", e);
+                    Err(format!("Failed to update firmware notes: {}", e))
                 }
             }
         }
@@ -1916,10 +3094,28 @@ pub fn run() {
             get_branch_latest_version,
             compare_branch_versions,
             archive_version,
-            restore_version
+            restore_version,
+            link_firmware_to_configuration,
+            unlink_firmware_from_configuration,
+            get_configurations_by_firmware,
+            export_complete_recovery,
+            upload_firmware,
+            get_firmware_list,
+            delete_firmware,
+            get_firmware_analysis,
+            retry_firmware_analysis,
+            update_firmware_status,
+            get_firmware_status_history,
+            get_available_firmware_status_transitions,
+            promote_firmware_to_golden,
+            update_firmware_notes
         ])
-        .setup(|_app| {
+        .setup(|app| {
             info!("Ferrocodex application starting up...");
+            
+            // Analysis queue will be initialized after database is ready
+            // For now, we'll initialize it on first use
+            
             Ok(())
         })
         .run(tauri::generate_context!())

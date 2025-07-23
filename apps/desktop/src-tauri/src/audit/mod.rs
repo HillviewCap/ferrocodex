@@ -22,6 +22,14 @@ pub enum AuditEventType {
     SystemShutdown,
     DatabaseOperation,
     SecurityViolation,
+    FirmwareUpload,
+    FirmwareDelete,
+    FirmwareAnalysisStarted,
+    FirmwareAnalysisCompleted,
+    FirmwareAnalysisFailed,
+    FirmwareStatusChange,
+    FirmwareGoldenPromotion,
+    FirmwareNotesUpdate,
 }
 
 impl fmt::Display for AuditEventType {
@@ -43,6 +51,14 @@ impl fmt::Display for AuditEventType {
             AuditEventType::SystemShutdown => write!(f, "SYS_002"),
             AuditEventType::DatabaseOperation => write!(f, "DB_001"),
             AuditEventType::SecurityViolation => write!(f, "SEC_001"),
+            AuditEventType::FirmwareUpload => write!(f, "FW_001"),
+            AuditEventType::FirmwareDelete => write!(f, "FW_002"),
+            AuditEventType::FirmwareAnalysisStarted => write!(f, "FW_003"),
+            AuditEventType::FirmwareAnalysisCompleted => write!(f, "FW_004"),
+            AuditEventType::FirmwareAnalysisFailed => write!(f, "FW_005"),
+            AuditEventType::FirmwareStatusChange => write!(f, "FW_006"),
+            AuditEventType::FirmwareGoldenPromotion => write!(f, "FW_007"),
+            AuditEventType::FirmwareNotesUpdate => write!(f, "FW_008"),
         }
     }
 }
@@ -117,6 +133,14 @@ impl<'a> SqliteAuditRepository<'a> {
             "SYS_002" => AuditEventType::SystemShutdown,
             "DB_001" => AuditEventType::DatabaseOperation,
             "SEC_001" => AuditEventType::SecurityViolation,
+            "FW_001" => AuditEventType::FirmwareUpload,
+            "FW_002" => AuditEventType::FirmwareDelete,
+            "FW_003" => AuditEventType::FirmwareAnalysisStarted,
+            "FW_004" => AuditEventType::FirmwareAnalysisCompleted,
+            "FW_005" => AuditEventType::FirmwareAnalysisFailed,
+            "FW_006" => AuditEventType::FirmwareStatusChange,
+            "FW_007" => AuditEventType::FirmwareGoldenPromotion,
+            "FW_008" => AuditEventType::FirmwareNotesUpdate,
             _ => return Err(rusqlite::Error::InvalidColumnType(0, "event_type".to_string(), rusqlite::types::Type::Text)),
         };
 
