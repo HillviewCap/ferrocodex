@@ -2,7 +2,11 @@
 
 ## Technical Summary
 
-The system is a cross-platform desktop application built using the Tauri framework, which features a Rust backend for maximum security and performance, and a React frontend for a polished user interface. It operates primarily as a modular monolith in an offline-first model, storing all data in a local, encrypted SQLite database. A monorepo structure will manage the codebase. For the optional, intermittent sync feature, the application will communicate with a secure, serverless backend hosted on AWS, ensuring scalability and cost-efficiency. The architecture prioritizes security, data integrity, and a responsive, intuitive experience for OT engineers.
+The system is a cross-platform desktop application built using the Tauri framework, which features a Rust backend for maximum security and performance, and a React frontend for a polished user interface. It operates primarily as a modular monolith in an offline-first model, storing all data in a local, encrypted SQLite database.
+
+The primary architectural evolution in v0.3.0 is the adoption of a hybrid storage model. All structured metadata will continue to be stored in the local, encrypted SQLite database, while large binary files (firmware) will be stored as individual encrypted files on the native file system. This ensures the application remains highly performant and scalable. The Rust core will also integrate the binwalk library for automated firmware analysis.
+
+A monorepo structure will manage the codebase. For the optional, intermittent sync feature, the application will communicate with a secure, serverless backend hosted on AWS, ensuring scalability and cost-efficiency. The architecture prioritizes security, data integrity, and a responsive, intuitive experience for OT engineers.
 
 ## Platform and Infrastructure Choice
 
@@ -24,20 +28,19 @@ The system is a cross-platform desktop application built using the Tauri framewo
 
 ## High Level Architecture Diagram
 
-Code snippet
-
-```
+```mermaid
 graph TD
     subgraph User's Environment
         A[User: OT Engineer] -- Interacts with --> B[Tauri Desktop App];
         B -- Contains --> C[React UI];
         B -- Contains --> D[Rust Core Logic];
-        D -- Reads/Writes --> E[Encrypted SQLite DB];
+        D -- Reads/Writes Metadata --> E[Encrypted SQLite DB];
+        D -- Reads/Writes Large Files --> G[Encrypted File Storage (Firmware)];
     end
 
     subgraph AWS Cloud (Optional Sync)
-        F[API Gateway] --> G[AWS Lambda];
-        G --> H[Amazon S3];
+        F[API Gateway] --> H[AWS Lambda];
+        H --> I[Amazon S3];
     end
 
     B -- User-Initiated Sync --> F;
@@ -45,6 +48,10 @@ graph TD
 
 ## Architectural Patterns
 
+- **Hybrid Storage Model:** Using a transactional SQL database for structured metadata and the native file system for storing large, unstructured binary files.
+    
+- **Firmware Analysis Engine:** The Rust core will integrate the binwalk library to perform automated analysis on uploaded firmware files.
+    
 - **Modular Monolith (Desktop App):** The core application is a single deployable unit, but its internal code will be structured in a modular way to ensure maintainability and separation of concerns.
     
 - **Serverless (Cloud Sync):** The backend for handling software updates and optional telemetry will be built using serverless functions to ensure it is scalable and cost-effective.
