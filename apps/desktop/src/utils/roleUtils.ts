@@ -83,3 +83,8 @@ export const canRestoreVersion = (user: UserInfo | null): boolean => {
   // Both Engineers and Administrators can restore archived versions
   return (isAdministrator(user) || isEngineer(user));
 };
+
+export const canLinkFirmware = (user: UserInfo | null): boolean => {
+  // Both Engineers and Administrators can link firmware to configurations
+  return (isAdministrator(user) || isEngineer(user));
+};

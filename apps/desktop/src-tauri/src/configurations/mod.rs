@@ -14,6 +14,7 @@ pub struct ConfigurationVersion {
     pub content_hash: String,
     pub author: i64,
     pub notes: String,
+    pub firmware_version_id: Option<i64>,
     pub created_at: String,
 }
 
@@ -75,6 +76,7 @@ pub struct ConfigurationVersionInfo {
     pub status: String,
     pub status_changed_by: Option<i64>,
     pub status_changed_at: Option<String>,
+    pub firmware_version_id: Option<i64>,
     pub created_at: String,
 }
 
@@ -93,6 +95,7 @@ impl From<ConfigurationVersion> for ConfigurationVersionInfo {
             status: "Draft".to_string(), // Default status
             status_changed_by: None,
             status_changed_at: None,
+            firmware_version_id: config.firmware_version_id,
             created_at: config.created_at,
         }
     }
@@ -140,6 +143,11 @@ pub trait ConfigurationRepository {
     // Manual archive/restore methods
     fn archive_version(&self, version_id: i64, archived_by: i64, archive_reason: Option<String>) -> Result<()>;
     fn restore_version(&self, version_id: i64, restored_by: i64, restore_reason: Option<String>) -> Result<()>;
+    
+    // Firmware linking methods
+    fn link_firmware_to_configuration(&self, config_id: i64, firmware_id: i64) -> Result<()>;
+    fn unlink_firmware_from_configuration(&self, config_id: i64) -> Result<()>;
+    fn get_configurations_by_firmware(&self, firmware_id: i64) -> Result<Vec<ConfigurationVersionInfo>>;
 }
 
 pub struct SqliteConfigurationRepository<'a> {
@@ -167,6 +175,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
                 status TEXT DEFAULT 'Draft' CHECK(status IN ('Draft', 'Silver', 'Approved', 'Golden', 'Archived')),
                 status_changed_by INTEGER REFERENCES users(id),
                 status_changed_at DATETIME,
+                firmware_version_id INTEGER REFERENCES firmware_versions(id) ON DELETE SET NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                 FOREIGN KEY (author) REFERENCES users(id),
@@ -191,6 +200,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
             CREATE INDEX IF NOT EXISTS idx_config_created_at ON configuration_versions(created_at);
             CREATE INDEX IF NOT EXISTS idx_configuration_versions_status ON configuration_versions(status);
             CREATE INDEX IF NOT EXISTS idx_configuration_versions_status_asset ON configuration_versions(asset_id, status);
+            CREATE INDEX IF NOT EXISTS idx_config_firmware_link ON configuration_versions(firmware_version_id);
             CREATE INDEX IF NOT EXISTS idx_status_history_version ON configuration_status_history(version_id);
             "#,
         )?;
@@ -208,6 +218,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
             content_hash: row.get("content_hash")?,
             author: row.get("author")?,
             notes: row.get("notes")?,
+            firmware_version_id: row.get("firmware_version_id")?,
             created_at: row.get("created_at")?,
         })
     }
@@ -226,6 +237,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
             status: row.get("status")?,
             status_changed_by: row.get("status_changed_by")?,
             status_changed_at: row.get("status_changed_at")?,
+            firmware_version_id: row.get("firmware_version_id")?,
             created_at: row.get("created_at")?,
         })
     }
@@ -336,7 +348,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT cv.id, cv.asset_id, cv.version_number, cv.file_name, cv.file_size, 
                     cv.content_hash, cv.author, u.username as author_username, cv.notes,
-                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.created_at
+                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.firmware_version_id, cv.created_at
              FROM configuration_versions cv
              JOIN users u ON cv.author = u.id
              WHERE cv.asset_id = ?1
@@ -379,7 +391,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
     fn get_configuration_by_id(&self, version_id: i64) -> Result<Option<ConfigurationVersion>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, asset_id, version_number, file_name, file_content, file_size, 
-                    content_hash, author, notes, created_at
+                    content_hash, author, notes, firmware_version_id, created_at
              FROM configuration_versions WHERE id = ?1"
         )?;
 
@@ -594,7 +606,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT cv.id, cv.asset_id, cv.version_number, cv.file_name, cv.file_size, 
                     cv.content_hash, cv.author, u.username as author_username, cv.notes,
-                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.created_at
+                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.firmware_version_id, cv.created_at
              FROM configuration_versions cv
              JOIN users u ON cv.author = u.id
              WHERE cv.asset_id = ?1 AND cv.status = 'Golden'
@@ -766,6 +778,77 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         )?;
 
         Ok(())
+    }
+    
+    fn link_firmware_to_configuration(&self, config_id: i64, firmware_id: i64) -> Result<()> {
+        // Validate that both configuration and firmware exist and belong to the same asset
+        let mut stmt = self.conn.prepare(
+            "SELECT cv.asset_id as config_asset, fv.asset_id as firmware_asset
+             FROM configuration_versions cv, firmware_versions fv
+             WHERE cv.id = ?1 AND fv.id = ?2"
+        )?;
+        
+        let result = stmt.query_row((config_id, firmware_id), |row| {
+            Ok((row.get::<_, i64>("config_asset")?, row.get::<_, i64>("firmware_asset")?))
+        });
+        
+        match result {
+            Ok((config_asset, firmware_asset)) => {
+                if config_asset != firmware_asset {
+                    return Err(anyhow::anyhow!("Configuration and firmware must belong to the same asset"));
+                }
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                return Err(anyhow::anyhow!("Configuration or firmware version not found"));
+            }
+            Err(e) => return Err(e.into()),
+        }
+        
+        // Update the configuration with the firmware link
+        let rows_affected = self.conn.execute(
+            "UPDATE configuration_versions SET firmware_version_id = ?1 WHERE id = ?2",
+            (firmware_id, config_id),
+        )?;
+        
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Failed to link firmware to configuration"));
+        }
+        
+        Ok(())
+    }
+    
+    fn unlink_firmware_from_configuration(&self, config_id: i64) -> Result<()> {
+        let rows_affected = self.conn.execute(
+            "UPDATE configuration_versions SET firmware_version_id = NULL WHERE id = ?1",
+            [config_id],
+        )?;
+        
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Configuration version not found"));
+        }
+        
+        Ok(())
+    }
+    
+    fn get_configurations_by_firmware(&self, firmware_id: i64) -> Result<Vec<ConfigurationVersionInfo>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT cv.id, cv.asset_id, cv.version_number, cv.file_name, cv.file_size, 
+                    cv.content_hash, cv.author, u.username as author_username, cv.notes,
+                    cv.status, cv.status_changed_by, cv.status_changed_at, cv.firmware_version_id, cv.created_at
+             FROM configuration_versions cv
+             JOIN users u ON cv.author = u.id
+             WHERE cv.firmware_version_id = ?1
+             ORDER BY cv.created_at DESC"
+        )?;
+
+        let config_iter = stmt.query_map([firmware_id], Self::row_to_configuration_info)?;
+        let mut configurations = Vec::new();
+
+        for config in config_iter {
+            configurations.push(config?);
+        }
+
+        Ok(configurations)
     }
 }
 
@@ -1557,6 +1640,228 @@ mod tests {
         let versions = repo.get_configuration_versions(1).unwrap();
         let restored_version = versions.iter().find(|v| v.id == config.id).unwrap();
         assert_eq!(restored_version.status, "Draft");
+    }
+    
+    #[test]
+    fn test_link_firmware_to_configuration() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+        
+        // Create firmware table and repository
+        conn.execute_batch(
+            r#"
+            CREATE TABLE firmware_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                author_id INTEGER NOT NULL,
+                vendor TEXT,
+                model TEXT,
+                version TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
+                file_path TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+            
+            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
+            "#,
+        ).unwrap();
+        
+        // Create a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+        
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Link firmware to configuration
+        let result = repo.link_firmware_to_configuration(config.id, 1);
+        assert!(result.is_ok());
+        
+        // Verify the link was created
+        let config_info = repo.get_configuration_versions(1).unwrap();
+        let linked_config = config_info.iter().find(|c| c.id == config.id).unwrap();
+        assert_eq!(linked_config.firmware_version_id, Some(1));
+    }
+    
+    #[test]
+    fn test_link_firmware_different_assets() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+        
+        // Create second asset
+        conn.execute(
+            "INSERT INTO assets (id, name, description, created_by) VALUES (2, 'Asset 2', 'Desc', 1)",
+            [],
+        ).unwrap();
+        
+        // Create firmware table and entries
+        conn.execute_batch(
+            r#"
+            CREATE TABLE firmware_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                author_id INTEGER NOT NULL,
+                vendor TEXT,
+                model TEXT,
+                version TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
+                file_path TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+            
+            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+            VALUES (1, 2, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
+            "#,
+        ).unwrap();
+        
+        // Create a configuration for asset 1
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+        
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Try to link firmware from asset 2 to configuration from asset 1 - should fail
+        let result = repo.link_firmware_to_configuration(config.id, 1);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must belong to the same asset"));
+    }
+    
+    #[test]
+    fn test_unlink_firmware_from_configuration() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+        
+        // Create firmware table
+        conn.execute_batch(
+            r#"
+            CREATE TABLE firmware_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                author_id INTEGER NOT NULL,
+                vendor TEXT,
+                model TEXT,
+                version TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
+                file_path TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+            
+            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
+            "#,
+        ).unwrap();
+        
+        // Create a configuration
+        let request = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{\"test\": \"value\"}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        };
+        
+        let config = repo.store_configuration(request).unwrap();
+        
+        // Link firmware to configuration
+        repo.link_firmware_to_configuration(config.id, 1).unwrap();
+        
+        // Unlink firmware
+        let result = repo.unlink_firmware_from_configuration(config.id);
+        assert!(result.is_ok());
+        
+        // Verify the link was removed
+        let config_info = repo.get_configuration_versions(1).unwrap();
+        let unlinked_config = config_info.iter().find(|c| c.id == config.id).unwrap();
+        assert_eq!(unlinked_config.firmware_version_id, None);
+    }
+    
+    #[test]
+    fn test_get_configurations_by_firmware() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+        
+        // Create firmware table
+        conn.execute_batch(
+            r#"
+            CREATE TABLE firmware_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id INTEGER NOT NULL,
+                author_id INTEGER NOT NULL,
+                vendor TEXT,
+                model TEXT,
+                version TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
+                file_path TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+            
+            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
+            "#,
+        ).unwrap();
+        
+        // Create two configurations
+        let request1 = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config1.json".to_string(),
+            file_content: b"{\"test\": \"value1\"}".to_vec(),
+            author: 1,
+            notes: "Test config 1".to_string(),
+        };
+        
+        let request2 = CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config2.json".to_string(),
+            file_content: b"{\"test\": \"value2\"}".to_vec(),
+            author: 1,
+            notes: "Test config 2".to_string(),
+        };
+        
+        let config1 = repo.store_configuration(request1).unwrap();
+        let config2 = repo.store_configuration(request2).unwrap();
+        
+        // Link both configurations to the same firmware
+        repo.link_firmware_to_configuration(config1.id, 1).unwrap();
+        repo.link_firmware_to_configuration(config2.id, 1).unwrap();
+        
+        // Get configurations by firmware
+        let configs = repo.get_configurations_by_firmware(1).unwrap();
+        assert_eq!(configs.len(), 2);
+        
+        // Verify both configurations are returned
+        let config_ids: Vec<i64> = configs.iter().map(|c| c.id).collect();
+        assert!(config_ids.contains(&config1.id));
+        assert!(config_ids.contains(&config2.id));
     }
 }
 
