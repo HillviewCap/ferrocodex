@@ -123,7 +123,7 @@ const FirmwareSelector: React.FC<FirmwareSelectorProps> = ({
   return (
     <Space size="small">
       <Select
-        style={{ minWidth: 200 }}
+        style={{ minWidth: 300 }}
         placeholder="Select firmware version"
         loading={loading}
         disabled={disabled || linking}
