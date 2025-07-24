@@ -2212,7 +2212,7 @@ async fn upload_firmware(
         .map_err(|e| format!("Failed to get file metadata: {}", e))?
         .len();
     info!("Reading file content: {} bytes expected", file_size);
-    let file_data = match file_utils::read_file_content(&file_path) {
+    let file_data = match file_utils::read_firmware_file_content(&file_path) {
         Ok(content) => {
             info!("Successfully read file content: {} bytes", content.len());
             content

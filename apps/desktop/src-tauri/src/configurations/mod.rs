@@ -875,6 +875,24 @@ pub mod file_utils {
         Ok(content)
     }
 
+    pub fn read_firmware_file_content(file_path: &str) -> Result<Vec<u8>> {
+        let path = Path::new(file_path);
+        
+        if !path.exists() {
+            return Err(anyhow::anyhow!("File does not exist: {}", file_path));
+        }
+
+        let content = fs::read(path)?;
+        
+        // Validate file size (2GB limit for firmware)
+        const MAX_FIRMWARE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2GB
+        if content.len() > MAX_FIRMWARE_SIZE {
+            return Err(anyhow::anyhow!("File size exceeds maximum limit of 2GB"));
+        }
+
+        Ok(content)
+    }
+
     pub fn get_file_metadata(file_path: &str) -> Result<FileMetadata> {
         let path = Path::new(file_path);
         
