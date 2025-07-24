@@ -55,7 +55,7 @@ const useBranchStore = create<BranchState>((set, get) => ({
     try {
       const branches = await invoke<BranchInfo[]>('get_branches', { 
         token, 
-        assetId: assetId 
+        assetId 
       });
       set({ branches, isLoading: false });
     } catch (error) {

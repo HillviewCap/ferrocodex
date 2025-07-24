@@ -6,7 +6,7 @@ import {
   Space,
   Spin,
   Empty,
-  message,
+  App,
   Breadcrumb,
   Divider,
   Avatar,
@@ -45,6 +45,7 @@ interface ConfigurationHistoryViewProps {
 
 const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ asset, onBack }) => {
   const { token } = useAuthStore();
+  const { message } = App.useApp();
   const { 
     versions, 
     versionsLoading, 
@@ -108,6 +109,11 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     // Refresh branches after creation
     if (token && asset.id) {
       fetchBranches(token, asset.id);
+      // Also refresh version history to show updated branch associations
+      setTimeout(() => {
+        fetchVersions();
+        fetchGoldenVersion();
+      }, 100);
     }
     // Navigate to Branch Management tab
     setActiveTab('branches');
@@ -146,6 +152,14 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     setActiveTab('versions');
   };
 
+  const handleVersionHistoryChange = () => {
+    // Refresh version history when branch operations affect versions
+    if (token && asset.id) {
+      fetchVersions(token, asset.id);
+      fetchGoldenVersion();
+    }
+  };
+
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -164,21 +178,30 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     <div style={{ padding: '24px' }}>
       {/* Header with breadcrumb and navigation */}
       <div style={{ marginBottom: '24px' }}>
-        <Breadcrumb style={{ marginBottom: '16px' }}>
-          <Breadcrumb.Item>
-            <Button 
-              type="link" 
-              icon={<ArrowLeftOutlined />}
-              onClick={onBack}
-              style={{ padding: 0 }}
-            >
-              Configuration Assets
-            </Button>
-          </Breadcrumb.Item>
-          <Breadcrumb.Item>
-            <HistoryOutlined /> Version History
-          </Breadcrumb.Item>
-        </Breadcrumb>
+        <Breadcrumb 
+          style={{ marginBottom: '16px' }}
+          items={[
+            {
+              title: (
+                <Button 
+                  type="link" 
+                  icon={<ArrowLeftOutlined />}
+                  onClick={onBack}
+                  style={{ padding: 0 }}
+                >
+                  Configuration Assets
+                </Button>
+              )
+            },
+            {
+              title: (
+                <>
+                  <HistoryOutlined /> Version History
+                </>
+              )
+            }
+          ]}
+        />
 
         <Card style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -365,6 +388,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
               <BranchManagement 
                 asset={asset}
                 onCreateBranch={handleCreateBranchFromManagement}
+                onVersionHistoryChange={handleVersionHistoryChange}
                 showCreateButton={false}
                 showSelectActions={false}
               />

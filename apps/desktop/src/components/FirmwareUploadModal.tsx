@@ -67,10 +67,11 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
   };
 
   const handleCancel = () => {
-    if (uploadProgress?.status !== 'uploading') {
-      handleReset();
-      onCancel();
+    if (uploadProgress?.status === 'uploading' || uploadProgress?.status === 'processing') {
+      return; // Prevent closing during active upload/processing
     }
+    handleReset();
+    onCancel();
   };
 
   const handleFileSelect = async () => {
@@ -371,7 +372,11 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
               Upload Firmware
             </Button>
           </Space>
-        ) : currentStep === 2 ? null : (
+        ) : currentStep === 2 ? (
+          uploadProgress?.status === 'complete' || uploadProgress?.status === 'error' ? (
+            <Button onClick={handleCancel}>Close</Button>
+          ) : null
+        ) : (
           <Button onClick={handleCancel}>Cancel</Button>
         )
       }

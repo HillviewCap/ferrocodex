@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ConfigurationHistoryView from '../ConfigurationHistoryView';
 import { AssetInfo } from '../../types/assets';
 
+// Mock Tauri API
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn()
+}));
+
 // Mock the stores
 vi.mock('../../store/auth', () => ({
   default: vi.fn(() => ({
@@ -20,6 +25,16 @@ vi.mock('../../store/assets', () => ({
   }))
 }));
 
+vi.mock('../../store/branches', () => ({
+  default: vi.fn(() => ({
+    branches: [],
+    branchVersions: {},
+    fetchBranches: vi.fn(),
+    fetchBranchVersions: vi.fn(),
+    clearError: vi.fn()
+  }))
+}));
+
 // Mock the child components
 vi.mock('../VersionHistoryList', () => ({
   default: ({ versions }: { versions: any[] }) => (
@@ -29,6 +44,22 @@ vi.mock('../VersionHistoryList', () => ({
       ))}
     </div>
   )
+}));
+
+vi.mock('../BranchManagement', () => ({
+  default: () => <div data-testid="branch-management">Branch Management</div>
+}));
+
+vi.mock('../FirmwareManagement', () => ({
+  default: () => <div data-testid="firmware-management">Firmware Management</div>
+}));
+
+vi.mock('../CreateBranchModal', () => ({
+  default: () => null
+}));
+
+vi.mock('../GoldenVersionIndicator', () => ({
+  default: () => null
 }));
 
 describe('ConfigurationHistoryView', () => {
@@ -174,22 +205,40 @@ describe('ConfigurationHistoryView', () => {
     expect(noDescriptionElements.length).toBeGreaterThan(0);
   });
 
-  it('calls fetchVersions on mount', () => {
+  it('calls fetchVersions on mount', async () => {
     const mockFetchVersions = vi.fn();
-    const useAssetStore = vi.fn(() => ({
+    const mockFetchBranches = vi.fn();
+    const mockInvoke = vi.fn().mockResolvedValue(null);
+    
+    // Import and override the mocks
+    const { default: useAssetStore } = await import('../../store/assets');
+    const { default: useBranchStore } = await import('../../store/branches');
+    const { invoke } = await import('@tauri-apps/api/core');
+    
+    (useAssetStore as any).mockReturnValue({
       versions: [],
       versionsLoading: false,
       error: null,
       fetchVersions: mockFetchVersions,
       clearError: vi.fn()
-    }));
-
-    vi.doMock('../../store/assets', () => ({
-      default: useAssetStore
-    }));
-
-    render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
+    });
     
-    expect(mockFetchVersions).toHaveBeenCalledWith('mock-token', 1);
+    (useBranchStore as any).mockReturnValue({
+      branches: [],
+      branchVersions: {},
+      fetchBranches: mockFetchBranches,
+      fetchBranchVersions: vi.fn(),
+      clearError: vi.fn()
+    });
+    
+    (invoke as any).mockImplementation(mockInvoke);
+
+    const { rerender } = render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
+    
+    // Wait for effects to run
+    await vi.waitFor(() => {
+      expect(mockFetchVersions).toHaveBeenCalledWith('mock-token', 1);
+      expect(mockFetchBranches).toHaveBeenCalledWith('mock-token', 1);
+    });
   });
 });

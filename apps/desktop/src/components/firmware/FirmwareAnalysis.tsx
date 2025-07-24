@@ -185,7 +185,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
                       <Space direction="vertical" style={{ width: '100%' }}>
                         <Text strong>{finding.findingType}</Text>
                         <Text type="secondary">{finding.description}</Text>
-                        {finding.offset !== undefined && (
+                        {finding.offset !== undefined && finding.offset !== null && (
                           <Text code>Offset: 0x{finding.offset.toString(16)}</Text>
                         )}
                       </Space>
@@ -287,7 +287,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
           </Descriptions.Item>
         )}
         
-        {analysis.entropyScore !== undefined && (
+        {analysis.entropyScore !== undefined && analysis.entropyScore !== null && (
           <Descriptions.Item label="Entropy Score">
             <Progress 
               percent={Math.round((analysis.entropyScore / 8) * 100)} 

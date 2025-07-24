@@ -19,7 +19,7 @@ import {
   FolderOpenOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons';
-import { dialog } from '@tauri-apps/plugin-dialog';
+import * as dialog from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { FirmwareVersionInfo } from '../types/firmware';
@@ -42,7 +42,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
   onCancel,
   onSuccess,
   assetId,
-  assetName,
+  assetName: _assetName,
   configuration,
   linkedFirmwareId
 }) => {
@@ -113,13 +113,13 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
 
     setExporting(true);
     try {
-      const manifestPath = await invoke<string>('export_recovery_package', {
+      const manifestPath = await invoke<string>('export_complete_recovery', {
         app: null, // Will be injected by Tauri
         token: token!,
-        assetId,
-        configId: configuration.id,
-        firmwareId: linkedFirmwareId,
-        exportPath: selectedPath
+        asset_id: assetId,
+        config_version_id: configuration.id,
+        firmware_version_id: linkedFirmwareId,
+        export_directory: selectedPath
       });
       
       message.success('Recovery package exported successfully!');

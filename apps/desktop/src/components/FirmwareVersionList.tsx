@@ -27,7 +27,6 @@ import {
   CloudServerOutlined,
   BarcodeOutlined,
   FileSearchOutlined,
-  LinkOutlined,
   EditOutlined,
   SwapOutlined,
   CrownOutlined,
@@ -40,10 +39,9 @@ import FirmwareAnalysis from './firmware/FirmwareAnalysis';
 import LinkedConfigurationsList from './LinkedConfigurationsList';
 import FirmwareHistoryTimeline from './firmware/FirmwareHistoryTimeline';
 import FirmwareStatusDialog from './firmware/FirmwareStatusDialog';
-import { canChangeFirmwareStatus, canPromoteFirmwareToGolden, canUpdateFirmwareNotes } from '../utils/roleUtils';
+import { canChangeFirmwareStatus, canUpdateFirmwareNotes } from '../utils/roleUtils';
 
 const { Text } = Typography;
-const { Panel } = Collapse;
 const { TextArea } = Input;
 
 interface FirmwareVersionListProps {
@@ -72,7 +70,10 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
 
   const formatDate = (dateString: string) => {
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      if (!dateString) return 'Unknown date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -80,16 +81,21 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
         minute: '2-digit'
       });
     } catch {
-      return dateString;
+      return 'Unknown date';
     }
   };
 
   const formatRelativeTime = (dateString: string) => {
     try {
+      if (!dateString) return 'Unknown date';
+      
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
       const now = new Date();
       const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
       
+      if (diffInSeconds < 0) return 'Future date';
       if (diffInSeconds < 60) return 'just now';
       if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
       if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
@@ -97,7 +103,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
       return `${Math.floor(diffInSeconds / 31536000)} years ago`;
     } catch {
-      return dateString;
+      return 'Unknown date';
     }
   };
 
@@ -159,6 +165,12 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   const handleStatusChange = async (firmware: FirmwareVersionInfo) => {
     try {
       const transitions = await getAvailableStatusTransitions(firmware.id);
+      
+      if (!transitions || transitions.length === 0) {
+        message.warning('No status transitions available for this firmware version');
+        return;
+      }
+      
       setAvailableTransitions(transitions);
       setSelectedFirmwareForStatus(firmware);
       setStatusDialogVisible(true);
@@ -168,7 +180,9 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   };
 
   const handleStatusUpdate = async (newStatus: FirmwareStatus, reason?: string) => {
-    if (!selectedFirmwareForStatus) return;
+    if (!selectedFirmwareForStatus) {
+      throw new Error('No firmware selected');
+    }
 
     try {
       if (newStatus === 'Golden') {
@@ -181,11 +195,17 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       setStatusDialogVisible(false);
       setSelectedFirmwareForStatus(null);
       
-      if (onDelete) {
-        onDelete(); // Refresh the list
+      // Don't call onDelete here as the store already updates the state
+      // Only call it if we need to reload for other reasons (e.g., Golden promotion affects multiple versions)
+      if (newStatus === 'Golden' && onDelete) {
+        // Golden promotion affects multiple versions, so refresh the list
+        await onDelete();
       }
     } catch (error) {
+      console.error('Failed to update firmware status:', error);
       message.error(`Failed to update firmware status: ${error}`);
+      // Re-throw the error so the dialog can handle its loading state
+      throw error;
     }
   };
 
@@ -383,7 +403,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 <Space size={4}>
                   <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {firmware.author_username}
+                    {firmware.author_username || 'Unknown user'}
                   </Text>
                 </Space>
               </Space>
@@ -468,7 +488,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
         }}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         {selectedFirmwareId && (
           <FirmwareAnalysis firmwareId={selectedFirmwareId} />

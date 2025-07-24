@@ -4,6 +4,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ExportRecoveryPackageModal from '../ExportRecoveryPackageModal';
 import { message } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
+import * as dialog from '@tauri-apps/plugin-dialog';
 
 // Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
@@ -12,9 +14,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Mock @tauri-apps/plugin-dialog
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-  dialog: {
-    open: vi.fn()
-  }
+  open: vi.fn()
 }));
 
 // Mock antd message
@@ -70,8 +70,8 @@ const mockFirmware = {
 describe('ExportRecoveryPackageModal', () => {
   const mockOnCancel = vi.fn();
   const mockOnSuccess = vi.fn();
-  const mockInvoke = vi.mocked(await import('@tauri-apps/api/core')).invoke;
-  const mockDialog = vi.mocked(await import('@tauri-apps/plugin-dialog')).dialog;
+  const mockInvoke = vi.mocked(invoke);
+  const mockDialog = vi.mocked(dialog);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -173,7 +173,7 @@ describe('ExportRecoveryPackageModal', () => {
     mockDialog.open.mockResolvedValueOnce('/export/path');
     mockInvoke
       .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockResolvedValueOnce('/export/path/recovery_manifest.json'); // export_recovery_package
+      .mockResolvedValueOnce('/export/path/recovery_manifest.json'); // export_complete_recovery
 
     render(
       <ExportRecoveryPackageModal
@@ -198,13 +198,13 @@ describe('ExportRecoveryPackageModal', () => {
     await user.click(screen.getByRole('button', { name: /Export Package/i }));
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('export_recovery_package', {
+      expect(mockInvoke).toHaveBeenCalledWith('export_complete_recovery', {
         app: null,
         token: 'test-token',
-        assetId: 1,
-        configId: 1,
-        firmwareId: 1,
-        exportPath: '/export/path'
+        asset_id: 1,
+        config_version_id: 1,
+        firmware_version_id: 1,
+        export_directory: '/export/path'
       });
       expect(message.success).toHaveBeenCalledWith('Recovery package exported successfully!');
       expect(mockOnSuccess).toHaveBeenCalledWith('/export/path/recovery_manifest.json');
@@ -256,7 +256,7 @@ describe('ExportRecoveryPackageModal', () => {
     mockDialog.open.mockResolvedValueOnce('/export/path');
     mockInvoke
       .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockRejectedValueOnce(new Error('Export failed')); // export_recovery_package
+      .mockRejectedValueOnce(new Error('Export failed')); // export_complete_recovery
 
     render(
       <ExportRecoveryPackageModal
@@ -290,7 +290,7 @@ describe('ExportRecoveryPackageModal', () => {
     // Make export hang
     mockInvoke
       .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockImplementationOnce(() => new Promise(() => {})); // export_recovery_package never resolves
+      .mockImplementationOnce(() => new Promise(() => {})); // export_complete_recovery never resolves
 
     render(
       <ExportRecoveryPackageModal

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Select, Space, Button, Tooltip, message, Tag } from 'antd';
-import { LinkOutlined, DisconnectOutlined, RocketOutlined } from '@ant-design/icons';
+import { Select, Space, message, Tag } from 'antd';
+import { RocketOutlined } from '@ant-design/icons';
 import { FirmwareVersionInfo } from '../types/firmware';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -52,8 +52,9 @@ const FirmwareSelector: React.FC<FirmwareSelectorProps> = ({
     }
   };
 
-  const handleLink = async () => {
-    if (!selectedFirmwareId) {
+  const handleLink = async (firmwareId?: number) => {
+    const targetFirmwareId = firmwareId ?? selectedFirmwareId;
+    if (!targetFirmwareId) {
       message.warning('Please select a firmware version to link');
       return;
     }
@@ -63,10 +64,10 @@ const FirmwareSelector: React.FC<FirmwareSelectorProps> = ({
       await invoke('link_firmware_to_configuration', {
         token,
         configId,
-        firmwareId: selectedFirmwareId
+        firmwareId: targetFirmwareId
       });
       message.success('Firmware linked successfully');
-      onLink(selectedFirmwareId);
+      onLink(targetFirmwareId);
     } catch (err) {
       console.error('Failed to link firmware:', err);
       message.error('Failed to link firmware: ' + (err as Error).message);
@@ -107,15 +108,27 @@ const FirmwareSelector: React.FC<FirmwareSelectorProps> = ({
     );
   };
 
+  const handleFirmwareChange = async (value: number | undefined) => {
+    setSelectedFirmwareId(value);
+    
+    // If a firmware is selected and it's different from current, automatically link it
+    if (value && value !== currentFirmwareId) {
+      await handleLink(value);
+    } else if (!value && currentFirmwareId) {
+      // If cleared (undefined) and there was a current firmware, unlink it
+      await handleUnlink();
+    }
+  };
+
   return (
     <Space size="small">
       <Select
-        style={{ minWidth: 200 }}
+        style={{ minWidth: 300 }}
         placeholder="Select firmware version"
         loading={loading}
         disabled={disabled || linking}
         value={selectedFirmwareId}
-        onChange={setSelectedFirmwareId}
+        onChange={handleFirmwareChange}
         allowClear
         showSearch
         filterOption={(input, option) => {
@@ -125,39 +138,12 @@ const FirmwareSelector: React.FC<FirmwareSelectorProps> = ({
           return searchStr.includes(input.toLowerCase());
         }}
       >
-        {firmwareVersions.map(firmware => (
+        {firmwareVersions?.map(firmware => (
           <Select.Option key={firmware.id} value={firmware.id}>
             {formatFirmwareOption(firmware)}
           </Select.Option>
         ))}
       </Select>
-
-      {currentFirmwareId ? (
-        <Tooltip title="Unlink firmware">
-          <Button
-            type="default"
-            icon={<DisconnectOutlined />}
-            onClick={handleUnlink}
-            loading={linking}
-            disabled={disabled}
-            danger
-          >
-            Unlink
-          </Button>
-        </Tooltip>
-      ) : (
-        <Tooltip title="Link selected firmware">
-          <Button
-            type="primary"
-            icon={<LinkOutlined />}
-            onClick={handleLink}
-            loading={linking}
-            disabled={disabled || !selectedFirmwareId}
-          >
-            Link
-          </Button>
-        </Tooltip>
-      )}
     </Space>
   );
 };

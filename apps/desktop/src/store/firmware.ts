@@ -173,12 +173,16 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
     try {
       set({ error: null });
       
+      console.log('Updating firmware status:', { firmwareId, newStatus, reason });
+      
       await invoke('update_firmware_status', {
         token,
         firmwareId,
         newStatus,
         reason,
       });
+
+      console.log('Firmware status updated successfully');
 
       // Update the firmware in state
       const firmwareVersions = get().firmwareVersions;
@@ -194,6 +198,7 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
 
       set({ firmwareVersions: updatedVersions });
     } catch (error) {
+      console.error('Failed to update firmware status:', error);
       set({ error: error as string });
       throw error;
     }

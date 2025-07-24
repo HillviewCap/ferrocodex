@@ -216,7 +216,7 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
       title={
         <Space>
           <ExportOutlined />
-          Complete Recovery Export - {assetName}
+          <span>Complete Recovery Export - {assetName}</span>
         </Space>
       }
       open={visible}
@@ -289,9 +289,11 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
           <Row gutter={16}>
             <Col span={12}>
               <div style={{ marginBottom: 16 }}>
-                <Text strong>Configuration Version:</Text>
+                <div style={{ marginBottom: 8 }}>
+                  <Text strong>Configuration Version:</Text>
+                </div>
                 <Select
-                  style={{ width: '100%', marginTop: 8 }}
+                  style={{ width: '100%' }}
                   placeholder="Select configuration version"
                   value={selectedConfigId}
                   onChange={setSelectedConfigId}
@@ -299,12 +301,12 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
                 >
                   {configurationVersions.map(config => (
                     <Option key={config.id} value={config.id}>
-                      <Space direction="vertical" size={0}>
-                        <Text>{config.version_number}</Text>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                      <div>
+                        <div>{config.version_number}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(0, 0, 0, 0.45)' }}>
                           {config.status} • {config.author_username}
-                        </Text>
-                      </Space>
+                        </div>
+                      </div>
                     </Option>
                   ))}
                 </Select>
@@ -313,9 +315,11 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
 
             <Col span={12}>
               <div style={{ marginBottom: 16 }}>
-                <Text strong>Firmware Version:</Text>
+                <div style={{ marginBottom: 8 }}>
+                  <Text strong>Firmware Version:</Text>
+                </div>
                 <Select
-                  style={{ width: '100%', marginTop: 8 }}
+                  style={{ width: '100%' }}
                   placeholder="Select firmware version"
                   value={selectedFirmwareId}
                   onChange={setSelectedFirmwareId}
@@ -323,12 +327,12 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
                 >
                   {firmwareVersions.map(firmware => (
                     <Option key={firmware.id} value={firmware.id}>
-                      <Space direction="vertical" size={0}>
-                        <Text>{firmware.version}</Text>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                      <div>
+                        <div>{firmware.version}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(0, 0, 0, 0.45)', whiteSpace: 'normal' }}>
                           {firmware.status} • {firmware.vendor} {firmware.model}
-                        </Text>
-                      </Space>
+                        </div>
+                      </div>
                     </Option>
                   ))}
                 </Select>
@@ -359,8 +363,10 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
           <Divider />
 
           <div style={{ marginBottom: 16 }}>
-            <Text strong>Export Directory:</Text>
-            <Row gutter={8} style={{ marginTop: 8 }}>
+            <div style={{ marginBottom: 8 }}>
+              <Text strong>Export Directory:</Text>
+            </div>
+            <Row gutter={8}>
               <Col flex={1}>
                 <Select
                   style={{ width: '100%' }}

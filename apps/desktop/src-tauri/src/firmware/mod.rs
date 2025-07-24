@@ -104,6 +104,7 @@ pub trait FirmwareRepository {
     fn get_available_firmware_status_transitions(&self, firmware_id: i64, user_role: &str) -> Result<Vec<FirmwareStatus>>;
     fn promote_firmware_to_golden(&self, firmware_id: i64, user_id: i64, reason: String) -> Result<()>;
     fn update_firmware_notes(&self, firmware_id: i64, notes: String) -> Result<()>;
+    fn update_firmware_file_path(&self, firmware_id: i64, file_path: String) -> Result<()>;
 }
 
 pub struct SqliteFirmwareRepository<'a> {
@@ -485,6 +486,15 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
         
         Ok(())
     }
+
+    fn update_firmware_file_path(&self, firmware_id: i64, file_path: String) -> Result<()> {
+        self.conn.execute(
+            "UPDATE firmware_versions SET file_path = ?1 WHERE id = ?2",
+            rusqlite::params![file_path, firmware_id],
+        )?;
+        
+        Ok(())
+    }
 }
 
 pub fn get_firmware_storage_dir(app_handle: &AppHandle) -> Result<PathBuf> {
@@ -529,20 +539,29 @@ impl FirmwareFileStorage {
         let file_path = asset_dir.join(&file_name);
         
         // Calculate hash of the original file
+        tracing::info!("Calculating SHA256 hash for {} bytes", file_data.len());
         let mut hasher = Sha256::new();
         hasher.update(file_data);
         let file_hash = format!("{:x}", hasher.finalize());
+        tracing::info!("Hash calculated successfully: {}", file_hash);
         
         // Encrypt the file data
+        tracing::info!("Starting file encryption for {} bytes", file_data.len());
         let encryption_key = derive_key_from_user_credentials(user_id, username);
         let encryption = FileEncryption::new(&encryption_key);
         let encrypted_data = encryption.encrypt(file_data)?;
+        tracing::info!("File encryption completed, encrypted size: {} bytes", encrypted_data.len());
         
         // Write encrypted data to file
+        tracing::info!("Writing encrypted data to file: {:?}", file_path);
         fs::write(&file_path, encrypted_data)?;
+        tracing::info!("File write completed successfully");
         
         // Return file path (relative to firmware dir), hash, and size
-        let relative_path = format!("{}/{}", asset_id, file_name);
+        let relative_path = PathBuf::from(asset_id.to_string())
+            .join(file_name)
+            .to_string_lossy()
+            .to_string();
         Ok((relative_path, file_hash, file_data.len() as i64))
     }
     
@@ -556,8 +575,15 @@ impl FirmwareFileStorage {
         let firmware_dir = get_firmware_storage_dir(app_handle)?;
         let full_path = firmware_dir.join(file_path);
         
+        // Debug logging
+        tracing::info!("Attempting to read firmware file: {}", file_path);
+        tracing::info!("Firmware storage directory: {:?}", firmware_dir);
+        tracing::info!("Full path: {:?}", full_path);
+        tracing::info!("File exists: {}", full_path.exists());
+        
         // Check if file exists
         if !full_path.exists() {
+            tracing::error!("Firmware file not found at path: {:?}", full_path);
             return Err(anyhow::anyhow!("Firmware file not found"));
         }
         

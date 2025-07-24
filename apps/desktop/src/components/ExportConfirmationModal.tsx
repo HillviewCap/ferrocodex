@@ -241,52 +241,37 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
           Export
         </Button>
       ]}
-      width={600}
+      width={550}
       destroyOnHidden
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {/* Version Information */}
         <div>
-          <Title level={5}>Configuration Details</Title>
-          <Row gutter={[16, 8]}>
-            <Col span={8}>
-              <Text type="secondary">Version:</Text>
+          <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Configuration Details</Title>
+          <Row gutter={[16, 4]}>
+            <Col span={12}>
+              <Text type="secondary">Version:</Text> <Text strong>{version.version_number}</Text>
             </Col>
-            <Col span={16}>
-              <Text strong>{version.version_number}</Text>
+            <Col span={12}>
+              <Text type="secondary">Status:</Text> <Text>{version.status}</Text>
             </Col>
-            <Col span={8}>
-              <Text type="secondary">File Name:</Text>
+            <Col span={12}>
+              <Text type="secondary">File:</Text> <Text strong>{version.file_name}</Text>
             </Col>
-            <Col span={16}>
-              <Text strong>{version.file_name}</Text>
+            <Col span={12}>
+              <Text type="secondary">Size:</Text> <Text>{formatFileSize(version.file_size)}</Text>
             </Col>
-            <Col span={8}>
-              <Text type="secondary">File Size:</Text>
-            </Col>
-            <Col span={16}>
-              <Text>{formatFileSize(version.file_size)}</Text>
-            </Col>
-            <Col span={8}>
-              <Text type="secondary">Author:</Text>
-            </Col>
-            <Col span={16}>
-              <Text>{version.author_username}</Text>
-            </Col>
-            <Col span={8}>
-              <Text type="secondary">Status:</Text>
-            </Col>
-            <Col span={16}>
-              <Text>{version.status}</Text>
+            <Col span={12}>
+              <Text type="secondary">Author:</Text> <Text>{version.author_username}</Text>
             </Col>
           </Row>
         </div>
 
-        <Divider />
+        <Divider style={{ margin: '12px 0' }} />
 
         {/* Export Location */}
         <div>
-          <Title level={5}>Export Location</Title>
+          <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Export Location</Title>
           <Input
             value={selectedPath}
             placeholder="Click 'Select Location' to choose where to save the file"
@@ -308,9 +293,9 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
         {/* Progress Section */}
         {(selectedPath || isExporting) && (
           <>
-            <Divider />
+            <Divider style={{ margin: '12px 0' }} />
             <div>
-              <Title level={5}>Export Progress</Title>
+              <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Export Progress</Title>
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Row align="middle" gutter={[8, 0]}>
                   <Col flex="none">
@@ -353,15 +338,6 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
           />
         )}
 
-        {/* Performance Warning */}
-        {selectedPath && (
-          <Alert
-            message="Export Information"
-            description="The export process includes integrity verification and should complete within 2 seconds. Large files may take longer."
-            type="info"
-            showIcon
-          />
-        )}
       </Space>
     </Modal>
   );
