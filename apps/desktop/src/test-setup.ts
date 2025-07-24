@@ -20,3 +20,17 @@ Object.defineProperty(window, 'matchMedia', {
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
+
+// Mock window.prompt for copy-to-clipboard functionality
+Object.defineProperty(window, 'prompt', {
+  writable: true,
+  value: vi.fn(),
+});
+
+// Mock window.getComputedStyle for Ant Design components
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({
+    getPropertyValue: vi.fn().mockReturnValue(''),
+  })),
+});

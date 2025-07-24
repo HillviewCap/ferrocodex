@@ -9,17 +9,33 @@ import useFirmwareStore from '../../store/firmware';
 vi.mock('../../store/auth');
 vi.mock('../../store/firmware');
 
-// Mock Ant Design Modal
+// Mock Ant Design components
 vi.mock('antd', async () => {
   const actual = await vi.importActual('antd');
+  
+  // Create Modal mock
+  const ModalMock = vi.fn(({ children, ...props }) => {
+    return props.open ? <div data-testid="modal" {...props}>{children}</div> : null;
+  });
+  
+  // Add static methods
+  ModalMock.confirm = vi.fn(({ onOk }) => {
+    // Immediately call onOk for testing
+    if (onOk) onOk();
+  });
+  ModalMock.info = vi.fn();
+  ModalMock.success = vi.fn();
+  ModalMock.error = vi.fn();
+  ModalMock.warning = vi.fn();
+  
   return {
     ...actual,
-    Modal: {
-      ...actual.Modal,
-      confirm: vi.fn(({ onOk }) => {
-        // Immediately call onOk for testing
-        if (onOk) onOk();
-      })
+    Modal: ModalMock,
+    message: {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn()
     }
   };
 });
