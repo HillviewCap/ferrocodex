@@ -109,6 +109,11 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     // Refresh branches after creation
     if (token && asset.id) {
       fetchBranches(token, asset.id);
+      // Also refresh version history to show updated branch associations
+      setTimeout(() => {
+        fetchVersions();
+        fetchGoldenVersion();
+      }, 100);
     }
     // Navigate to Branch Management tab
     setActiveTab('branches');
@@ -145,6 +150,14 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
     // For now, we'll just show a message as we need a version to create a branch from
     message.info('Please select a version from the history to create a branch from');
     setActiveTab('versions');
+  };
+
+  const handleVersionHistoryChange = () => {
+    // Refresh version history when branch operations affect versions
+    if (token && asset.id) {
+      fetchVersions(token, asset.id);
+      fetchGoldenVersion();
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -375,6 +388,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
               <BranchManagement 
                 asset={asset}
                 onCreateBranch={handleCreateBranchFromManagement}
+                onVersionHistoryChange={handleVersionHistoryChange}
                 showCreateButton={false}
                 showSelectActions={false}
               />

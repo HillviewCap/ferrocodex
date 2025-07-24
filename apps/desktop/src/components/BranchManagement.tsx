@@ -47,6 +47,7 @@ interface BranchManagementProps {
   onCreateBranch?: () => void;
   onSelectBranch?: (branch: BranchInfo) => void;
   onViewBranchDetails?: (branch: BranchInfo) => void;
+  onVersionHistoryChange?: () => void;
   showCreateButton?: boolean;
   showSelectActions?: boolean;
 }
@@ -56,6 +57,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
   onCreateBranch,
   onSelectBranch,
   onViewBranchDetails,
+  onVersionHistoryChange,
   showCreateButton = true,
   showSelectActions = true
 }) => {
@@ -192,6 +194,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     
     // Clear the selected branch
     setSelectedBranchForImport(null);
+    
+    // Notify parent that version history may have changed
+    if (onVersionHistoryChange) {
+      onVersionHistoryChange();
+    }
   };
 
   const handleImportCancel = () => {
@@ -268,6 +275,11 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
     setPromoteSilverModalVisible(false);
     setSelectedBranchForPromotion(null);
     message.success('Branch promoted to Silver status successfully!');
+    
+    // Notify parent that version history may have changed
+    if (onVersionHistoryChange) {
+      onVersionHistoryChange();
+    }
   };
 
   const handlePromotionCancel = () => {
