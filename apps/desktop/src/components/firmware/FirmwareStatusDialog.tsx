@@ -62,10 +62,11 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
       
       await onConfirm(values.newStatus, values.reason);
       
+      // Only reset and close if successful
       form.resetFields();
-      onCancel();
     } catch (error) {
-      console.error('Form validation failed:', error);
+      console.error('Status update failed:', error);
+      // Don't close the dialog on error
     } finally {
       setLoading(false);
     }
@@ -74,20 +75,26 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
   const selectedStatus = Form.useWatch('newStatus', form);
   const isGoldenPromotion = selectedStatus === 'Golden';
 
+  const handleCancel = () => {
+    form.resetFields();
+    onCancel();
+  };
+
   return (
     <Modal
       title="Change Firmware Status"
       open={visible}
       onOk={handleSubmit}
-      onCancel={onCancel}
+      onCancel={handleCancel}
       confirmLoading={loading}
       okText="Change Status"
       width={500}
+      destroyOnClose={true}
     >
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ newStatus: availableTransitions[0] }}
+        initialValues={{ newStatus: availableTransitions.length > 0 ? availableTransitions[0] : undefined }}
       >
         <Form.Item label="Current Status" style={{ marginBottom: '16px' }}>
           <Space>

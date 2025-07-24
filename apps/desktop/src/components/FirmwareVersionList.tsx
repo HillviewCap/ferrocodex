@@ -165,6 +165,12 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   const handleStatusChange = async (firmware: FirmwareVersionInfo) => {
     try {
       const transitions = await getAvailableStatusTransitions(firmware.id);
+      
+      if (!transitions || transitions.length === 0) {
+        message.warning('No status transitions available for this firmware version');
+        return;
+      }
+      
       setAvailableTransitions(transitions);
       setSelectedFirmwareForStatus(firmware);
       setStatusDialogVisible(true);
@@ -189,10 +195,14 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       setStatusDialogVisible(false);
       setSelectedFirmwareForStatus(null);
       
-      if (onDelete) {
-        onDelete(); // Refresh the list
+      // Don't call onDelete here as the store already updates the state
+      // Only call it if we need to reload for other reasons (e.g., Golden promotion affects multiple versions)
+      if (newStatus === 'Golden' && onDelete) {
+        // Golden promotion affects multiple versions, so refresh the list
+        await onDelete();
       }
     } catch (error) {
+      console.error('Failed to update firmware status:', error);
       message.error(`Failed to update firmware status: ${error}`);
       // Re-throw the error so the dialog can handle its loading state
       throw error;
