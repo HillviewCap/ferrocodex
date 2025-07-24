@@ -166,7 +166,9 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   };
 
   const handleStatusUpdate = async (newStatus: FirmwareStatus, reason?: string) => {
-    if (!selectedFirmwareForStatus) return;
+    if (!selectedFirmwareForStatus) {
+      throw new Error('No firmware selected');
+    }
 
     try {
       if (newStatus === 'Golden') {
@@ -184,6 +186,8 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       }
     } catch (error) {
       message.error(`Failed to update firmware status: ${error}`);
+      // Re-throw the error so the dialog can handle its loading state
+      throw error;
     }
   };
 
