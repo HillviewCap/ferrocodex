@@ -70,7 +70,10 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
 
   const formatDate = (dateString: string) => {
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      if (!dateString) return 'Unknown date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -78,16 +81,21 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
         minute: '2-digit'
       });
     } catch {
-      return dateString;
+      return 'Unknown date';
     }
   };
 
   const formatRelativeTime = (dateString: string) => {
     try {
+      if (!dateString) return 'Unknown date';
+      
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
       const now = new Date();
       const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
       
+      if (diffInSeconds < 0) return 'Future date';
       if (diffInSeconds < 60) return 'just now';
       if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
       if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
@@ -95,7 +103,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
       return `${Math.floor(diffInSeconds / 31536000)} years ago`;
     } catch {
-      return dateString;
+      return 'Unknown date';
     }
   };
 
@@ -385,7 +393,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 <Space size={4}>
                   <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {firmware.author_username}
+                    {firmware.author_username || 'Unknown user'}
                   </Text>
                 </Space>
               </Space>
