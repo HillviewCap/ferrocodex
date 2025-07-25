@@ -4,7 +4,7 @@ import { FirmwareVersionInfo, UploadFirmwareRequest, FirmwareUploadProgress, Fir
 import useAuthStore from './auth';
 
 interface FirmwareState {
-  firmwareVersions: Record<number, FirmwareVersionInfo[]>; // Keyed by asset_id
+  firmwareVersions: Record<number, FirmwareVersionInfo[]>; // Keyed by assetId
   selectedFirmware: FirmwareVersionInfo | null;
   isLoading: boolean;
   isUploading: boolean;
@@ -91,12 +91,12 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
 
       await invoke('upload_firmware', {
         token,
-        assetId: request.asset_id,
+        assetId: request.assetId,
         vendor: request.vendor,
         model: request.model,
         version: request.version,
         notes: request.notes,
-        filePath: request.file_path,
+        filePath: request.filePath,
       });
 
       // Update progress to processing
@@ -108,7 +108,7 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
       });
 
       // Reload firmware versions
-      await get().loadFirmwareVersions(request.asset_id);
+      await get().loadFirmwareVersions(request.assetId);
 
       set({ 
         isUploading: false,

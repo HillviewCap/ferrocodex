@@ -140,12 +140,12 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
       const values = await form.validateFields();
       
       await uploadFirmware({
-        asset_id: assetId,
+        assetId: assetId,
         vendor: values.vendor || null,
         model: values.model || null,
         version: values.version,
         notes: values.notes || null,
-        file_path: selectedFile.path
+        filePath: selectedFile.path
       });
 
       setCurrentStep(2);

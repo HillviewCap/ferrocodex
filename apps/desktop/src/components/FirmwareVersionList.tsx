@@ -55,6 +55,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
 }) => {
   const { user } = useAuthStore();
   const { deleteFirmware, updateFirmwareStatus, getAvailableStatusTransitions, promoteFirmwareToGolden, updateFirmwareNotes } = useFirmwareStore();
+
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
   const [selectedFirmwareId, setSelectedFirmwareId] = useState<number | null>(null);
@@ -306,15 +307,15 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 <Tooltip title="File Size">
                   <Space size={4}>
                     <FileOutlined style={{ color: '#8c8c8c' }} />
-                    <Text type="secondary">{formatFirmwareFileSize(firmware.file_size)}</Text>
+                    <Text type="secondary">{formatFirmwareFileSize(firmware.fileSize)}</Text>
                   </Space>
                 </Tooltip>
                 
                 <Tooltip title="File Hash (SHA-256)">
                   <Space size={4}>
                     <BarcodeOutlined style={{ color: '#8c8c8c' }} />
-                    <Text type="secondary" copyable={{ text: firmware.file_hash }}>
-                      {formatFirmwareHash(firmware.file_hash)}
+                    <Text type="secondary" copyable={{ text: firmware.fileHash }}>
+                      {formatFirmwareHash(firmware.fileHash)}
                     </Text>
                   </Space>
                 </Tooltip>
@@ -331,7 +332,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
               
               <LinkedConfigurationsList 
                 firmwareId={firmware.id}
-                assetId={firmware.asset_id}
+                assetId={firmware.assetId}
               />
 
               {(firmware.notes || canUpdateFirmwareNotes(user)) && (
@@ -391,11 +392,11 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
               height: '100%'
             }}>
               <Space direction="vertical" align="end" size="small">
-                <Tooltip title={formatDate(firmware.created_at)}>
+                <Tooltip title={formatDate(firmware.createdAt)}>
                   <Space size={4}>
                     <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      {formatRelativeTime(firmware.created_at)}
+                      {formatRelativeTime(firmware.createdAt)}
                     </Text>
                   </Space>
                 </Tooltip>
@@ -403,7 +404,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 <Space size={4}>
                   <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {firmware.author_username && firmware.author_username.trim() !== '' ? firmware.author_username : 'Unknown user'}
+                    {firmware.authorUsername && firmware.authorUsername.trim() !== '' ? firmware.authorUsername : 'Unknown user'}
                   </Text>
                 </Space>
               </Space>
