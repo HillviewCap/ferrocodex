@@ -111,7 +111,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
       fetchBranches(token, asset.id);
       // Also refresh version history to show updated branch associations
       setTimeout(() => {
-        fetchVersions();
+        fetchVersions(token, asset.id);
         fetchGoldenVersion();
       }, 100);
     }

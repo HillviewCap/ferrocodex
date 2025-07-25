@@ -1011,6 +1011,10 @@ mod tests {
         let repo = SqliteConfigurationRepository::new(&conn);
         repo.initialize_schema().unwrap();
         
+        // Initialize firmware schema for tests that use firmware functionality
+        let firmware_repo = crate::firmware::SqliteFirmwareRepository::new(&conn);
+        firmware_repo.initialize_schema().unwrap();
+        
         (temp_file, conn)
     }
 
@@ -1665,29 +1669,11 @@ mod tests {
         let (_temp_file, conn) = setup_test_db();
         let repo = SqliteConfigurationRepository::new(&conn);
         
-        // Create firmware table and repository
-        conn.execute_batch(
-            r#"
-            CREATE TABLE firmware_versions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                asset_id INTEGER NOT NULL,
-                author_id INTEGER NOT NULL,
-                vendor TEXT,
-                model TEXT,
-                version TEXT NOT NULL,
-                notes TEXT,
-                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
-                file_path TEXT NOT NULL,
-                file_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
-            
-            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
-            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
-            "#,
+        // Insert test firmware data (table already created by setup_test_db)
+        conn.execute(
+            "INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+             VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024)",
+            [],
         ).unwrap();
         
         // Create a configuration
@@ -1722,29 +1708,11 @@ mod tests {
             [],
         ).unwrap();
         
-        // Create firmware table and entries
-        conn.execute_batch(
-            r#"
-            CREATE TABLE firmware_versions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                asset_id INTEGER NOT NULL,
-                author_id INTEGER NOT NULL,
-                vendor TEXT,
-                model TEXT,
-                version TEXT NOT NULL,
-                notes TEXT,
-                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
-                file_path TEXT NOT NULL,
-                file_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
-            
-            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
-            VALUES (1, 2, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
-            "#,
+        // Insert firmware data for second asset (table already created by setup_test_db)
+        conn.execute(
+            "INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+             VALUES (1, 2, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024)",
+            [],
         ).unwrap();
         
         // Create a configuration for asset 1
@@ -1769,29 +1737,11 @@ mod tests {
         let (_temp_file, conn) = setup_test_db();
         let repo = SqliteConfigurationRepository::new(&conn);
         
-        // Create firmware table
-        conn.execute_batch(
-            r#"
-            CREATE TABLE firmware_versions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                asset_id INTEGER NOT NULL,
-                author_id INTEGER NOT NULL,
-                vendor TEXT,
-                model TEXT,
-                version TEXT NOT NULL,
-                notes TEXT,
-                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
-                file_path TEXT NOT NULL,
-                file_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
-            
-            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
-            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
-            "#,
+        // Insert test firmware data (table already created by setup_test_db)
+        conn.execute(
+            "INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+             VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024)",
+            [],
         ).unwrap();
         
         // Create a configuration
@@ -1823,29 +1773,11 @@ mod tests {
         let (_temp_file, conn) = setup_test_db();
         let repo = SqliteConfigurationRepository::new(&conn);
         
-        // Create firmware table
-        conn.execute_batch(
-            r#"
-            CREATE TABLE firmware_versions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                asset_id INTEGER NOT NULL,
-                author_id INTEGER NOT NULL,
-                vendor TEXT,
-                model TEXT,
-                version TEXT NOT NULL,
-                notes TEXT,
-                status TEXT NOT NULL CHECK(status IN ('Draft', 'Golden', 'Archived')),
-                file_path TEXT NOT NULL,
-                file_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
-            
-            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
-            VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024);
-            "#,
+        // Insert test firmware data (table already created by setup_test_db)
+        conn.execute(
+            "INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+             VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'abc123', 1024)",
+            [],
         ).unwrap();
         
         // Create two configurations

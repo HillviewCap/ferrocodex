@@ -30,7 +30,9 @@
       "Bash(dir:*)",
       "Bash(git config:*)",
       "Bash(gh api:*)",
-      "Bash(gh repo edit:*)"
+      "Bash(gh repo edit:*)",
+      "Bash(md-tree:*)",
+      "Bash(npm audit:*)"
     ],
     "deny": []
   }

@@ -444,7 +444,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
             // Insert history record
             tx.execute(
                 "INSERT INTO firmware_status_history (firmware_version_id, old_status, new_status, changed_by, reason)
-                 VALUES (?1, 'Golden', 'Archived', ?2, 'Automatically archived when new Golden version was promoted')",
+                 VALUES (?1, 'Golden', 'Archived', ?2, 'automatically archived when new Golden version was promoted')",
                 rusqlite::params![golden_id, user_id],
             )?;
         }

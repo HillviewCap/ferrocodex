@@ -43,7 +43,7 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
   const [configVersionsLoading, setConfigVersionsLoading] = useState(false);
   
   const assetFirmware = firmwareVersions[asset.id] || [];
-  const isEngineer = user?.role === 'Engineer' || user?.role === 'Administrator';
+  const isEngineer = user?.role === 'Engineer';
 
   useEffect(() => {
     loadFirmwareVersions(asset.id).catch(err => {

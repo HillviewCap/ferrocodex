@@ -804,6 +804,10 @@ mod tests {
         let repo = SqliteBranchRepository::new(&conn);
         repo.initialize_schema().unwrap();
         
+        // Initialize firmware schema for tests that use firmware functionality
+        let firmware_repo = crate::firmware::SqliteFirmwareRepository::new(&conn);
+        firmware_repo.initialize_schema().unwrap();
+        
         (temp_file, conn)
     }
 
