@@ -142,22 +142,26 @@ export const validateFirmwareFileSize = (size: number): string | null => {
   return null;
 };
 
-export const formatFirmwareFileSize = (bytes: number): string => {
-  if (!bytes || isNaN(bytes) || bytes < 0) return '0 Bytes';
-  if (bytes === 0) return '0 Bytes';
+export const formatFirmwareFileSize = (bytes: number | null | undefined): string => {
+  // Handle null, undefined, NaN, negative, or non-numeric values
+  if (bytes == null || isNaN(Number(bytes)) || Number(bytes) < 0) return '0 Bytes';
+  
+  const numBytes = Number(bytes);
+  if (numBytes === 0) return '0 Bytes';
   
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.floor(Math.log(numBytes) / Math.log(k));
   
   if (i < 0 || i >= sizes.length) return '0 Bytes';
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const formattedSize = parseFloat((numBytes / Math.pow(k, i)).toFixed(2));
+  return isNaN(formattedSize) ? '0 Bytes' : `${formattedSize} ${sizes[i]}`;
 };
 
 export const formatFirmwareHash = (hash: string | null | undefined): string => {
-  // Handle undefined/null hash values
-  if (!hash) {
+  // Handle undefined/null hash values or placeholder values from migration
+  if (!hash || hash === 'unknown' || hash.trim() === '') {
     return 'N/A';
   }
   
