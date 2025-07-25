@@ -31,7 +31,8 @@
       "Bash(git config:*)",
       "Bash(gh api:*)",
       "Bash(gh repo edit:*)",
-      "Bash(md-tree:*)"
+      "Bash(md-tree:*)",
+      "Bash(npm audit:*)"
     ],
     "deny": []
   }
