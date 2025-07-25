@@ -19,9 +19,9 @@ export interface FirmwareVersion {
 
 export interface FirmwareVersionInfo {
   id: number;
-  asset_id: number;
-  author_id: number;
-  author_username: string;
+  assetId: number;
+  authorId: number;
+  authorUsername: string;
   vendor: string | null;
   model: string | null;
   version: string;
@@ -30,10 +30,10 @@ export interface FirmwareVersionInfo {
   status_changed_at?: string;
   status_changed_by?: number;
   status_changed_by_username?: string;
-  file_path: string;
-  file_hash: string;
-  file_size: number;
-  created_at: string;
+  filePath: string;
+  fileHash: string;
+  fileSize: number;
+  createdAt: string;
 }
 
 export interface FirmwareStatusHistory {
@@ -48,12 +48,12 @@ export interface FirmwareStatusHistory {
 }
 
 export interface UploadFirmwareRequest {
-  asset_id: number;
+  assetId: number;
   vendor: string | null;
   model: string | null;
   version: string;
   notes: string | null;
-  file_path: string;
+  filePath: string;
 }
 
 export interface FirmwareUploadProgress {
@@ -142,22 +142,26 @@ export const validateFirmwareFileSize = (size: number): string | null => {
   return null;
 };
 
-export const formatFirmwareFileSize = (bytes: number): string => {
-  if (!bytes || isNaN(bytes) || bytes < 0) return '0 Bytes';
-  if (bytes === 0) return '0 Bytes';
+export const formatFirmwareFileSize = (bytes: number | null | undefined): string => {
+  // Handle null, undefined, NaN, negative, or non-numeric values
+  if (bytes == null || isNaN(Number(bytes)) || Number(bytes) < 0) return '0 Bytes';
+  
+  const numBytes = Number(bytes);
+  if (numBytes === 0) return '0 Bytes';
   
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.floor(Math.log(numBytes) / Math.log(k));
   
   if (i < 0 || i >= sizes.length) return '0 Bytes';
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const formattedSize = parseFloat((numBytes / Math.pow(k, i)).toFixed(2));
+  return isNaN(formattedSize) ? '0 Bytes' : `${formattedSize} ${sizes[i]}`;
 };
 
 export const formatFirmwareHash = (hash: string | null | undefined): string => {
-  // Handle undefined/null hash values
-  if (!hash) {
+  // Handle undefined/null hash values or placeholder values from migration
+  if (!hash || hash === 'unknown' || hash.trim() === '') {
     return 'N/A';
   }
   
@@ -167,8 +171,8 @@ export const formatFirmwareHash = (hash: string | null | undefined): string => {
 
 export const sortFirmwareVersions = (versions: FirmwareVersionInfo[]): FirmwareVersionInfo[] => {
   return [...versions].sort((a, b) => {
-    // Sort by created_at descending (latest first)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    // Sort by createdAt descending (latest first)
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 };
 
