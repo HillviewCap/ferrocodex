@@ -13,6 +13,7 @@ FerroCodex uses a relational data model centered around **Assets** (equipment), 
 **Purpose**: Represents system users with role-based access control.
 
 **Attributes**:
+
 - `id` (number): Unique identifier
 - `username` (string): Unique username (3-50 chars, alphanumeric + underscore/hyphen)
 - `password_hash` (string): Bcrypt hashed password
@@ -22,6 +23,7 @@ FerroCodex uses a relational data model centered around **Assets** (equipment), 
 - `last_login` (string?): Last successful login timestamp
 
 **TypeScript Interface**:
+
 ```typescript
 interface UserInfo {
   id: number;
@@ -36,6 +38,7 @@ type Role = 'Administrator' | 'Engineer';
 ```
 
 **Business Rules**:
+
 - Usernames must be unique
 - At least one active Administrator must exist
 - Passwords must be minimum 8 characters
@@ -46,6 +49,7 @@ type Role = 'Administrator' | 'Engineer';
 **Purpose**: Represents a piece of equipment or device being managed.
 
 **Attributes**:
+
 - `id` (number): Unique identifier
 - `name` (string): Unique asset name (1-100 chars)
 - `description` (string): Asset description (0-500 chars)
@@ -53,6 +57,7 @@ type Role = 'Administrator' | 'Engineer';
 - `created_at` (string): ISO 8601 timestamp
 
 **TypeScript Interface**:
+
 ```typescript
 interface Asset {
   id: number;
@@ -72,6 +77,7 @@ interface AssetInfo extends Asset {
 ```
 
 **Relationships**:
+
 - Has many Configuration Versions
 - Has many Branches
 - Has many Firmware Versions
@@ -82,6 +88,7 @@ interface AssetInfo extends Asset {
 **Purpose**: Represents a specific version of an asset's configuration file.
 
 **Attributes**:
+
 - `id` (number): Unique identifier
 - `asset_id` (number): Parent asset ID
 - `version_number` (number): Auto-incrementing version
@@ -97,6 +104,7 @@ interface AssetInfo extends Asset {
 - `firmware_version_id` (number?): Linked firmware ID
 
 **TypeScript Interface**:
+
 ```typescript
 interface ConfigurationVersion {
   id: number;
@@ -136,6 +144,7 @@ type ConfigurationStatus = 'Draft' | 'Silver' | 'Approved' | 'Golden' | 'Archive
 ```
 
 **Business Rules**:
+
 - Version numbers auto-increment per asset
 - Only one Golden version per asset
 - Status transitions follow defined workflow
@@ -146,6 +155,7 @@ type ConfigurationStatus = 'Draft' | 'Silver' | 'Approved' | 'Golden' | 'Archive
 **Purpose**: Enables isolated configuration development and testing.
 
 **Attributes**:
+
 - `id` (number): Unique identifier  
 - `name` (string): Branch name (1-100 chars)
 - `description` (string?): Optional description (0-500 chars)
@@ -157,6 +167,7 @@ type ConfigurationStatus = 'Draft' | 'Silver' | 'Approved' | 'Golden' | 'Archive
 - `is_active` (boolean): Branch status
 
 **TypeScript Interface**:
+
 ```typescript
 interface Branch {
   id: number;
@@ -180,6 +191,7 @@ interface BranchInfo extends Branch {
 ```
 
 **Relationships**:
+
 - Belongs to one Asset
 - May have a parent Branch (for sub-branching)
 - May start from a base Configuration Version
@@ -191,6 +203,7 @@ interface BranchInfo extends Branch {
 **Purpose**: Manages firmware files associated with assets for complete recovery scenarios.
 
 **Attributes**:
+
 - `id` (number): Unique identifier
 - `asset_id` (number?): Optional associated asset
 - `file_name` (string): Original filename
@@ -209,6 +222,7 @@ interface BranchInfo extends Branch {
 - `analysis_result` (object?): Analysis findings
 
 **TypeScript Interface**:
+
 ```typescript
 interface FirmwareVersion {
   id: number;
@@ -241,6 +255,7 @@ type AnalysisStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 ```
 
 **Business Rules**:
+
 - Large files stored encrypted on filesystem
 - Metadata stored in database
 - Automatic analysis queued on upload
@@ -251,6 +266,7 @@ type AnalysisStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 **Purpose**: Maintains complete audit trail of all system operations.
 
 **Attributes**:
+
 - `id` (number): Unique identifier
 - `user_id` (number?): User who performed action
 - `username` (string): Username at time of action
@@ -262,6 +278,7 @@ type AnalysisStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 - `timestamp` (string): ISO 8601 timestamp
 
 **TypeScript Interface**:
+
 ```typescript
 interface AuditLogEntry {
   id: number;
@@ -363,6 +380,7 @@ interface FirmwareExportInfo {
 ## Validation Rules
 
 ### Username Validation
+
 ```typescript
 const USERNAME_VALIDATION = {
   MIN_LENGTH: 3,
@@ -373,6 +391,7 @@ const USERNAME_VALIDATION = {
 ```
 
 ### Password Validation
+
 ```typescript
 const PASSWORD_VALIDATION = {
   MIN_LENGTH: 8,
@@ -381,6 +400,7 @@ const PASSWORD_VALIDATION = {
 ```
 
 ### Asset Name Validation
+
 ```typescript
 const ASSET_NAME_VALIDATION = {
   MIN_LENGTH: 1,
@@ -390,6 +410,7 @@ const ASSET_NAME_VALIDATION = {
 ```
 
 ### File Size Limits
+
 ```typescript
 const FILE_SIZE_LIMITS = {
   CONFIGURATION: 50 * 1024 * 1024,  // 50 MB
@@ -398,6 +419,7 @@ const FILE_SIZE_LIMITS = {
 ```
 
 ### Allowed File Extensions
+
 ```typescript
 const ALLOWED_EXTENSIONS = {
   CONFIGURATION: ['.conf', '.cfg', '.txt', '.xml', '.json', '.ini', '.yaml', '.yml'],
