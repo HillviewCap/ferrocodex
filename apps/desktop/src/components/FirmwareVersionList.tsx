@@ -68,9 +68,9 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   const isEngineer = user?.role === 'Engineer';
   const sortedVersions = sortFirmwareVersions(versions);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     try {
-      if (!dateString) return 'Unknown date';
+      if (!dateString || dateString.trim() === '') return 'Unknown date';
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
       return date.toLocaleDateString('en-US', {
@@ -85,9 +85,9 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     }
   };
 
-  const formatRelativeTime = (dateString: string) => {
+  const formatRelativeTime = (dateString: string | null | undefined) => {
     try {
-      if (!dateString) return 'Unknown date';
+      if (!dateString || dateString.trim() === '') return 'Unknown date';
       
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
@@ -403,7 +403,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 <Space size={4}>
                   <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {firmware.author_username || 'Unknown user'}
+                    {firmware.author_username && firmware.author_username.trim() !== '' ? firmware.author_username : 'Unknown user'}
                   </Text>
                 </Space>
               </Space>
