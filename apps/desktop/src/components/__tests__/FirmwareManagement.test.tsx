@@ -92,10 +92,21 @@ describe('FirmwareManagement', () => {
     expect(screen.getByRole('button', { name: /upload firmware/i })).toBeInTheDocument();
   });
 
-  it('hides upload button for non-engineer role', () => {
+  it('shows upload button for administrator role', () => {
     (useAuthStore as any).mockReturnValue({
       ...mockAuthStore,
       user: { ...mockAuthStore.user, role: 'Administrator' }
+    });
+    
+    render(<FirmwareManagement asset={mockAsset} />);
+    
+    expect(screen.getByRole('button', { name: /upload firmware/i })).toBeInTheDocument();
+  });
+
+  it('hides upload button for unauthorized roles', () => {
+    (useAuthStore as any).mockReturnValue({
+      ...mockAuthStore,
+      user: { ...mockAuthStore.user, role: 'Viewer' }
     });
     
     render(<FirmwareManagement asset={mockAsset} />);

@@ -293,10 +293,10 @@ describe('Firmware Management Integration Tests', () => {
   });
 
   describe('Permission-based Workflow', () => {
-    it('should not allow upload for non-engineer users', () => {
+    it('should not allow upload for unauthorized users', () => {
       (useAuthStore as any).mockReturnValue({
         ...mockAuthStore,
-        user: { ...mockAuthStore.user, role: 'Administrator' }
+        user: { ...mockAuthStore.user, role: 'Viewer' }
       });
       
       render(<FirmwareManagement asset={mockAsset} />);
@@ -305,7 +305,18 @@ describe('Firmware Management Integration Tests', () => {
       expect(screen.queryByRole('button', { name: /upload firmware/i })).not.toBeInTheDocument();
     });
 
-    it('should show different empty state message for non-engineers', () => {
+    it('should show different empty state message for unauthorized users', () => {
+      (useAuthStore as any).mockReturnValue({
+        ...mockAuthStore,
+        user: { ...mockAuthStore.user, role: 'Viewer' }
+      });
+      
+      render(<FirmwareManagement asset={mockAsset} />);
+      
+      expect(screen.getByText('No firmware files have been uploaded for this asset')).toBeInTheDocument();
+    });
+
+    it('should allow upload for Administrator users', () => {
       (useAuthStore as any).mockReturnValue({
         ...mockAuthStore,
         user: { ...mockAuthStore.user, role: 'Administrator' }
@@ -313,7 +324,8 @@ describe('Firmware Management Integration Tests', () => {
       
       render(<FirmwareManagement asset={mockAsset} />);
       
-      expect(screen.getByText('No firmware files have been uploaded for this asset')).toBeInTheDocument();
+      // Upload button should be visible for Administrator
+      expect(screen.getByRole('button', { name: /upload firmware/i })).toBeInTheDocument();
     });
   });
 });
