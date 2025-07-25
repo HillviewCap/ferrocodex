@@ -5,6 +5,13 @@ All notable changes to Ferrocodex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-01-25
+
+### Fixed
+- **Firmware Upload Permissions**: Fixed firmware upload access control to allow both Engineer and Administrator roles to upload firmware files
+- **Role-Based Access Control**: Updated permission model to ensure proper access for administrative users
+- **Test Coverage**: Updated test suites to reflect correct permission requirements
+
 ## [0.3.0] - 2025-01-25
 
 ### Added
