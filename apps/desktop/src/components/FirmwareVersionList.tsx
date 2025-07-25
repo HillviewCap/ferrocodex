@@ -279,7 +279,12 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     return (
       <>
       <Card 
-        style={{ marginBottom: '16px' }}
+        style={{ 
+          marginBottom: '16px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          border: '1px solid #f0f0f0'
+        }}
         loading={deletingId === firmware.id}
       >
         <Row gutter={[16, 8]}>
@@ -303,16 +308,16 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
               
               <Divider style={{ margin: '8px 0' }} />
               
-              <Space wrap size="small">
+              <Space wrap size="large">
                 <Tooltip title="File Size">
-                  <Space size={4}>
+                  <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <FileOutlined style={{ color: '#8c8c8c' }} />
                     <Text type="secondary">{formatFirmwareFileSize(firmware.fileSize)}</Text>
                   </Space>
                 </Tooltip>
                 
                 <Tooltip title="File Hash (SHA-256)">
-                  <Space size={4}>
+                  <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <BarcodeOutlined style={{ color: '#8c8c8c' }} />
                     <Text type="secondary" copyable={{ text: firmware.fileHash }}>
                       {formatFirmwareHash(firmware.fileHash)}
@@ -321,7 +326,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                 </Tooltip>
 
                 <Tooltip title="Encrypted Storage">
-                  <Space size={4}>
+                  <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <LockOutlined style={{ color: '#52c41a' }} />
                     <Text type="secondary" style={{ color: '#52c41a' }}>Encrypted</Text>
                   </Space>
@@ -393,7 +398,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
             }}>
               <Space direction="vertical" align="end" size="small">
                 <Tooltip title={formatDate(firmware.createdAt)}>
-                  <Space size={4}>
+                  <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       {formatRelativeTime(firmware.createdAt)}
@@ -418,7 +423,21 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
                   <Button 
                     type="text" 
                     icon={<MoreOutlined />}
-                    style={{ marginTop: '8px' }}
+                    style={{ 
+                      marginTop: '8px',
+                      color: '#595959',
+                      backgroundColor: '#fafafa',
+                      border: '1px solid #d9d9d9',
+                      borderRadius: '6px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f0f0f0';
+                      e.currentTarget.style.borderColor = '#bfbfbf';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#fafafa';
+                      e.currentTarget.style.borderColor = '#d9d9d9';
+                    }}
                   />
                 </Dropdown>
               )}
