@@ -5,6 +5,12 @@ use std::collections::HashMap;
 use crate::encryption::FileEncryption;
 use tracing::{info, debug};
 
+pub mod password_services;
+pub use password_services::{PasswordGenerator, PasswordStrengthAnalyzer, PasswordReuseChecker};
+
+#[cfg(test)]
+mod password_performance_tests;
+
 // Vault data structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityVault {
@@ -26,6 +32,11 @@ pub struct VaultSecret {
     pub encrypted_value: String,
     pub created_at: String,
     pub updated_at: String,
+    // Password management fields
+    pub strength_score: Option<i32>,
+    pub last_changed: Option<String>,
+    pub generation_method: Option<String>,
+    pub policy_version: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +48,40 @@ pub struct VaultVersion {
     pub timestamp: String,
     pub notes: String,
     pub changes_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordHistory {
+    pub id: i64,
+    pub secret_id: i64,
+    pub password_hash: String,
+    pub created_at: String,
+    pub retired_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordPolicy {
+    pub id: i64,
+    pub min_length: i32,
+    pub require_uppercase: bool,
+    pub require_lowercase: bool,
+    pub require_numbers: bool,
+    pub require_special: bool,
+    pub max_age_days: Option<i32>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordStrength {
+    pub score: i32,
+    pub entropy: f64,
+    pub has_uppercase: bool,
+    pub has_lowercase: bool,
+    pub has_numbers: bool,
+    pub has_special: bool,
+    pub length: usize,
+    pub feedback: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,6 +170,36 @@ pub struct VaultInfo {
     pub secret_count: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratePasswordRequest {
+    pub length: usize,
+    pub include_uppercase: bool,
+    pub include_lowercase: bool,
+    pub include_numbers: bool,
+    pub include_special: bool,
+    pub exclude_ambiguous: bool,
+}
+
+impl Default for GeneratePasswordRequest {
+    fn default() -> Self {
+        Self {
+            length: 16,
+            include_uppercase: true,
+            include_lowercase: true,
+            include_numbers: true,
+            include_special: true,
+            exclude_ambiguous: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCredentialPasswordRequest {
+    pub secret_id: i64,
+    pub new_password: String,
+    pub author_id: i64,
+}
+
 // Repository trait
 pub trait VaultRepository {
     fn create_vault(&self, request: CreateVaultRequest) -> Result<IdentityVault>;
@@ -144,6 +219,14 @@ pub trait VaultRepository {
     
     fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault>;
     fn initialize_schema(&self) -> Result<()>;
+    
+    // Password management methods
+    fn add_password_history(&self, secret_id: i64, password_hash: &str) -> Result<()>;
+    fn get_password_history(&self, secret_id: i64) -> Result<Vec<PasswordHistory>>;
+    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool>;
+    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()>;
+    fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
+    fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
 }
 
 // SQLite implementation
@@ -181,6 +264,20 @@ impl<'a> SqliteVaultRepository<'a> {
             encrypted_value: row.get("encrypted_value")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            strength_score: row.get("strength_score").ok(),
+            last_changed: row.get("last_changed").ok(),
+            generation_method: row.get("generation_method").ok(),
+            policy_version: row.get("policy_version").ok(),
+        })
+    }
+
+    fn row_to_password_history(row: &Row) -> rusqlite::Result<PasswordHistory> {
+        Ok(PasswordHistory {
+            id: row.get("id")?,
+            secret_id: row.get("secret_id")?,
+            password_hash: row.get("password_hash")?,
+            created_at: row.get("created_at")?,
+            retired_at: row.get("retired_at").ok(),
         })
     }
 
@@ -230,6 +327,11 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 encrypted_value TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                -- Password management fields
+                strength_score INTEGER,
+                last_changed DATETIME,
+                generation_method TEXT,
+                policy_version INTEGER,
                 FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
                 UNIQUE(vault_id, label)
             );
@@ -247,6 +349,29 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 FOREIGN KEY (author) REFERENCES users(id) ON DELETE RESTRICT
             );
 
+            -- Password history table for tracking password changes and preventing reuse
+            CREATE TABLE IF NOT EXISTS password_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                secret_id INTEGER NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                retired_at DATETIME,
+                FOREIGN KEY (secret_id) REFERENCES vault_secrets(id) ON DELETE CASCADE
+            );
+
+            -- Password policy configuration table
+            CREATE TABLE IF NOT EXISTS password_policies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                min_length INTEGER NOT NULL DEFAULT 12,
+                require_uppercase BOOLEAN NOT NULL DEFAULT 1,
+                require_lowercase BOOLEAN NOT NULL DEFAULT 1,
+                require_numbers BOOLEAN NOT NULL DEFAULT 1,
+                require_special BOOLEAN NOT NULL DEFAULT 1,
+                max_age_days INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
             -- Indexes for performance
             CREATE INDEX IF NOT EXISTS idx_vault_entries_asset_id ON vault_entries(asset_id);
             CREATE INDEX IF NOT EXISTS idx_vault_entries_created_by ON vault_entries(created_by);
@@ -255,10 +380,19 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             CREATE INDEX IF NOT EXISTS idx_vault_secrets_vault_id ON vault_secrets(vault_id);
             CREATE INDEX IF NOT EXISTS idx_vault_secrets_secret_type ON vault_secrets(secret_type);
             CREATE INDEX IF NOT EXISTS idx_vault_secrets_created_at ON vault_secrets(created_at);
+            CREATE INDEX IF NOT EXISTS idx_vault_secrets_strength_score ON vault_secrets(strength_score);
             
             CREATE INDEX IF NOT EXISTS idx_vault_versions_vault_id ON vault_versions(vault_id);
             CREATE INDEX IF NOT EXISTS idx_vault_versions_timestamp ON vault_versions(timestamp);
             CREATE INDEX IF NOT EXISTS idx_vault_versions_author ON vault_versions(author);
+            
+            CREATE INDEX IF NOT EXISTS idx_password_history_secret_id ON password_history(secret_id);
+            CREATE INDEX IF NOT EXISTS idx_password_history_password_hash ON password_history(password_hash);
+            CREATE INDEX IF NOT EXISTS idx_password_history_created_at ON password_history(created_at);
+
+            -- Insert default password policy if none exists
+            INSERT OR IGNORE INTO password_policies (id, min_length, require_uppercase, require_lowercase, require_numbers, require_special)
+            VALUES (1, 12, 1, 1, 1, 1);
             "#,
         )?;
 
@@ -591,6 +725,147 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         info!("Imported vault '{}' with {} secrets", imported_vault.name, vault_info.secret_count);
         Ok(imported_vault)
+    }
+
+    // Password management method implementations
+    fn add_password_history(&self, secret_id: i64, password_hash: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO password_history (secret_id, password_hash) VALUES (?1, ?2)",
+            (secret_id, password_hash),
+        )?;
+
+        debug!("Added password history entry for secret {}", secret_id);
+        Ok(())
+    }
+
+    fn get_password_history(&self, secret_id: i64) -> Result<Vec<PasswordHistory>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, secret_id, password_hash, created_at, retired_at 
+             FROM password_history WHERE secret_id = ?1 ORDER BY created_at DESC"
+        )?;
+
+        let history_iter = stmt.query_map([secret_id], Self::row_to_password_history)?;
+        let mut history = Vec::new();
+
+        for entry in history_iter {
+            history.push(entry?);
+        }
+
+        Ok(history)
+    }
+
+    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool> {
+        let query = if let Some(_exclude_id) = exclude_secret_id {
+            "SELECT COUNT(*) FROM password_history ph 
+             JOIN vault_secrets vs ON ph.secret_id = vs.id 
+             WHERE ph.password_hash = ?1 AND vs.id != ?2 AND ph.retired_at IS NULL"
+        } else {
+            "SELECT COUNT(*) FROM password_history ph 
+             JOIN vault_secrets vs ON ph.secret_id = vs.id 
+             WHERE ph.password_hash = ?1 AND ph.retired_at IS NULL"
+        };
+
+        let mut stmt = self.conn.prepare(query)?;
+        let count: i64 = if let Some(exclude_id) = exclude_secret_id {
+            stmt.query_row((password_hash, exclude_id), |row| row.get(0))?
+        } else {
+            stmt.query_row([password_hash], |row| row.get(0))?
+        };
+
+        Ok(count > 0)
+    }
+
+    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()> {
+        // First, retire the old password in history if it exists
+        self.conn.execute(
+            "UPDATE password_history SET retired_at = CURRENT_TIMESTAMP 
+             WHERE secret_id = ?1 AND retired_at IS NULL",
+            [request.secret_id],
+        )?;
+
+        // Add new password to history
+        self.add_password_history(request.secret_id, password_hash)?;
+
+        // Encrypt the new password value
+        let encryption = FileEncryption::new(&format!("vault_{}_{}", request.secret_id, request.author_id));
+        let encrypted_value = encryption.encrypt(request.new_password.as_bytes())?;
+        use base64::{Engine as _, engine::general_purpose};
+        let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_value);
+
+        // Update the secret with new password and metadata
+        self.conn.execute(
+            "UPDATE vault_secrets 
+             SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP, 
+                 strength_score = ?2, last_changed = CURRENT_TIMESTAMP,
+                 generation_method = 'manual', policy_version = 1
+             WHERE id = ?3",
+            (&encrypted_value_base64, strength_score, request.secret_id),
+        )?;
+
+        // Add version history
+        let mut changes = HashMap::new();
+        changes.insert("password_updated".to_string(), "true".to_string());
+        changes.insert("strength_score".to_string(), strength_score.to_string());
+
+        // Get the vault_id for version history
+        let vault_id: i64 = self.conn.query_row(
+            "SELECT vault_id FROM vault_secrets WHERE id = ?1",
+            [request.secret_id],
+            |row| row.get(0),
+        )?;
+
+        self.add_version_history(
+            vault_id,
+            ChangeType::SecretUpdated,
+            request.author_id,
+            "Password updated with strength validation",
+            changes,
+        )?;
+
+        // Clean up old password history (keep last 5)
+        self.cleanup_password_history(request.secret_id, 5)?;
+
+        info!("Updated password for secret {} with strength score {}", request.secret_id, strength_score);
+        Ok(())
+    }
+
+    fn get_default_password_policy(&self) -> Result<PasswordPolicy> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, min_length, require_uppercase, require_lowercase, require_numbers, require_special, max_age_days, created_at, updated_at 
+             FROM password_policies WHERE id = 1"
+        )?;
+
+        let policy = stmt.query_row([], |row| {
+            Ok(PasswordPolicy {
+                id: row.get("id")?,
+                min_length: row.get("min_length")?,
+                require_uppercase: row.get("require_uppercase")?,
+                require_lowercase: row.get("require_lowercase")?,
+                require_numbers: row.get("require_numbers")?,
+                require_special: row.get("require_special")?,
+                max_age_days: row.get("max_age_days").ok(),
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
+            })
+        })?;
+
+        Ok(policy)
+    }
+
+    fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM password_history 
+             WHERE secret_id = ?1 AND id NOT IN (
+                 SELECT id FROM password_history 
+                 WHERE secret_id = ?1 
+                 ORDER BY created_at DESC 
+                 LIMIT ?2
+             )",
+            (secret_id, keep_count),
+        )?;
+
+        debug!("Cleaned up password history for secret {}, keeping {} entries", secret_id, keep_count);
+        Ok(())
     }
 }
 

@@ -30,7 +30,10 @@ import {
   SecurityScanOutlined,
   FileTextOutlined,
   HistoryOutlined,
-  CopyOutlined
+  CopyOutlined,
+  KeyOutlined,
+  ReloadOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo } from '../types/assets';
@@ -42,9 +45,15 @@ import {
   CreateVaultRequest,
   AddSecretRequest,
   secretTypeDisplayNames,
-  changeTypeDisplayNames
+  changeTypeDisplayNames,
+  UpdateCredentialPasswordRequest,
+  getStrengthColor,
+  getStrengthLabel
 } from '../types/vault';
 import useAuthStore from '../store/auth';
+import PasswordGenerator from './PasswordGenerator';
+import PasswordInput from './PasswordInput';
+import PasswordHistory from './PasswordHistory';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -66,6 +75,14 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const [visibleSecrets, setVisibleSecrets] = useState<Set<number>>(new Set());
   const [decryptedSecrets, setDecryptedSecrets] = useState<Map<number, string>>(new Map());
   const [activeTab, setActiveTab] = useState('secrets');
+  
+  // Password management state
+  const [passwordGeneratorVisible, setPasswordGeneratorVisible] = useState(false);
+  const [passwordHistoryVisible, setPasswordHistoryVisible] = useState(false);
+  const [selectedSecret, setSelectedSecret] = useState<VaultSecret | null>(null);
+  const [updatePasswordVisible, setUpdatePasswordVisible] = useState(false);
+  const [updatePasswordForm] = Form.useForm();
+  const [addSecretType, setAddSecretType] = useState<SecretType | null>(null);
 
   const [createVaultForm] = Form.useForm();
   const [addSecretForm] = Form.useForm();
@@ -158,6 +175,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
       message.success('Secret added successfully');
       setAddSecretVisible(false);
       addSecretForm.resetFields();
+      setAddSecretType(null);
       fetchVaultInfo();
     } catch (err) {
       console.error('Failed to add secret:', err);
@@ -196,6 +214,55 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     if (decryptedValue) {
       navigator.clipboard.writeText(decryptedValue);
       message.success('Secret copied to clipboard');
+    }
+  };
+
+  const handleUpdatePassword = (secret: VaultSecret) => {
+    setSelectedSecret(secret);
+    updatePasswordForm.resetFields();
+    setUpdatePasswordVisible(true);
+  };
+
+  const handlePasswordUpdate = async (values: any) => {
+    if (!token || !user || !selectedSecret) return;
+
+    try {
+      const request: UpdateCredentialPasswordRequest = {
+        secret_id: selectedSecret.id,
+        new_password: values.password,
+        author_id: user.id,
+      };
+
+      await invoke('update_credential_password', {
+        token,
+        request
+      });
+
+      message.success('Password updated successfully');
+      setUpdatePasswordVisible(false);
+      updatePasswordForm.resetFields();
+      setSelectedSecret(null);
+      fetchVaultInfo();
+    } catch (err) {
+      console.error('Failed to update password:', err);
+      message.error(typeof err === 'string' ? err : 'Failed to update password');
+    }
+  };
+
+  const handleViewPasswordHistory = (secret: VaultSecret) => {
+    setSelectedSecret(secret);
+    setPasswordHistoryVisible(true);
+  };
+
+  const handleGeneratePasswordForSecret = (secret: VaultSecret) => {
+    setSelectedSecret(secret);
+    setPasswordGeneratorVisible(true);
+  };
+
+  const handlePasswordGenerated = (password: string) => {
+    if (selectedSecret) {
+      updatePasswordForm.setFieldsValue({ password });
+      setUpdatePasswordVisible(true);
     }
   };
 
@@ -420,13 +487,42 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                                 />
                               </Tooltip>
                             ),
-                            <Tooltip title="Edit secret">
-                              <Button
-                                type="text"
-                                icon={<EditOutlined />}
-                                disabled
-                              />
-                            </Tooltip>,
+                            secret.secret_type === 'Password' && (
+                              <Tooltip title="Update password">
+                                <Button
+                                  type="text"
+                                  icon={<KeyOutlined />}
+                                  onClick={() => handleUpdatePassword(secret)}
+                                />
+                              </Tooltip>
+                            ),
+                            secret.secret_type === 'Password' && (
+                              <Tooltip title="Generate new password">
+                                <Button
+                                  type="text"
+                                  icon={<ReloadOutlined />}
+                                  onClick={() => handleGeneratePasswordForSecret(secret)}
+                                />
+                              </Tooltip>
+                            ),
+                            secret.secret_type === 'Password' && (
+                              <Tooltip title="View password history">
+                                <Button
+                                  type="text"
+                                  icon={<HistoryOutlined />}
+                                  onClick={() => handleViewPasswordHistory(secret)}
+                                />
+                              </Tooltip>
+                            ),
+                            secret.secret_type !== 'Password' && (
+                              <Tooltip title="Edit secret">
+                                <Button
+                                  type="text"
+                                  icon={<EditOutlined />}
+                                  disabled
+                                />
+                              </Tooltip>
+                            ),
                             <Popconfirm
                               title="Delete secret"
                               description="Are you sure you want to delete this secret? This action cannot be undone."
@@ -450,6 +546,16 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                               <Space>
                                 <Text strong>{secret.label}</Text>
                                 <Tag color="geekblue">{secretTypeDisplayNames[secret.secret_type]}</Tag>
+                                {secret.secret_type === 'Password' && secret.strength_score && (
+                                  <Tag color={getStrengthColor(secret.strength_score)}>
+                                    {getStrengthLabel(secret.strength_score)} ({secret.strength_score}/100)
+                                  </Tag>
+                                )}
+                                {secret.generation_method === 'generated' && (
+                                  <Tag color="cyan" icon={<KeyOutlined />}>
+                                    Generated
+                                  </Tag>
+                                )}
                               </Space>
                             }
                             description={
@@ -463,9 +569,28 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                                     <Text type="secondary">••••••••••••••••</Text>
                                   )}
                                 </div>
-                                <Text type="secondary" style={{ fontSize: '12px' }}>
-                                  Added: {formatDate(secret.created_at)}
-                                </Text>
+                                
+                                <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
+                                  <Text type="secondary">
+                                    Added: {formatDate(secret.created_at)}
+                                  </Text>
+                                  {secret.secret_type === 'Password' && secret.last_changed && (
+                                    <Text type="secondary">
+                                      Last Changed: {formatDate(secret.last_changed)}
+                                    </Text>
+                                  )}
+                                </div>
+
+                                {secret.secret_type === 'Password' && secret.strength_score && secret.strength_score < 60 && (
+                                  <div style={{ marginTop: '4px' }}>
+                                    <Space size="small">
+                                      <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+                                      <Text type="warning" style={{ fontSize: '12px' }}>
+                                        Consider updating this password for better security
+                                      </Text>
+                                    </Space>
+                                  </div>
+                                )}
                               </div>
                             }
                           />
@@ -550,6 +675,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
         onCancel={() => {
           setAddSecretVisible(false);
           addSecretForm.resetFields();
+          setAddSecretType(null);
         }}
         footer={null}
         width={600}
@@ -564,7 +690,10 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
             label="Secret Type"
             rules={[{ required: true, message: 'Please select a secret type' }]}
           >
-            <Select placeholder="Select secret type">
+            <Select 
+              placeholder="Select secret type"
+              onChange={(value) => setAddSecretType(value as SecretType)}
+            >
               <Select.Option value="Password">
                 <Space>
                   <LockOutlined />
@@ -612,10 +741,20 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
               { min: 1, message: 'Secret value cannot be empty' }
             ]}
           >
-            <TextArea
-              rows={4}
-              placeholder="Enter the secret value (will be encrypted when stored)"
-            />
+            {addSecretType === 'Password' ? (
+              <PasswordInput
+                placeholder="Enter password (use generator for strong passwords)"
+                showStrength={true}
+                showGenerator={true}
+                checkReuse={true}
+                minScore={40}
+              />
+            ) : (
+              <TextArea
+                rows={4}
+                placeholder="Enter the secret value (will be encrypted when stored)"
+              />
+            )}
           </Form.Item>
 
           <Alert
@@ -630,6 +769,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
               <Button onClick={() => {
                 setAddSecretVisible(false);
                 addSecretForm.resetFields();
+                setAddSecretType(null);
               }}>
                 Cancel
               </Button>
@@ -640,6 +780,94 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           </div>
         </Form>
       </Modal>
+
+      {/* Update Password Modal */}
+      <Modal
+        title={
+          <Space>
+            <KeyOutlined />
+            Update Password - {selectedSecret?.label}
+          </Space>
+        }
+        open={updatePasswordVisible}
+        onCancel={() => {
+          setUpdatePasswordVisible(false);
+          updatePasswordForm.resetFields();
+          setSelectedSecret(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={updatePasswordForm}
+          layout="vertical"
+          onFinish={handlePasswordUpdate}
+        >
+          <Form.Item
+            name="password"
+            label="New Password"
+            rules={[
+              { required: true, message: 'Please enter the new password' },
+              { min: 1, message: 'Password cannot be empty' }
+            ]}
+          >
+            <PasswordInput
+              placeholder="Enter new password"
+              showStrength={true}
+              showGenerator={true}
+              checkReuse={true}
+              secretId={selectedSecret?.id}
+              minScore={60}
+            />
+          </Form.Item>
+
+          <Alert
+            message="Password Update Security"
+            description="The new password will be validated for strength and checked against previously used passwords to prevent reuse. The old password will be retired and moved to history."
+            type="info"
+            style={{ marginBottom: '16px' }}
+          />
+
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setUpdatePasswordVisible(false);
+                updatePasswordForm.resetFields();
+                setSelectedSecret(null);
+              }}>
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit">
+                Update Password
+              </Button>
+            </Space>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* Password Generator Modal */}
+      <PasswordGenerator
+        visible={passwordGeneratorVisible}
+        onCancel={() => {
+          setPasswordGeneratorVisible(false);
+          setSelectedSecret(null);
+        }}
+        onGenerated={handlePasswordGenerated}
+        title={selectedSecret ? `Generate Password for ${selectedSecret.label}` : 'Generate Password'}
+      />
+
+      {/* Password History Modal */}
+      {selectedSecret && (
+        <PasswordHistory
+          visible={passwordHistoryVisible}
+          onCancel={() => {
+            setPasswordHistoryVisible(false);
+            setSelectedSecret(null);
+          }}
+          secretId={selectedSecret.id}
+          secretLabel={selectedSecret.label}
+        />
+      )}
     </div>
   );
 };
