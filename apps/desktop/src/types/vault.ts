@@ -137,3 +137,111 @@ export const defaultPasswordRequest: GeneratePasswordRequest = {
   include_special: true,
   exclude_ambiguous: true,
 };
+
+// Standalone credential types for Story 4.3
+export interface StandaloneCredential {
+  id: number;
+  name: string;
+  description: string;
+  credential_type: SecretType;
+  category_id?: number;
+  encrypted_data: string;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+  last_accessed?: string;
+}
+
+export interface CredentialCategory {
+  id: number;
+  name: string;
+  description?: string;
+  parent_category_id?: number;
+  color_code?: string;
+  icon?: string;
+  created_at: string;
+}
+
+export interface StandaloneCredentialHistory {
+  id: number;
+  credential_id: number;
+  change_type: StandaloneChangeType;
+  author: number;
+  timestamp: string;
+  notes?: string;
+  changes_json?: string;
+}
+
+export type StandaloneChangeType = 'Created' | 'Updated' | 'Accessed' | 'Deleted';
+
+export interface StandaloneCredentialInfo {
+  credential: StandaloneCredential;
+  category?: CredentialCategory;
+  tags: string[];
+}
+
+export interface CreateStandaloneCredentialRequest {
+  name: string;
+  description: string;
+  credential_type: SecretType;
+  category_id?: number;
+  value: string;
+  tags?: string[];
+  created_by: number;
+}
+
+export interface UpdateStandaloneCredentialRequest {
+  id: number;
+  name?: string;
+  description?: string;
+  category_id?: number;
+  value?: string;
+  author_id: number;
+}
+
+export interface SearchCredentialsRequest {
+  query?: string;
+  credential_type?: SecretType;
+  category_id?: number;
+  tags?: string[];
+  created_after?: string;
+  created_before?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SearchCredentialsResponse {
+  credentials: StandaloneCredentialInfo[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+  description?: string;
+  parent_category_id?: number;
+  color_code?: string;
+  icon?: string;
+}
+
+export interface CategoryWithChildren {
+  category: CredentialCategory;
+  children: CategoryWithChildren[];
+  credential_count: number;
+}
+
+export const standaloneChangeTypeDisplayNames: Record<StandaloneChangeType, string> = {
+  Created: 'Created',
+  Updated: 'Updated',
+  Accessed: 'Accessed',
+  Deleted: 'Deleted',
+};
+
+export const defaultCategoryIcons: Record<string, string> = {
+  'Jump Hosts': 'server',
+  'Databases': 'database',
+  'Network Equipment': 'network',
+  'Applications': 'apps',
+  'Cloud Services': 'cloud',
+};

@@ -4,12 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::encryption::FileEncryption;
 use tracing::{info, debug};
+use chrono;
 
 pub mod password_services;
 pub use password_services::{PasswordGenerator, PasswordStrengthAnalyzer, PasswordReuseChecker};
 
 #[cfg(test)]
 mod password_performance_tests;
+
+#[cfg(test)]
+mod standalone_tests;
 
 // Vault data structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,6 +204,145 @@ pub struct UpdateCredentialPasswordRequest {
     pub author_id: i64,
 }
 
+// Standalone credential structures for Story 4.3
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandaloneCredential {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub credential_type: SecretType,
+    pub category_id: Option<i64>,
+    pub encrypted_data: String,
+    pub created_by: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_accessed: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialCategory {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_category_id: Option<i64>,
+    pub color_code: Option<String>,
+    pub icon: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialTag {
+    pub id: i64,
+    pub standalone_credential_id: i64,
+    pub tag_name: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandaloneCredentialHistory {
+    pub id: i64,
+    pub credential_id: i64,
+    pub change_type: StandaloneChangeType,
+    pub author: i64,
+    pub timestamp: String,
+    pub notes: Option<String>,
+    pub changes_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StandaloneChangeType {
+    Created,
+    Updated,
+    Accessed,
+    Deleted,
+}
+
+impl StandaloneChangeType {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "created" => Ok(StandaloneChangeType::Created),
+            "updated" => Ok(StandaloneChangeType::Updated),
+            "accessed" => Ok(StandaloneChangeType::Accessed),
+            "deleted" => Ok(StandaloneChangeType::Deleted),
+            _ => Err(anyhow::anyhow!("Invalid standalone change type: {}", s)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            StandaloneChangeType::Created => "created".to_string(),
+            StandaloneChangeType::Updated => "updated".to_string(),
+            StandaloneChangeType::Accessed => "accessed".to_string(),
+            StandaloneChangeType::Deleted => "deleted".to_string(),
+        }
+    }
+}
+
+// Request/Response types for standalone credentials
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateStandaloneCredentialRequest {
+    pub name: String,
+    pub description: String,
+    pub credential_type: SecretType,
+    pub category_id: Option<i64>,
+    pub value: String,
+    pub tags: Option<Vec<String>>,
+    pub created_by: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateStandaloneCredentialRequest {
+    pub id: i64,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub category_id: Option<i64>,
+    pub value: Option<String>,
+    pub author_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandaloneCredentialInfo {
+    pub credential: StandaloneCredential,
+    pub category: Option<CredentialCategory>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchCredentialsRequest {
+    pub query: Option<String>,
+    pub credential_type: Option<SecretType>,
+    pub category_id: Option<i64>,
+    pub tags: Option<Vec<String>>,
+    pub created_after: Option<String>,
+    pub created_before: Option<String>,
+    pub limit: Option<i32>,
+    pub offset: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchCredentialsResponse {
+    pub credentials: Vec<StandaloneCredentialInfo>,
+    pub total_count: i64,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCategoryRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_category_id: Option<i64>,
+    pub color_code: Option<String>,
+    pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryWithChildren {
+    pub category: CredentialCategory,
+    pub children: Vec<CategoryWithChildren>,
+    pub credential_count: i64,
+}
+
 // Repository trait
 pub trait VaultRepository {
     fn create_vault(&self, request: CreateVaultRequest) -> Result<IdentityVault>;
@@ -227,6 +370,27 @@ pub trait VaultRepository {
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()>;
     fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
+    
+    // Standalone credential methods for Story 4.3
+    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest) -> Result<StandaloneCredential>;
+    fn get_standalone_credential(&self, credential_id: i64) -> Result<Option<StandaloneCredentialInfo>>;
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest) -> Result<()>;
+    fn delete_standalone_credential(&self, credential_id: i64, author_id: i64) -> Result<()>;
+    fn search_standalone_credentials(&self, request: SearchCredentialsRequest) -> Result<SearchCredentialsResponse>;
+    fn get_standalone_credential_history(&self, credential_id: i64) -> Result<Vec<StandaloneCredentialHistory>>;
+    fn update_credential_last_accessed(&self, credential_id: i64) -> Result<()>;
+    
+    // Category management methods
+    fn create_credential_category(&self, request: CreateCategoryRequest) -> Result<CredentialCategory>;
+    fn get_credential_categories(&self) -> Result<Vec<CategoryWithChildren>>;
+    fn update_credential_category(&self, category_id: i64, request: CreateCategoryRequest) -> Result<()>;
+    fn delete_credential_category(&self, category_id: i64) -> Result<()>;
+    fn get_category_by_id(&self, category_id: i64) -> Result<Option<CredentialCategory>>;
+    
+    // Tag management methods
+    fn add_credential_tags(&self, credential_id: i64, tags: &[String]) -> Result<()>;
+    fn remove_credential_tag(&self, credential_id: i64, tag_name: &str) -> Result<()>;
+    fn get_all_tags(&self) -> Result<Vec<String>>;
 }
 
 // SQLite implementation
@@ -294,6 +458,53 @@ impl<'a> SqliteVaultRepository<'a> {
             timestamp: row.get("timestamp")?,
             notes: row.get("notes")?,
             changes_json: row.get("changes_json")?,
+        })
+    }
+
+    fn row_to_standalone_credential(row: &Row) -> rusqlite::Result<StandaloneCredential> {
+        let credential_type_str: String = row.get("credential_type")?;
+        let credential_type = SecretType::from_str(&credential_type_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "credential_type".to_string(), rusqlite::types::Type::Text))?;
+
+        Ok(StandaloneCredential {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
+            credential_type,
+            category_id: row.get("category_id").ok(),
+            encrypted_data: row.get("encrypted_data")?,
+            created_by: row.get("created_by")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            last_accessed: row.get("last_accessed").ok(),
+        })
+    }
+
+    fn row_to_category(row: &Row) -> rusqlite::Result<CredentialCategory> {
+        Ok(CredentialCategory {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            description: row.get("description").ok(),
+            parent_category_id: row.get("parent_category_id").ok(),
+            color_code: row.get("color_code").ok(),
+            icon: row.get("icon").ok(),
+            created_at: row.get("created_at")?,
+        })
+    }
+
+    fn row_to_standalone_history(row: &Row) -> rusqlite::Result<StandaloneCredentialHistory> {
+        let change_type_str: String = row.get("change_type")?;
+        let change_type = StandaloneChangeType::from_str(&change_type_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "change_type".to_string(), rusqlite::types::Type::Text))?;
+
+        Ok(StandaloneCredentialHistory {
+            id: row.get("id")?,
+            credential_id: row.get("credential_id")?,
+            change_type,
+            author: row.get("author")?,
+            timestamp: row.get("timestamp")?,
+            notes: row.get("notes").ok(),
+            changes_json: row.get("changes_json").ok(),
         })
     }
 }
@@ -393,6 +604,85 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             -- Insert default password policy if none exists
             INSERT OR IGNORE INTO password_policies (id, min_length, require_uppercase, require_lowercase, require_numbers, require_special)
             VALUES (1, 12, 1, 1, 1, 1);
+
+            -- Standalone credentials tables for Story 4.3
+            CREATE TABLE IF NOT EXISTS standalone_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                credential_type TEXT NOT NULL CHECK(credential_type IN ('password', 'ip_address', 'vpn_key', 'license_file')),
+                category_id INTEGER,
+                encrypted_data TEXT NOT NULL,
+                created_by INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_accessed DATETIME,
+                FOREIGN KEY (category_id) REFERENCES credential_categories(id) ON DELETE SET NULL,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            -- Credential categories table for hierarchical organization
+            CREATE TABLE IF NOT EXISTS credential_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                parent_category_id INTEGER,
+                color_code TEXT,
+                icon TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_category_id) REFERENCES credential_categories(id) ON DELETE CASCADE,
+                UNIQUE(name, parent_category_id)
+            );
+
+            -- Credential tags for flexible organization
+            CREATE TABLE IF NOT EXISTS credential_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                standalone_credential_id INTEGER NOT NULL,
+                tag_name TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (standalone_credential_id) REFERENCES standalone_credentials(id) ON DELETE CASCADE,
+                UNIQUE(standalone_credential_id, tag_name)
+            );
+
+            -- Standalone credential history table
+            CREATE TABLE IF NOT EXISTS standalone_credential_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                credential_id INTEGER NOT NULL,
+                change_type TEXT NOT NULL CHECK(change_type IN ('created', 'updated', 'accessed', 'deleted')),
+                author INTEGER NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT,
+                changes_json TEXT,
+                FOREIGN KEY (credential_id) REFERENCES standalone_credentials(id) ON DELETE CASCADE,
+                FOREIGN KEY (author) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            -- Indexes for standalone credentials performance
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_name ON standalone_credentials(name);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_category_id ON standalone_credentials(category_id);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_credential_type ON standalone_credentials(credential_type);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_created_at ON standalone_credentials(created_at);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_last_accessed ON standalone_credentials(last_accessed);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credentials_created_by ON standalone_credentials(created_by);
+            
+            CREATE INDEX IF NOT EXISTS idx_credential_categories_parent_id ON credential_categories(parent_category_id);
+            CREATE INDEX IF NOT EXISTS idx_credential_categories_name ON credential_categories(name);
+            
+            CREATE INDEX IF NOT EXISTS idx_credential_tags_credential_id ON credential_tags(standalone_credential_id);
+            CREATE INDEX IF NOT EXISTS idx_credential_tags_tag_name ON credential_tags(tag_name);
+            
+            CREATE INDEX IF NOT EXISTS idx_standalone_credential_history_credential_id ON standalone_credential_history(credential_id);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credential_history_timestamp ON standalone_credential_history(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_standalone_credential_history_author ON standalone_credential_history(author);
+
+            -- Insert predefined credential categories
+            INSERT OR IGNORE INTO credential_categories (id, name, description, parent_category_id, color_code, icon)
+            VALUES 
+                (1, 'Jump Hosts', 'SSH jump servers and bastion hosts', NULL, '#4CAF50', 'server'),
+                (2, 'Databases', 'Database server credentials', NULL, '#2196F3', 'database'),
+                (3, 'Network Equipment', 'Switches, routers, and firewalls', NULL, '#FF9800', 'network'),
+                (4, 'Applications', 'Application and service credentials', NULL, '#9C27B0', 'apps'),
+                (5, 'Cloud Services', 'Cloud platform credentials', NULL, '#00BCD4', 'cloud');
             "#,
         )?;
 
@@ -866,6 +1156,626 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         debug!("Cleaned up password history for secret {}, keeping {} entries", secret_id, keep_count);
         Ok(())
+    }
+
+    // Standalone credential implementations for Story 4.3
+    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest) -> Result<StandaloneCredential> {
+        // Validate input
+        if request.name.trim().is_empty() {
+            return Err(anyhow::anyhow!("Credential name cannot be empty"));
+        }
+        if request.name.len() < 2 {
+            return Err(anyhow::anyhow!("Credential name must be at least 2 characters long"));
+        }
+        if request.name.len() > 100 {
+            return Err(anyhow::anyhow!("Credential name cannot exceed 100 characters"));
+        }
+        if request.value.trim().is_empty() {
+            return Err(anyhow::anyhow!("Credential value cannot be empty"));
+        }
+
+        // Encrypt the credential value
+        let encryption = FileEncryption::new(&format!("standalone_{}_{}", request.created_by, chrono::Utc::now().timestamp()));
+        let encrypted_data = encryption.encrypt(request.value.as_bytes())?;
+        use base64::{Engine as _, engine::general_purpose};
+        let encrypted_data_base64 = general_purpose::STANDARD.encode(encrypted_data);
+
+        debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) 
+             RETURNING id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed"
+        )?;
+
+        let credential = stmt.query_row(
+            (&request.name, &request.description, &request.credential_type.to_string(), 
+             &request.category_id, &encrypted_data_base64, &request.created_by),
+            Self::row_to_standalone_credential,
+        )?;
+
+        // Add tags if provided
+        if let Some(tags) = &request.tags {
+            self.add_credential_tags(credential.id, tags)?;
+        }
+
+        // Add history entry
+        let mut changes = HashMap::new();
+        changes.insert("name".to_string(), request.name.clone());
+        changes.insert("credential_type".to_string(), request.credential_type.to_string());
+        if let Some(category_id) = request.category_id {
+            changes.insert("category_id".to_string(), category_id.to_string());
+        }
+        
+        self.add_standalone_history(
+            credential.id,
+            StandaloneChangeType::Created,
+            request.created_by,
+            &format!("Created standalone credential '{}'", request.name),
+            changes,
+        )?;
+
+        info!("Created standalone credential '{}' with ID {}", credential.name, credential.id);
+        Ok(credential)
+    }
+
+    fn get_standalone_credential(&self, credential_id: i64) -> Result<Option<StandaloneCredentialInfo>> {
+        // Get the credential
+        let mut cred_stmt = self.conn.prepare(
+            "SELECT id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed 
+             FROM standalone_credentials WHERE id = ?1"
+        )?;
+
+        let cred_result = cred_stmt.query_row([credential_id], Self::row_to_standalone_credential);
+        
+        let credential = match cred_result {
+            Ok(cred) => cred,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+
+        // Get the category if it exists
+        let category = if let Some(cat_id) = credential.category_id {
+            self.get_category_by_id(cat_id)?
+        } else {
+            None
+        };
+
+        // Get tags
+        let tags = self.get_credential_tags(credential_id)?;
+
+        // Update last accessed
+        self.update_credential_last_accessed(credential_id)?;
+
+        Ok(Some(StandaloneCredentialInfo {
+            credential,
+            category,
+            tags,
+        }))
+    }
+
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest) -> Result<()> {
+        let mut updates = Vec::new();
+        let mut changes = HashMap::new();
+
+        // Prepare the base query components
+        if request.name.is_some() {
+            updates.push("name = ?");
+            changes.insert("name".to_string(), request.name.as_ref().unwrap().clone());
+        }
+
+        if request.description.is_some() {
+            updates.push("description = ?");
+            changes.insert("description".to_string(), request.description.as_ref().unwrap().clone());
+        }
+
+        if request.category_id.is_some() {
+            updates.push("category_id = ?");
+            changes.insert("category_id".to_string(), request.category_id.unwrap().to_string());
+        }
+
+        let encrypted_data_base64 = if let Some(ref value) = request.value {
+            // Encrypt the new value
+            let encryption = FileEncryption::new(&format!("standalone_{}_{}", request.id, request.author_id));
+            let encrypted_data = encryption.encrypt(value.as_bytes())?;
+            use base64::{Engine as _, engine::general_purpose};
+            let encrypted_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            
+            updates.push("encrypted_data = ?");
+            changes.insert("value_updated".to_string(), "true".to_string());
+            Some(encrypted_base64)
+        } else {
+            None
+        };
+
+        if updates.is_empty() {
+            return Err(anyhow::anyhow!("No fields to update"));
+        }
+
+        updates.push("updated_at = CURRENT_TIMESTAMP");
+
+        let query = format!(
+            "UPDATE standalone_credentials SET {} WHERE id = ?",
+            updates.join(", ")
+        );
+
+        // Build params based on what's being updated
+        let rows_affected = match (&request.name, &request.description, &request.category_id, &encrypted_data_base64) {
+            (Some(name), Some(desc), Some(cat_id), Some(enc_data)) => {
+                self.conn.execute(&query, (name, desc, cat_id, enc_data, request.id))?
+            },
+            (Some(name), Some(desc), Some(cat_id), None) => {
+                self.conn.execute(&query, (name, desc, cat_id, request.id))?
+            },
+            (Some(name), Some(desc), None, Some(enc_data)) => {
+                self.conn.execute(&query, (name, desc, enc_data, request.id))?
+            },
+            (Some(name), Some(desc), None, None) => {
+                self.conn.execute(&query, (name, desc, request.id))?
+            },
+            (Some(name), None, Some(cat_id), Some(enc_data)) => {
+                self.conn.execute(&query, (name, cat_id, enc_data, request.id))?
+            },
+            (Some(name), None, Some(cat_id), None) => {
+                self.conn.execute(&query, (name, cat_id, request.id))?
+            },
+            (Some(name), None, None, Some(enc_data)) => {
+                self.conn.execute(&query, (name, enc_data, request.id))?
+            },
+            (Some(name), None, None, None) => {
+                self.conn.execute(&query, (name, request.id))?
+            },
+            (None, Some(desc), Some(cat_id), Some(enc_data)) => {
+                self.conn.execute(&query, (desc, cat_id, enc_data, request.id))?
+            },
+            (None, Some(desc), Some(cat_id), None) => {
+                self.conn.execute(&query, (desc, cat_id, request.id))?
+            },
+            (None, Some(desc), None, Some(enc_data)) => {
+                self.conn.execute(&query, (desc, enc_data, request.id))?
+            },
+            (None, Some(desc), None, None) => {
+                self.conn.execute(&query, (desc, request.id))?
+            },
+            (None, None, Some(cat_id), Some(enc_data)) => {
+                self.conn.execute(&query, (cat_id, enc_data, request.id))?
+            },
+            (None, None, Some(cat_id), None) => {
+                self.conn.execute(&query, (cat_id, request.id))?
+            },
+            (None, None, None, Some(enc_data)) => {
+                self.conn.execute(&query, (enc_data, request.id))?
+            },
+            (None, None, None, None) => {
+                return Err(anyhow::anyhow!("No fields to update"));
+            }
+        };
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Credential not found"));
+        }
+
+        // Add history entry
+        self.add_standalone_history(
+            request.id,
+            StandaloneChangeType::Updated,
+            request.author_id,
+            "Updated standalone credential",
+            changes,
+        )?;
+
+        info!("Updated standalone credential with ID {}", request.id);
+        Ok(())
+    }
+
+    fn delete_standalone_credential(&self, credential_id: i64, author_id: i64) -> Result<()> {
+        // Get credential details before deletion for audit trail
+        let credential_info = self.get_standalone_credential(credential_id)?
+            .ok_or_else(|| anyhow::anyhow!("Credential not found"))?;
+
+        // Add history entry before deletion
+        let mut changes = HashMap::new();
+        changes.insert("name".to_string(), credential_info.credential.name.clone());
+        changes.insert("credential_type".to_string(), credential_info.credential.credential_type.to_string());
+        
+        self.add_standalone_history(
+            credential_id,
+            StandaloneChangeType::Deleted,
+            author_id,
+            &format!("Deleted standalone credential '{}'", credential_info.credential.name),
+            changes,
+        )?;
+
+        let rows_affected = self.conn.execute(
+            "DELETE FROM standalone_credentials WHERE id = ?1",
+            [credential_id],
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Credential not found"));
+        }
+
+        info!("Deleted standalone credential '{}' (ID: {})", credential_info.credential.name, credential_id);
+        Ok(())
+    }
+
+    fn search_standalone_credentials(&self, request: SearchCredentialsRequest) -> Result<SearchCredentialsResponse> {
+        let mut query = String::from(
+            "SELECT DISTINCT sc.id, sc.name, sc.description, sc.credential_type, sc.category_id, 
+                    sc.encrypted_data, sc.created_by, sc.created_at, sc.updated_at, sc.last_accessed 
+             FROM standalone_credentials sc"
+        );
+        
+        let mut joins = Vec::new();
+        let mut conditions = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        // Add tag join if searching by tags
+        if let Some(ref tags) = request.tags {
+            if !tags.is_empty() {
+                joins.push("LEFT JOIN credential_tags ct ON sc.id = ct.standalone_credential_id");
+            }
+        }
+
+        // Build WHERE conditions
+        let mut param_index = 1;
+        if let Some(ref query_str) = request.query {
+            conditions.push(format!("(sc.name LIKE ?{} OR sc.description LIKE ?{})", param_index, param_index));
+            params.push(Box::new(format!("%{}%", query_str)));
+            param_index += 1;
+        }
+
+        if let Some(ref cred_type) = request.credential_type {
+            conditions.push(format!("sc.credential_type = ?{}", param_index));
+            params.push(Box::new(cred_type.to_string()));
+            param_index += 1;
+        }
+
+        if let Some(category_id) = request.category_id {
+            conditions.push(format!("sc.category_id = ?{}", param_index));
+            params.push(Box::new(category_id));
+            param_index += 1;
+        }
+
+        if let Some(ref tags) = request.tags {
+            if !tags.is_empty() {
+                let tag_placeholders = tags.iter().enumerate()
+                    .map(|(i, _)| format!("?{}", param_index + i))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                conditions.push(format!("ct.tag_name IN ({})", tag_placeholders));
+                for tag in tags {
+                    params.push(Box::new(tag.clone()));
+                }
+                param_index += tags.len();
+            }
+        }
+
+        if let Some(ref created_after) = request.created_after {
+            conditions.push(format!("sc.created_at >= ?{}", param_index));
+            params.push(Box::new(created_after.clone()));
+            param_index += 1;
+        }
+
+        if let Some(ref created_before) = request.created_before {
+            conditions.push(format!("sc.created_at <= ?{}", param_index));
+            params.push(Box::new(created_before.clone()));
+            // param_index += 1; // Not needed as it's the last parameter
+        }
+
+        // Combine joins and conditions
+        if !joins.is_empty() {
+            query.push_str(" ");
+            query.push_str(&joins.join(" "));
+        }
+
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        // Count total results
+        let count_query = format!("SELECT COUNT(DISTINCT sc.id) FROM standalone_credentials sc {} {}", 
+            if !joins.is_empty() { joins.join(" ") } else { String::new() },
+            if !conditions.is_empty() { format!("WHERE {}", conditions.join(" AND ")) } else { String::new() }
+        );
+
+        let total_count: i64 = self.conn.query_row(&count_query, rusqlite::params_from_iter(params.iter()), |row| row.get(0))?;
+
+        // Add ordering and pagination
+        query.push_str(" ORDER BY sc.created_at DESC");
+        
+        let limit = request.limit.unwrap_or(50).min(100);
+        let offset = request.offset.unwrap_or(0);
+        query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+
+        // Execute search query
+        let mut stmt = self.conn.prepare(&query)?;
+        let cred_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), Self::row_to_standalone_credential)?;
+        
+        let mut credentials = Vec::new();
+        for cred_result in cred_iter {
+            let cred = cred_result?;
+            
+            // Get category info
+            let category = if let Some(cat_id) = cred.category_id {
+                self.get_category_by_id(cat_id)?
+            } else {
+                None
+            };
+            
+            // Get tags
+            let tags = self.get_credential_tags(cred.id)?;
+            
+            credentials.push(StandaloneCredentialInfo {
+                credential: cred,
+                category,
+                tags,
+            });
+        }
+
+        let page = (offset / limit) + 1;
+
+        Ok(SearchCredentialsResponse {
+            credentials,
+            total_count,
+            page: page as i32,
+            page_size: limit,
+        })
+    }
+
+    fn get_standalone_credential_history(&self, credential_id: i64) -> Result<Vec<StandaloneCredentialHistory>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, credential_id, change_type, author, timestamp, notes, changes_json 
+             FROM standalone_credential_history WHERE credential_id = ?1 ORDER BY timestamp DESC"
+        )?;
+
+        let history_iter = stmt.query_map([credential_id], Self::row_to_standalone_history)?;
+        let mut history = Vec::new();
+
+        for entry in history_iter {
+            history.push(entry?);
+        }
+
+        Ok(history)
+    }
+
+    fn update_credential_last_accessed(&self, credential_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE standalone_credentials SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?1",
+            [credential_id],
+        )?;
+
+        debug!("Updated last accessed time for credential {}", credential_id);
+        Ok(())
+    }
+
+    // Category management implementations
+    fn create_credential_category(&self, request: CreateCategoryRequest) -> Result<CredentialCategory> {
+        if request.name.trim().is_empty() {
+            return Err(anyhow::anyhow!("Category name cannot be empty"));
+        }
+
+        debug!("Creating credential category '{}'", request.name);
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO credential_categories (name, description, parent_category_id, color_code, icon) 
+             VALUES (?1, ?2, ?3, ?4, ?5) 
+             RETURNING id, name, description, parent_category_id, color_code, icon, created_at"
+        )?;
+
+        let category = stmt.query_row(
+            (&request.name, &request.description, &request.parent_category_id, 
+             &request.color_code, &request.icon),
+            Self::row_to_category,
+        )?;
+
+        info!("Created credential category '{}' with ID {}", category.name, category.id);
+        Ok(category)
+    }
+
+    fn get_credential_categories(&self) -> Result<Vec<CategoryWithChildren>> {
+        // Get all categories
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, description, parent_category_id, color_code, icon, created_at 
+             FROM credential_categories ORDER BY name"
+        )?;
+
+        let cat_iter = stmt.query_map([], Self::row_to_category)?;
+        let mut all_categories = Vec::new();
+
+        for cat in cat_iter {
+            all_categories.push(cat?);
+        }
+
+        // Build hierarchical structure
+        let mut root_categories = Vec::new();
+        let mut category_map: HashMap<i64, Vec<CredentialCategory>> = HashMap::new();
+
+        // Group categories by parent
+        for cat in &all_categories {
+            if let Some(parent_id) = cat.parent_category_id {
+                category_map.entry(parent_id).or_insert_with(Vec::new).push(cat.clone());
+            } else {
+                root_categories.push(cat.clone());
+            }
+        }
+
+        // Build tree structure
+        let mut result = Vec::new();
+        for root_cat in root_categories {
+            let children = self.build_category_tree(&root_cat, &category_map)?;
+            let credential_count = self.get_category_credential_count(root_cat.id)?;
+            
+            result.push(CategoryWithChildren {
+                category: root_cat,
+                children,
+                credential_count,
+            });
+        }
+
+        Ok(result)
+    }
+
+    fn update_credential_category(&self, category_id: i64, request: CreateCategoryRequest) -> Result<()> {
+        let rows_affected = self.conn.execute(
+            "UPDATE credential_categories 
+             SET name = ?1, description = ?2, parent_category_id = ?3, color_code = ?4, icon = ?5 
+             WHERE id = ?6",
+            (&request.name, &request.description, &request.parent_category_id, 
+             &request.color_code, &request.icon, &category_id),
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Category not found"));
+        }
+
+        info!("Updated credential category with ID {}", category_id);
+        Ok(())
+    }
+
+    fn delete_credential_category(&self, category_id: i64) -> Result<()> {
+        // Check if category has credentials
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM standalone_credentials WHERE category_id = ?1",
+            [category_id],
+            |row| row.get(0),
+        )?;
+
+        if count > 0 {
+            return Err(anyhow::anyhow!("Cannot delete category with associated credentials"));
+        }
+
+        let rows_affected = self.conn.execute(
+            "DELETE FROM credential_categories WHERE id = ?1",
+            [category_id],
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Category not found"));
+        }
+
+        info!("Deleted credential category with ID {}", category_id);
+        Ok(())
+    }
+
+    fn get_category_by_id(&self, category_id: i64) -> Result<Option<CredentialCategory>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, description, parent_category_id, color_code, icon, created_at 
+             FROM credential_categories WHERE id = ?1"
+        )?;
+
+        let result = stmt.query_row([category_id], Self::row_to_category);
+        
+        match result {
+            Ok(category) => Ok(Some(category)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    // Tag management implementations
+    fn add_credential_tags(&self, credential_id: i64, tags: &[String]) -> Result<()> {
+        for tag in tags {
+            if !tag.trim().is_empty() {
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO credential_tags (standalone_credential_id, tag_name) VALUES (?1, ?2)",
+                    (credential_id, tag.trim()),
+                )?;
+            }
+        }
+
+        debug!("Added {} tags to credential {}", tags.len(), credential_id);
+        Ok(())
+    }
+
+    fn remove_credential_tag(&self, credential_id: i64, tag_name: &str) -> Result<()> {
+        let rows_affected = self.conn.execute(
+            "DELETE FROM credential_tags WHERE standalone_credential_id = ?1 AND tag_name = ?2",
+            (credential_id, tag_name),
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Tag not found"));
+        }
+
+        debug!("Removed tag '{}' from credential {}", tag_name, credential_id);
+        Ok(())
+    }
+
+    fn get_all_tags(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT tag_name FROM credential_tags ORDER BY tag_name"
+        )?;
+
+        let tag_iter = stmt.query_map([], |row| row.get(0))?;
+        let mut tags = Vec::new();
+
+        for tag in tag_iter {
+            tags.push(tag?);
+        }
+
+        Ok(tags)
+    }
+}
+
+// Helper methods
+impl<'a> SqliteVaultRepository<'a> {
+    fn add_standalone_history(&self, credential_id: i64, change_type: StandaloneChangeType, author: i64, notes: &str, changes: HashMap<String, String>) -> Result<()> {
+        let changes_json = serde_json::to_string(&changes)?;
+        
+        self.conn.execute(
+            "INSERT INTO standalone_credential_history (credential_id, change_type, author, notes, changes_json) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&credential_id, &change_type.to_string(), &author, &notes, &changes_json),
+        )?;
+
+        debug!("Added history entry for standalone credential {}: {}", credential_id, notes);
+        Ok(())
+    }
+
+    fn get_credential_tags(&self, credential_id: i64) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT tag_name FROM credential_tags WHERE standalone_credential_id = ?1 ORDER BY tag_name"
+        )?;
+
+        let tag_iter = stmt.query_map([credential_id], |row| row.get(0))?;
+        let mut tags = Vec::new();
+
+        for tag in tag_iter {
+            tags.push(tag?);
+        }
+
+        Ok(tags)
+    }
+
+    fn build_category_tree(&self, parent: &CredentialCategory, category_map: &HashMap<i64, Vec<CredentialCategory>>) -> Result<Vec<CategoryWithChildren>> {
+        let mut children = Vec::new();
+
+        if let Some(child_categories) = category_map.get(&parent.id) {
+            for child_cat in child_categories {
+                let sub_children = self.build_category_tree(child_cat, category_map)?;
+                let credential_count = self.get_category_credential_count(child_cat.id)?;
+                
+                children.push(CategoryWithChildren {
+                    category: child_cat.clone(),
+                    children: sub_children,
+                    credential_count,
+                });
+            }
+        }
+
+        Ok(children)
+    }
+
+    fn get_category_credential_count(&self, category_id: i64) -> Result<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM standalone_credentials WHERE category_id = ?1",
+            [category_id],
+            |row| row.get(0),
+        )?;
+
+        Ok(count)
     }
 }
 

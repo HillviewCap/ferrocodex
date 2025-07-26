@@ -23,7 +23,7 @@ use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, Br
 use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
 use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
 use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
-use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer};
+use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer, CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren};
 use encryption::FileEncryption;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -3643,6 +3643,472 @@ async fn update_credential_password(
     }
 }
 
+// Standalone credential commands for Story 4.3
+
+#[tauri::command]
+async fn create_standalone_credential(
+    token: String,
+    credential_request: CreateStandaloneCredentialRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<StandaloneCredentialInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    // Sanitize input
+    let sanitized_name = InputSanitizer::sanitize_string(&credential_request.name);
+    let sanitized_description = InputSanitizer::sanitize_string(&credential_request.description);
+    let sanitized_value = InputSanitizer::sanitize_string(&credential_request.value);
+    let sanitized_tags = credential_request.tags.as_ref().map(|tags| 
+        tags.iter().map(|tag| InputSanitizer::sanitize_string(tag)).collect()
+    );
+
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&sanitized_name) ||
+       InputSanitizer::is_potentially_malicious(&sanitized_description) ||
+       InputSanitizer::is_potentially_malicious(&sanitized_value) {
+        error!("Potentially malicious input detected in create_standalone_credential");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            let sanitized_request = CreateStandaloneCredentialRequest {
+                name: sanitized_name,
+                description: sanitized_description,
+                credential_type: credential_request.credential_type,
+                category_id: credential_request.category_id,
+                value: sanitized_value,
+                tags: sanitized_tags,
+                created_by: session.user_id,
+            };
+
+            match vault_repo.create_standalone_credential(sanitized_request) {
+                Ok(credential) => {
+                    info!("Standalone credential created by {}: {}", session.username, credential.name);
+                    
+                    // Fetch the full credential info
+                    match vault_repo.get_standalone_credential(credential.id) {
+                        Ok(Some(credential_info)) => Ok(credential_info),
+                        Ok(None) => Err("Failed to retrieve created credential".to_string()),
+                        Err(e) => {
+                            error!("Failed to retrieve credential info: {}", e);
+                            Err(format!("Failed to retrieve credential info: {}", e))
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to create standalone credential: {}", e);
+                    Err(format!("Failed to create standalone credential: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn search_credentials(
+    token: String,
+    search_request: SearchCredentialsRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<vault::SearchCredentialsResponse, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            // Sanitize search query if provided
+            let sanitized_request = SearchCredentialsRequest {
+                query: search_request.query.map(|q| InputSanitizer::sanitize_string(&q)),
+                credential_type: search_request.credential_type,
+                category_id: search_request.category_id,
+                tags: search_request.tags.map(|tags| 
+                    tags.iter().map(|tag| InputSanitizer::sanitize_string(tag)).collect()
+                ),
+                created_after: search_request.created_after,
+                created_before: search_request.created_before,
+                limit: search_request.limit,
+                offset: search_request.offset,
+            };
+
+            match vault_repo.search_standalone_credentials(sanitized_request) {
+                Ok(response) => Ok(response),
+                Err(e) => {
+                    error!("Failed to search credentials: {}", e);
+                    Err(format!("Failed to search credentials: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_credential_categories(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<CategoryWithChildren>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match vault_repo.get_credential_categories() {
+                Ok(categories) => Ok(categories),
+                Err(e) => {
+                    error!("Failed to get credential categories: {}", e);
+                    Err(format!("Failed to get credential categories: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn manage_credential_categories(
+    token: String,
+    action: String,
+    category_id: Option<i64>,
+    category_request: Option<CreateCategoryRequest>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match action.as_str() {
+                "create" => {
+                    if let Some(request) = category_request {
+                        let sanitized_request = CreateCategoryRequest {
+                            name: InputSanitizer::sanitize_string(&request.name),
+                            description: request.description.map(|d| InputSanitizer::sanitize_string(&d)),
+                            parent_category_id: request.parent_category_id,
+                            color_code: request.color_code,
+                            icon: request.icon,
+                        };
+
+                        match vault_repo.create_credential_category(sanitized_request) {
+                            Ok(category) => Ok(format!("Created category: {}", category.name)),
+                            Err(e) => Err(format!("Failed to create category: {}", e)),
+                        }
+                    } else {
+                        Err("Category request data required for create action".to_string())
+                    }
+                }
+                "update" => {
+                    if let (Some(cat_id), Some(request)) = (category_id, category_request) {
+                        let sanitized_request = CreateCategoryRequest {
+                            name: InputSanitizer::sanitize_string(&request.name),
+                            description: request.description.map(|d| InputSanitizer::sanitize_string(&d)),
+                            parent_category_id: request.parent_category_id,
+                            color_code: request.color_code,
+                            icon: request.icon,
+                        };
+
+                        match vault_repo.update_credential_category(cat_id, sanitized_request) {
+                            Ok(_) => Ok(format!("Updated category ID: {}", cat_id)),
+                            Err(e) => Err(format!("Failed to update category: {}", e)),
+                        }
+                    } else {
+                        Err("Category ID and request data required for update action".to_string())
+                    }
+                }
+                "delete" => {
+                    if let Some(cat_id) = category_id {
+                        match vault_repo.delete_credential_category(cat_id) {
+                            Ok(_) => Ok(format!("Deleted category ID: {}", cat_id)),
+                            Err(e) => Err(format!("Failed to delete category: {}", e)),
+                        }
+                    } else {
+                        Err("Category ID required for delete action".to_string())
+                    }
+                }
+                _ => Err("Invalid action. Must be 'create', 'update', or 'delete'".to_string()),
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_credential_history(
+    token: String,
+    credential_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<vault::StandaloneCredentialHistory>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match vault_repo.get_standalone_credential_history(credential_id) {
+                Ok(history) => {
+                    info!("Retrieved history for credential {}", credential_id);
+                    Ok(history)
+                }
+                Err(e) => {
+                    error!("Failed to get credential history: {}", e);
+                    Err(format!("Failed to get credential history: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_standalone_credential(
+    token: String,
+    update_request: UpdateStandaloneCredentialRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            let sanitized_request = UpdateStandaloneCredentialRequest {
+                id: update_request.id,
+                name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
+                description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
+                category_id: update_request.category_id,
+                value: update_request.value.map(|v| InputSanitizer::sanitize_string(&v)),
+                author_id: session.user_id,
+            };
+
+            match vault_repo.update_standalone_credential(sanitized_request) {
+                Ok(_) => {
+                    info!("Updated standalone credential {} by {}", update_request.id, session.username);
+                    Ok("Credential updated successfully".to_string())
+                }
+                Err(e) => {
+                    error!("Failed to update standalone credential: {}", e);
+                    Err(format!("Failed to update credential: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn delete_standalone_credential(
+    token: String,
+    credential_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match vault_repo.delete_standalone_credential(credential_id, session.user_id) {
+                Ok(_) => {
+                    info!("Deleted standalone credential {} by {}", credential_id, session.username);
+                    Ok("Credential deleted successfully".to_string())
+                }
+                Err(e) => {
+                    error!("Failed to delete standalone credential: {}", e);
+                    Err(format!("Failed to delete credential: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_standalone_credential(
+    token: String,
+    credential_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<StandaloneCredentialInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match vault_repo.get_standalone_credential(credential_id) {
+                Ok(Some(credential_info)) => Ok(credential_info),
+                Ok(None) => Err("Credential not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get standalone credential: {}", e);
+                    Err(format!("Failed to get credential: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn decrypt_standalone_credential(
+    token: String,
+    credential_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+
+            match vault_repo.get_standalone_credential(credential_id) {
+                Ok(Some(credential_info)) => {
+                    // Decrypt the credential value
+                    let encryption = FileEncryption::new(&format!("standalone_{}_{}", credential_id, session.user_id));
+                    use base64::{Engine as _, engine::general_purpose};
+                    
+                    let encrypted_bytes = general_purpose::STANDARD.decode(&credential_info.credential.encrypted_data)
+                        .map_err(|e| format!("Failed to decode encrypted data: {}", e))?;
+                    
+                    let decrypted_bytes = encryption.decrypt(&encrypted_bytes)
+                        .map_err(|e| format!("Failed to decrypt credential: {}", e))?;
+                    
+                    let decrypted_value = String::from_utf8(decrypted_bytes)
+                        .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?;
+                    
+                    info!("Decrypted standalone credential {} for user {}", credential_id, session.username);
+                    Ok(decrypted_value)
+                }
+                Ok(None) => Err("Credential not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get standalone credential: {}", e);
+                    Err(format!("Failed to get credential: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -3716,7 +4182,17 @@ pub fn run() {
             validate_password_strength,
             check_password_reuse,
             get_password_history,
-            update_credential_password
+            update_credential_password,
+            // Standalone credential commands
+            create_standalone_credential,
+            search_credentials,
+            get_credential_categories,
+            manage_credential_categories,
+            get_credential_history,
+            update_standalone_credential,
+            delete_standalone_credential,
+            get_standalone_credential,
+            decrypt_standalone_credential
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");
