@@ -3,6 +3,7 @@ export interface RecoveryExportRequest {
   config_version_id: number;
   firmware_version_id: number;
   export_directory: string;
+  include_vault?: boolean;
 }
 
 export interface RecoveryManifest {
@@ -11,6 +12,7 @@ export interface RecoveryManifest {
   exported_by: string;
   configuration: ConfigurationExportInfo;
   firmware: FirmwareExportInfo;
+  vault?: VaultExportInfo;
   compatibility_verified: boolean;
 }
 
@@ -32,6 +34,16 @@ export interface FirmwareExportInfo {
   file_size: number;
 }
 
+export interface VaultExportInfo {
+  vault_id: number;
+  vault_name: string;
+  filename: string;
+  checksum: string;
+  secret_count: number;
+  file_size: number;
+  encrypted: boolean;
+}
+
 export interface ExportProgress {
   step: ExportStep;
   progress: number;
@@ -43,6 +55,7 @@ export type ExportStep =
   | 'selecting'
   | 'exporting_config' 
   | 'exporting_firmware'
+  | 'exporting_vault'
   | 'creating_manifest'
   | 'completed'
   | 'error';
@@ -50,6 +63,7 @@ export type ExportStep =
 export interface ExportTiming {
   config_export_ms?: number;
   firmware_export_ms?: number;
+  vault_export_ms?: number;
   total_ms?: number;
 }
 

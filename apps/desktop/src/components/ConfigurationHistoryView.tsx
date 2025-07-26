@@ -22,7 +22,8 @@ import {
   UserOutlined,
   FileOutlined,
   BranchesOutlined,
-  CloudServerOutlined
+  CloudServerOutlined,
+  SafetyOutlined
 } from '@ant-design/icons';
 import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -34,6 +35,7 @@ import CreateBranchModal from './CreateBranchModal';
 import BranchManagement from './BranchManagement';
 import GoldenVersionIndicator from './GoldenVersionIndicator';
 import FirmwareManagement from './FirmwareManagement';
+import IdentityVault from './IdentityVault';
 import { invoke } from '@tauri-apps/api/core';
 
 const { Title, Text } = Typography;
@@ -404,6 +406,18 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
             ),
             children: (
               <FirmwareManagement asset={asset} />
+            )
+          },
+          {
+            key: 'vault',
+            label: (
+              <span>
+                <SafetyOutlined />
+                Identity Vault
+              </span>
+            ),
+            children: (
+              <IdentityVault asset={asset} />
             )
           }
         ]}

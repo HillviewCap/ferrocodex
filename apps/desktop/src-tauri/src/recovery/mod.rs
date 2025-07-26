@@ -6,6 +6,7 @@ use tauri::AppHandle;
 use crate::{
     configurations::ConfigurationRepository,
     firmware::{FirmwareRepository, FirmwareFileStorage},
+    vault::{VaultRepository, VaultInfo},
     validation::InputSanitizer,
     audit::{self, AuditRepository},
     users::UserRole,
@@ -18,6 +19,7 @@ pub struct RecoveryExportRequest {
     pub config_version_id: i64,
     pub firmware_version_id: i64,
     pub export_directory: String,
+    pub include_vault: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +30,7 @@ pub struct RecoveryManifest {
     pub exported_by: String,
     pub configuration: ConfigurationExportInfo,
     pub firmware: FirmwareExportInfo,
+    pub vault: Option<VaultExportInfo>,
     pub compatibility_verified: bool,
 }
 
@@ -55,6 +58,18 @@ pub struct FirmwareExportInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VaultExportInfo {
+    pub vault_id: i64,
+    pub vault_name: String,
+    pub filename: String,
+    pub checksum: String,
+    pub secret_count: usize,
+    pub file_size: i64,
+    pub encrypted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportProgress {
     pub step: ExportStep,
     pub progress: f32,
@@ -68,6 +83,7 @@ pub enum ExportStep {
     Selecting,
     ExportingConfig,
     ExportingFirmware,
+    ExportingVault,
     CreatingManifest,
     Completed,
     Error,
@@ -78,12 +94,14 @@ pub enum ExportStep {
 pub struct ExportTiming {
     pub config_export_ms: Option<u64>,
     pub firmware_export_ms: Option<u64>,
+    pub vault_export_ms: Option<u64>,
     pub total_ms: Option<u64>,
 }
 
 pub struct RecoveryExporter<'a> {
     config_repo: &'a dyn ConfigurationRepository,
     firmware_repo: &'a dyn FirmwareRepository,
+    vault_repo: &'a dyn VaultRepository,
     audit_repo: &'a dyn AuditRepository,
 }
 
@@ -91,11 +109,13 @@ impl<'a> RecoveryExporter<'a> {
     pub fn new(
         config_repo: &'a dyn ConfigurationRepository,
         firmware_repo: &'a dyn FirmwareRepository,
+        vault_repo: &'a dyn VaultRepository,
         audit_repo: &'a dyn AuditRepository,
     ) -> Self {
         Self {
             config_repo,
             firmware_repo,
+            vault_repo,
             audit_repo,
         }
     }
@@ -232,6 +252,52 @@ impl<'a> RecoveryExporter<'a> {
         // Calculate firmware file checksum
         let firmware_checksum = Self::calculate_checksum(&firmware_data);
 
+        // Export vault if requested
+        let mut vault_export_ms = 0u64;
+        let vault_export_info = if request.include_vault.unwrap_or(false) {
+            let vault_start = std::time::Instant::now();
+            
+            // Check if vault exists for this asset
+            match self.vault_repo.get_vault_by_asset_id(request.asset_id)? {
+                Some(vault_info) => {
+                    let vault_filename = format!("{}_vault.json", sanitized_asset_name);
+                    let vault_export_path = export_dir.join(&vault_filename);
+                    
+                    // Export vault data as JSON (encrypted secrets remain encrypted)
+                    let vault_json = serde_json::to_string_pretty(&vault_info)
+                        .map_err(|e| {
+                            cleanup_files(&created_files, export_dir, export_dir_created);
+                            anyhow::anyhow!("Failed to serialize vault data: {}", e)
+                        })?;
+                    
+                    std::fs::write(&vault_export_path, &vault_json)
+                        .map_err(|e| {
+                            cleanup_files(&created_files, export_dir, export_dir_created);
+                            anyhow::anyhow!("Failed to write vault file: {}", e)
+                        })?;
+                    
+                    created_files.push(vault_export_path.clone());
+                    vault_export_ms = vault_start.elapsed().as_millis() as u64;
+                    
+                    // Calculate vault file checksum
+                    let vault_checksum = Self::calculate_checksum(vault_json.as_bytes());
+                    
+                    Some(VaultExportInfo {
+                        vault_id: vault_info.vault.id,
+                        vault_name: vault_info.vault.name.clone(),
+                        filename: vault_filename,
+                        checksum: vault_checksum,
+                        secret_count: vault_info.secret_count,
+                        file_size: vault_json.len() as i64,
+                        encrypted: true,
+                    })
+                },
+                None => None,
+            }
+        } else {
+            None
+        };
+
         // Check compatibility (if firmware is linked to this configuration)
         let compatibility_verified = config.firmware_version_id == Some(request.firmware_version_id);
 
@@ -257,6 +323,7 @@ impl<'a> RecoveryExporter<'a> {
                 model: firmware.model.unwrap_or_else(|| "Unknown".to_string()),
                 file_size: firmware_data.len() as i64,
             },
+            vault: vault_export_info,
             compatibility_verified,
         };
 
@@ -295,6 +362,8 @@ impl<'a> RecoveryExporter<'a> {
                 "exported_by": username,
                 "config_export_ms": config_export_ms,
                 "firmware_export_ms": firmware_export_ms,
+                "vault_export_ms": vault_export_ms,
+                "vault_included": request.include_vault.unwrap_or(false),
                 "total_ms": total_ms,
                 "compatibility_verified": compatibility_verified
             }).to_string()),
@@ -306,10 +375,17 @@ impl<'a> RecoveryExporter<'a> {
             tracing::error!("Failed to log audit event: {}", e);
         }
 
-        tracing::info!(
-            "Complete recovery package exported by {}: Asset {} to {} (Config: {}ms, Firmware: {}ms, Total: {}ms)",
-            username, request.asset_id, export_directory, config_export_ms, firmware_export_ms, total_ms
-        );
+        if request.include_vault.unwrap_or(false) {
+            tracing::info!(
+                "Complete recovery package exported by {}: Asset {} to {} (Config: {}ms, Firmware: {}ms, Vault: {}ms, Total: {}ms)",
+                username, request.asset_id, export_directory, config_export_ms, firmware_export_ms, vault_export_ms, total_ms
+            );
+        } else {
+            tracing::info!(
+                "Complete recovery package exported by {}: Asset {} to {} (Config: {}ms, Firmware: {}ms, Total: {}ms)",
+                username, request.asset_id, export_directory, config_export_ms, firmware_export_ms, total_ms
+            );
+        }
 
         Ok(manifest)
     }
