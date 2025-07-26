@@ -62,11 +62,15 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
       
       await onConfirm(values.newStatus, values.reason);
       
-      // Only reset and close if successful
+      // Reset form and close modal on successful update
       form.resetFields();
+      // Use setTimeout to ensure state updates complete before closing
+      setTimeout(() => {
+        onCancel();
+      }, 100);
     } catch (error) {
       console.error('Status update failed:', error);
-      // Don't close the dialog on error
+      // Don't close the dialog on error - leave it open for user to retry or cancel
     } finally {
       setLoading(false);
     }
@@ -89,7 +93,7 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
       confirmLoading={loading}
       okText="Change Status"
       width={500}
-      destroyOnClose={true}
+      destroyOnHidden
     >
       <Form
         form={form}
