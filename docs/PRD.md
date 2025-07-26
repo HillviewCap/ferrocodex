@@ -181,6 +181,10 @@ The application will be built using the Tauri framework. The core backend logic 
 
 - **Goal:** Transform the platform into a comprehensive asset recovery solution by adding secure firmware storage, automated analysis, and integrated management capabilities.
 
+#### Epic 4: Asset Identity Vault
+
+- **Goal:** Create a comprehensive credential and secret management system that serves as the single source of truth for all asset-related authentication information, eliminating the cognitive burden on engineers and enabling secure sharing of access credentials.
+
 ---
 
 ### Epic 1 Foundation & Core Versioning
@@ -427,4 +431,106 @@ As an Engineer, I want to export both firmware and configuration for an asset, s
 
 ---
 
-This concludes the FerroCodex Product Requirements Document v0.3.0. The platform now addresses the complete asset recovery scenario, providing engineers with a comprehensive, secure, and user-friendly solution for managing both configurations and firmware in critical OT environments.
+### Epic 4 Asset Identity Vault
+
+**Epic Goal:** Create a comprehensive credential and secret management system that serves as the single source of truth for all asset-related authentication information, eliminating the cognitive burden on engineers and enabling secure sharing of access credentials. This epic addresses the core user needs of offloading cognitive burden, enabling secure sharing, compensating for device limitations, eliminating password reuse, and simplifying password rotation.
+
+#### Story 4.1: PLC Identity Vault Creation
+
+As an Engineer, I want to create an identity vault for a PLC that groups all its secrets together, so that I have a single, secure location for all authentication information related to that asset.
+
+- **Acceptance Criteria:**
+
+    1. From an asset's detail view, users can create an "Identity Vault" that stores multiple types of secrets for that PLC.
+
+    2. The vault can store login passwords, IP addresses, VPN keys, and license files in a single, organized container.
+
+    3. All vault contents are encrypted using the same AES-256 standard as configuration files.
+
+    4. The vault maintains version history and audit trails for all changes to any secret within it.
+
+    5. Vault creation is integrated with the existing asset recovery export functionality.
+
+#### Story 4.2: Individual Asset Password Management
+
+As an Engineer, I want to store and manage unique passwords for individual assets, so that I can eliminate password reuse and maintain strong, unique credentials for every device.
+
+- **Acceptance Criteria:**
+
+    1. Each asset's identity vault supports multiple credential entries with descriptive labels (e.g., "Admin Login", "Maintenance Account", "Read-Only Access").
+
+    2. The system can generate strong, unique passwords automatically when requested.
+
+    3. Password strength indicators are displayed when creating or updating credentials.
+
+    4. Users can view password history to track when credentials were last changed.
+
+    5. The system warns users if they attempt to reuse passwords across different assets or accounts.
+
+#### Story 4.3: Standalone IT Asset Credential Storage
+
+As an Engineer, I want to store passwords for jump hosts, databases, and other IT assets that aren't tracked as PLCs on the platform, so that I can manage all my industrial environment credentials in one secure location.
+
+- **Acceptance Criteria:**
+
+    1. Users can create standalone credential entries that are not associated with a tracked PLC asset.
+
+    2. Standalone entries support the same credential types as PLC vaults (passwords, IP addresses, VPN keys, license files).
+
+    3. Standalone credentials can be organized into categories (e.g., "Jump Hosts", "Databases", "Network Equipment").
+
+    4. Search and filtering capabilities help users quickly locate specific standalone credentials.
+
+    5. The same encryption, versioning, and audit trail features apply to standalone credentials.
+
+#### Story 4.4: Integrated Recovery Bundle Export
+
+As an Engineer, I want to export a complete recovery bundle that includes configuration, firmware, and identity vault information, so that I have everything needed for complete asset recovery in a single, secure package.
+
+- **Acceptance Criteria:**
+
+    1. The existing recovery export functionality is enhanced to include identity vault contents.
+
+    2. Users can choose to include or exclude identity vault information in recovery bundles based on security policies.
+
+    3. When identity vault information is included, it maintains the same encryption standards during export.
+
+    4. The recovery bundle manifest documents all included components (configuration, firmware, credentials).
+
+    5. Import functionality can restore the complete bundle including identity vault information to a new installation.
+
+#### Story 4.5: Secure Credential Sharing
+
+As an Administrator, I want to control which users can access identity vault information, so that I can enable secure sharing of credentials among authorized team members while maintaining security controls.
+
+- **Acceptance Criteria:**
+
+    1. Identity vault access is controlled by the existing role-based permission system.
+
+    2. Administrators can grant or revoke access to specific identity vaults for individual Engineer users.
+
+    3. All access to identity vault information is logged in the audit trail.
+
+    4. Users can only view credentials for vaults they have been explicitly granted access to.
+
+    5. The system supports time-limited access grants that automatically expire after a specified period.
+
+#### Story 4.6: Password Rotation Workflow
+
+As an Engineer, I want to easily rotate passwords and track the rotation history, so that I can maintain security best practices and respond quickly to security incidents.
+
+- **Acceptance Criteria:**
+
+    1. Each credential entry has a "Rotate Password" action that guides users through the password change process.
+
+    2. The system tracks password rotation dates and can alert users when passwords are approaching recommended rotation intervals.
+
+    3. Previous passwords are securely archived in the version history but marked as "Rotated" to prevent accidental reuse.
+
+    4. Users can add notes during password rotation to document the reason for the change.
+
+    5. Batch rotation workflows allow users to rotate multiple related passwords (e.g., all accounts on a specific PLC) in a coordinated manner.
+
+---
+
+This concludes the FerroCodex Product Requirements Document v0.3.0. The platform now addresses the complete asset recovery scenario, providing engineers with a comprehensive, secure, and user-friendly solution for managing configurations, firmware, and identity credentials in critical OT environments.
