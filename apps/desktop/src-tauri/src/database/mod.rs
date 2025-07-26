@@ -9,6 +9,7 @@ use crate::configurations::SqliteConfigurationRepository;
 use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
 use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
+use crate::vault::{SqliteVaultRepository, VaultRepository};
 
 pub struct Database {
     conn: Connection,
@@ -85,6 +86,10 @@ impl Database {
         // Initialize firmware analysis schema
         let firmware_analysis_repo = SqliteFirmwareAnalysisRepository::new(&self.conn);
         firmware_analysis_repo.initialize_schema()?;
+
+        // Initialize vault schema
+        let vault_repo = SqliteVaultRepository::new(&self.conn);
+        vault_repo.initialize_schema()?;
 
         // Run data migrations
         self.run_data_migrations()?;
