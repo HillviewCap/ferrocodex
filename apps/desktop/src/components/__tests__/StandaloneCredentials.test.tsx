@@ -159,7 +159,7 @@ describe('StandaloneCredentials', () => {
   it('renders standalone credentials interface', async () => {
     render(<StandaloneCredentials />);
     
-    expect(screen.getByText('Standalone Credentials')).toBeInTheDocument();
+    expect(screen.getByText('Vault')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search credentials...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add credential/i })).toBeInTheDocument();
     
