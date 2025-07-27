@@ -30,6 +30,7 @@ npm run dev          # Start development server with hot reload
 npm run build        # Build all packages
 npm run test         # Run all tests across workspaces
 npm run lint         # Run linting across all workspaces
+npm run clean        # Clean build artifacts
 
 # From apps/desktop directory:
 npm run test:run     # Run frontend tests once
@@ -38,6 +39,14 @@ npm run tauri:build  # Build production desktop app
 
 # Backend tests (from root):
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+# Running specific tests:
+# Frontend test for specific file
+cd apps/desktop
+npm run test -- src/components/Dashboard.test.tsx
+
+# Backend test for specific module
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
 ```
 
 ### Release & Deployment
@@ -51,17 +60,6 @@ git push origin v1.0.0
 # - Build binaries for Windows, macOS (Intel + ARM), and Linux
 # - Run all tests across platforms
 # - Create GitHub release with downloadable assets
-```
-
-### Running Individual Tests
-
-```bash
-# Frontend test for specific file
-cd apps/desktop
-npm run test -- src/components/Dashboard.test.tsx
-
-# Backend test for specific module
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
 ```
 
 ## Architecture Overview
@@ -114,8 +112,11 @@ apps/desktop/
         ├── configurations/ # Config file management
         ├── database/      # SQLite database layer
         ├── encryption/    # AES-256 encryption
+        ├── firmware/      # Firmware management
+        ├── recovery/      # Recovery package handling
         ├── users/         # User management
-        └── validation/    # Input validation
+        ├── validation/    # Input validation
+        └── vault/         # Asset Identity Vault (v0.4.0)
 ```
 
 ### Important Conventions

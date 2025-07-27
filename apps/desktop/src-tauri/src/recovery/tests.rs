@@ -216,6 +216,10 @@ use tempfile::TempDir;
                     last_changed: Some("2024-01-01T00:00:00Z".to_string()),
                     generation_method: Some("manual".to_string()),
                     policy_version: Some(1),
+                    last_rotated: None,
+                    rotation_interval_days: None,
+                    next_rotation_due: None,
+                    rotation_policy_id: None,
                 },
                 VaultSecret {
                     id: 2,
@@ -229,6 +233,10 @@ use tempfile::TempDir;
                     last_changed: None,
                     generation_method: None,
                     policy_version: None,
+                    last_rotated: None,
+                    rotation_interval_days: None,
+                    next_rotation_due: None,
+                    rotation_policy_id: None,
                 },
             ];
             

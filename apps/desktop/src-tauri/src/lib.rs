@@ -13,6 +13,7 @@ mod recovery;
 mod vault;
 
 use database::Database;
+use rusqlite::Connection;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
 use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
 use audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event, create_vault_access_granted_event, create_vault_access_revoked_event};
@@ -4387,6 +4388,7 @@ async fn check_vault_access(
             .map_err(|_| "Failed to acquire session lock".to_string())?;
         session_manager.validate_session(&token)
             .map_err(|e| e.to_string())?
+            .ok_or("Invalid session")?
     };
 
     info!("User {} checking access to vault {} with permission {:?}", 
@@ -4398,12 +4400,19 @@ async fn check_vault_access(
     let db = db_guard.as_ref()
         .ok_or("Database not initialized")?;
 
-    // Use access control service to check permissions
-    let access_control = VaultAccessControlService::new(db.clone());
+    // Get a proper database connection wrapped in Arc<Mutex<>>
+    let db_conn = {
+        let conn_path = db.get_connection().path()
+            .ok_or("Failed to get database path")?;
+        let new_conn = Connection::open(conn_path)
+            .map_err(|e| format!("Failed to open database connection: {}", e))?;
+        Arc::new(Mutex::new(new_conn))
+    };
+    let access_control = VaultAccessControlService::new(db_conn);
     
     // Get user details
-    let user_repo = SqliteUserRepository::new(db);
-    let full_user = user_repo.find_by_id(user.id)
+    let user_repo = SqliteUserRepository::new(db.get_connection());
+    let full_user = user_repo.find_by_id(user.user_id)
         .map_err(|e| e.to_string())?
         .ok_or("User not found")?;
     
@@ -4424,6 +4433,7 @@ async fn grant_vault_access(
             .map_err(|_| "Failed to acquire session lock".to_string())?;
         session_manager.validate_session(&token)
             .map_err(|e| e.to_string())?
+            .ok_or("Invalid session")?
     };
 
     // Verify administrator role
@@ -4442,20 +4452,20 @@ async fn grant_vault_access(
         .ok_or("Database not initialized")?;
 
     // Get target user details for audit
-    let user_repo = SqliteUserRepository::new(db);
+    let user_repo = SqliteUserRepository::new(db.get_connection());
     let target_user = user_repo.find_by_id(request.user_id)
         .map_err(|e| e.to_string())?
         .ok_or("Target user not found")?;
 
     // Grant the permission
-    let vault_repo = SqliteVaultRepository::new(db);
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
     let permission = vault_repo.grant_vault_access(request.clone())
         .map_err(|e| e.to_string())?;
 
     // Log audit event
     let audit_repo = SqliteAuditRepository::new(db.get_connection());
     let audit_event = create_vault_access_granted_event(
-        admin_user.id,
+        admin_user.user_id,
         &admin_user.username,
         request.user_id,
         &target_user.username,
@@ -4463,7 +4473,7 @@ async fn grant_vault_access(
         &request.permission_type.to_string(),
     );
     
-    audit_repo.log_event(audit_event)
+    audit_repo.log_event(&audit_event)
         .map_err(|e| e.to_string())?;
 
     Ok(permission)
@@ -4482,6 +4492,7 @@ async fn revoke_vault_access(
             .map_err(|_| "Failed to acquire session lock".to_string())?;
         session_manager.validate_session(&token)
             .map_err(|e| e.to_string())?
+            .ok_or("Invalid session")?
     };
 
     // Verify administrator role
@@ -4504,28 +4515,29 @@ async fn revoke_vault_access(
         .ok_or("Database not initialized")?;
 
     // Get target user details for audit
-    let user_repo = SqliteUserRepository::new(db);
+    let user_repo = SqliteUserRepository::new(db.get_connection());
     let target_user = user_repo.find_by_id(request.user_id)
         .map_err(|e| e.to_string())?
         .ok_or("Target user not found")?;
 
     // Revoke the permission
-    let vault_repo = SqliteVaultRepository::new(db);
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
     vault_repo.revoke_vault_access(request.clone())
         .map_err(|e| e.to_string())?;
 
     // Log audit event
     let audit_repo = SqliteAuditRepository::new(db.get_connection());
+    let permission_str = request.permission_type.as_ref().map(|p| p.to_string());
     let audit_event = create_vault_access_revoked_event(
-        admin_user.id,
+        admin_user.user_id,
         &admin_user.username,
         request.user_id,
         &target_user.username,
         request.vault_id,
-        request.permission_type.as_ref().map(|p| p.to_string().as_str()),
+        permission_str.as_deref(),
     );
     
-    audit_repo.log_event(audit_event)
+    audit_repo.log_event(&audit_event)
         .map_err(|e| e.to_string())?;
 
     Ok(())
@@ -4547,16 +4559,18 @@ async fn get_user_vault_permissions(
             .map_err(|e| e.to_string())?
     };
 
+    let current_user = current_user.ok_or("Invalid session")?;
+
     // Determine which user's permissions to query
     let target_user_id = if let Some(uid) = user_id {
         // Only administrators can query other users' permissions
-        if uid != current_user.id && current_user.role != UserRole::Administrator {
+        if uid != current_user.user_id && current_user.role != UserRole::Administrator {
             return Err("Only administrators can view other users' permissions".to_string());
         }
         uid
     } else {
         // Default to current user
-        current_user.id
+        current_user.user_id
     };
 
     info!("Getting vault permissions for user {}", target_user_id);
@@ -4568,7 +4582,7 @@ async fn get_user_vault_permissions(
         .ok_or("Database not initialized")?;
 
     // Get permissions
-    let vault_repo = SqliteVaultRepository::new(db);
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
     vault_repo.get_user_vault_permissions(target_user_id, vault_id)
         .map_err(|e| e.to_string())
 }
@@ -4589,6 +4603,8 @@ async fn get_vault_access_log(
             .map_err(|e| e.to_string())?
     };
 
+    let user = user.ok_or("Invalid session")?;
+
     // Only administrators can view access logs
     if user.role != UserRole::Administrator {
         return Err("Only administrators can view vault access logs".to_string());
@@ -4603,7 +4619,7 @@ async fn get_vault_access_log(
         .ok_or("Database not initialized")?;
 
     // Get access log
-    let vault_repo = SqliteVaultRepository::new(db);
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
     vault_repo.get_vault_access_log(vault_id, limit)
         .map_err(|e| e.to_string())
 }
@@ -4623,6 +4639,8 @@ async fn create_permission_request(
             .map_err(|e| e.to_string())?
     };
 
+    let user = user.ok_or("Invalid session")?;
+
     info!("User {} requesting {} permission for vault {}", 
           user.username, request.requested_permission.to_string(), request.vault_id);
 
@@ -4633,8 +4651,8 @@ async fn create_permission_request(
         .ok_or("Database not initialized")?;
 
     // Create the permission request
-    let vault_repo = SqliteVaultRepository::new(db);
-    let permission_request = vault_repo.create_permission_request(request.clone(), user.id)
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
+    let permission_request = vault_repo.create_permission_request(request.clone(), user.user_id)
         .map_err(|e| e.to_string())?;
 
     // Log audit event
@@ -4646,7 +4664,7 @@ async fn create_permission_request(
     let audit_repo = SqliteAuditRepository::new(db.get_connection());
     let audit_event = AuditEventRequest {
         event_type: AuditEventType::VaultPermissionRequested,
-        user_id: Some(user.id),
+        user_id: Some(user.user_id),
         username: Some(user.username.clone()),
         admin_user_id: None,
         admin_username: None,
@@ -4660,7 +4678,7 @@ async fn create_permission_request(
         user_agent: None,
     };
     
-    audit_repo.log_event(audit_event)
+    audit_repo.log_event(&audit_event)
         .map_err(|e| e.to_string())?;
 
     Ok(permission_request)
@@ -4690,7 +4708,7 @@ async fn rotate_password(
     drop(session_manager_guard);
 
     // Check permissions - Engineers can rotate passwords
-    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+    if session.role != UserRole::Administrator && session.role != UserRole::Engineer {
         return Err("Insufficient permissions to rotate passwords".to_string());
     }
 
@@ -4778,7 +4796,7 @@ async fn create_rotation_batch(
     drop(session_manager_guard);
 
     // Check permissions
-    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+    if session.role != UserRole::Administrator && session.role != UserRole::Engineer {
         return Err("Insufficient permissions to create rotation batch".to_string());
     }
 
@@ -4859,7 +4877,7 @@ async fn update_rotation_policy(
     drop(session_manager_guard);
 
     // Only administrators can update rotation policies
-    if session.user_role != "Administrator" {
+    if session.role != UserRole::Administrator {
         return Err("Only administrators can update rotation policies".to_string());
     }
 
@@ -4932,7 +4950,7 @@ async fn execute_batch_rotation(
     drop(session_manager_guard);
 
     // Check permissions
-    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+    if session.role != UserRole::Administrator && session.role != UserRole::Engineer {
         return Err("Insufficient permissions to execute rotation batch".to_string());
     }
 
@@ -4977,7 +4995,7 @@ async fn create_rotation_schedule(
     drop(session_manager_guard);
 
     // Only administrators can create rotation schedules
-    if session.user_role != "Administrator" {
+    if session.role != UserRole::Administrator {
         return Err("Only administrators can create rotation schedules".to_string());
     }
 
@@ -5076,6 +5094,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(DatabaseState::default())
         .manage(SessionManagerState::default())
         .manage(LoginAttemptTrackerState::default())

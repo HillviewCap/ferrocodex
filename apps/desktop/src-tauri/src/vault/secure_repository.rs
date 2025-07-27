@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, info, warn};
+use tracing::debug;
 use crate::users::User;
 use crate::vault::{
     VaultRepository, SqliteVaultRepository, VaultInfo, IdentityVault, VaultSecret,
@@ -32,7 +32,7 @@ impl SecureVaultRepository {
         // First get the vault info
         let vault_info = repo.get_vault_by_asset_id(asset_id)?;
         
-        if let Some(mut vault_info) = vault_info {
+        if let Some(vault_info) = vault_info {
             // Check if user has read access
             if !self.access_control.can_read(user, vault_info.vault.id)? {
                 debug!("User {} denied read access to vault {}", user.id, vault_info.vault.id);
@@ -293,7 +293,7 @@ impl SecureVaultRepository {
     /// Get all vaults accessible by the user
     pub fn get_accessible_vaults(&self, user: &User) -> Result<Vec<IdentityVault>> {
         let conn = self.db_conn.lock().unwrap();
-        let repo = SqliteVaultRepository::new(&conn);
+        let _repo = SqliteVaultRepository::new(&conn);
         
         if user.role == crate::users::UserRole::Administrator {
             // Administrators can see all vaults

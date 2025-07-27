@@ -7,21 +7,14 @@ use tracing::{info, debug};
 use chrono;
 
 pub mod password_services;
-pub use password_services::{PasswordGenerator, PasswordStrengthAnalyzer, PasswordReuseChecker};
+pub use password_services::{PasswordGenerator, PasswordStrengthAnalyzer};
 
 pub mod access_control;
 pub use access_control::VaultAccessControlService;
 
 pub mod secure_repository;
-pub use secure_repository::SecureVaultRepository;
 
 pub mod rotation;
-pub use rotation::{
-    PasswordRotationService, PasswordRotationRequest, RotationSchedule, RotationBatch,
-    BatchStatus, PasswordRotationHistory, RotationAlert, CreateRotationScheduleRequest,
-    UpdateRotationScheduleRequest, CreateRotationBatchRequest, BatchRotationItem,
-    BatchRotationRequest
-};
 
 #[cfg(test)]
 mod password_performance_tests;
@@ -55,6 +48,11 @@ pub struct VaultSecret {
     pub last_changed: Option<String>,
     pub generation_method: Option<String>,
     pub policy_version: Option<i32>,
+    // Rotation management fields
+    pub last_rotated: Option<String>,
+    pub rotation_interval_days: Option<i32>,
+    pub next_rotation_due: Option<String>,
+    pub rotation_policy_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -678,6 +676,10 @@ impl<'a> SqliteVaultRepository<'a> {
             last_changed: row.get("last_changed").ok(),
             generation_method: row.get("generation_method").ok(),
             policy_version: row.get("policy_version").ok(),
+            last_rotated: row.get("last_rotated").ok(),
+            rotation_interval_days: row.get("rotation_interval_days").ok(),
+            next_rotation_due: row.get("next_rotation_due").ok(),
+            rotation_policy_id: row.get("rotation_policy_id").ok(),
         })
     }
 
@@ -2471,7 +2473,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(updated_request)
     }
 
-    fn get_pending_permission_requests(&self, admin_id: i64) -> Result<Vec<PermissionRequest>> {
+    fn get_pending_permission_requests(&self, _admin_id: i64) -> Result<Vec<PermissionRequest>> {
         let mut stmt = self.conn.prepare(
             "SELECT request_id, user_id, vault_id, requested_permission, requested_by, status, 
                     approved_by, created_at, updated_at, approval_notes 
