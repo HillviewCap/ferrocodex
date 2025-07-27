@@ -117,7 +117,7 @@ impl VaultAccessControlService {
     }
 
     /// Check permission inheritance based on role
-    pub fn check_permission_inheritance(&self, user: &User, permission_type: PermissionType) -> bool {
+    pub fn check_permission_inheritance(&self, user: &User, _permission_type: PermissionType) -> bool {
         match user.role {
             UserRole::Administrator => true, // Administrators have all permissions
             UserRole::Engineer => {

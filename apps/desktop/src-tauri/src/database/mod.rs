@@ -173,7 +173,7 @@ impl Database {
             info!("Applying password rotation migration");
             
             // Check if columns already exist before adding them
-            let column_check: Result<i32> = self.conn.query_row(
+            let column_check: Result<i32, rusqlite::Error> = self.conn.query_row(
                 "SELECT COUNT(*) FROM pragma_table_info('vault_secrets') WHERE name = 'last_rotated'",
                 [],
                 |row| row.get(0),

@@ -1,11 +1,12 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 use std::collections::HashMap;
-use tracing::{info, debug, warn, error};
-use rusqlite::{Connection, params, Row, Transaction};
+use std::str::FromStr;
+use tracing::{info, debug, warn};
+use rusqlite::{Connection, params};
 use crate::audit::{AuditRepository, AuditEventRequest, AuditEventType};
-use super::{VaultSecret, PasswordHistory, VaultRepository, ChangeType};
+use super::VaultRepository;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordRotationRequest {
