@@ -199,3 +199,4 @@ const VaultAccessIndicator: React.FC<VaultAccessIndicatorProps> = ({
 };
 
 export default VaultAccessIndicator;
+
