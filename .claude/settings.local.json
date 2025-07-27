@@ -34,7 +34,12 @@
       "Bash(md-tree:*)",
       "Bash(npm audit:*)",
       "Bash(git pull:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(gh release view:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(git tag:*)",
+      "Bash(git restore:*)"
     ],
     "deny": []
   }
