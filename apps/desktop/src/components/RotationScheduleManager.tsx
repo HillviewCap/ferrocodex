@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Select, InputNumber, Switch, Button, Space, notification, Spin, Alert, Typography, Divider } from 'antd';
-import { CalendarOutlined, SaveOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, Form, Select, Switch, Button, Space, notification, Spin, Alert, Typography, Divider } from 'antd';
+import { CalendarOutlined, SaveOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { RotationSchedule, CreateRotationScheduleRequest, UpdateRotationScheduleRequest, rotationIntervalOptions, rotationAlertOptions } from '../types/vault';
 import useAuthStore from '../store/auth';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface RotationScheduleManagerProps {
   vaultId: number;

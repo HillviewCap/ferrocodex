@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, List, Tag, Space, Typography, Button, Empty, Badge, Alert, Progress, Statistic, Row, Col } from 'antd';
-import { WarningOutlined, CalendarOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { WarningOutlined, CalendarOutlined, LockOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { RotationAlert, RotationComplianceMetrics } from '../types/vault';
 import useAuthStore from '../store/auth';
@@ -52,13 +52,6 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
     } catch (error) {
       console.error('Failed to load compliance metrics:', error);
     }
-  };
-
-  const getAlertColor = (daysUntilRotation: number) => {
-    if (daysUntilRotation < 0) return 'error';
-    if (daysUntilRotation <= 7) return 'warning';
-    if (daysUntilRotation <= 14) return 'processing';
-    return 'default';
   };
 
   const getAlertIcon = (daysUntilRotation: number) => {

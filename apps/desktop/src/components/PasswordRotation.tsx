@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Steps, Form, Input, Button, Select, notification, Space, Typography, Alert, Spin } from 'antd';
+import { Modal, Steps, Form, Input, Button, notification, Space, Typography, Alert, Spin } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
-import { LockOutlined, InfoCircleOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
+import { LockOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { VaultSecret, PasswordRotationRequest, PasswordHistory, PasswordStrength, GeneratePasswordRequest, defaultPasswordRequest } from '../types/vault';
 import useAuthStore from '../store/auth';
 

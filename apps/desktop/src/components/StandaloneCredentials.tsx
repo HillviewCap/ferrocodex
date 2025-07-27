@@ -15,7 +15,6 @@ import {
   Tooltip,
   Popconfirm,
   Alert,
-  Tabs,
   Tree,
   Row,
   Col,
@@ -96,6 +95,7 @@ const StandaloneCredentials: React.FC = () => {
   });
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [, setSelectedCategory] = useState<number | null>(null);
 
   useEffect(() => {
     if (token) {

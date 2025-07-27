@@ -3,10 +3,9 @@ import { Modal, Timeline, Empty, Spin, Typography, Tag, Space, Descriptions } fr
 import { HistoryOutlined, UserOutlined, CalendarOutlined, FileTextOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { PasswordRotationHistory } from '../types/vault';
-import useAuthStore from '../store/auth';
-import { UserInfo } from '../types/auth';
+import useAuthStore, { UserInfo } from '../store/auth';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface PasswordRotationHistoryViewerProps {
   secretId: number;

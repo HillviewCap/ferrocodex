@@ -49,7 +49,8 @@ import {
   changeTypeDisplayNames,
   UpdateCredentialPasswordRequest,
   getStrengthColor,
-  getStrengthLabel
+  getStrengthLabel,
+  VaultAccessInfo
 } from '../types/vault';
 import useAuthStore from '../store/auth';
 import PasswordGenerator from './PasswordGenerator';
@@ -79,8 +80,6 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const [visibleSecrets, setVisibleSecrets] = useState<Set<number>>(new Set());
   const [decryptedSecrets, setDecryptedSecrets] = useState<Map<number, string>>(new Map());
   const [activeTab, setActiveTab] = useState('secrets');
-  const [hasAccess, setHasAccess] = useState(false);
-  const [accessInfo, setAccessInfo] = useState<VaultAccessInfo | null>(null);
   const [permissionManagerVisible, setPermissionManagerVisible] = useState(false);
   
   // Password management state
@@ -127,18 +126,13 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     if (!token || !user) return;
     
     try {
-      const info = await invoke<VaultAccessInfo>('check_vault_access', {
+      await invoke<VaultAccessInfo>('check_vault_access', {
         token,
         vaultId: vaultId,
         permissionType: 'Read'
       });
-      
-      setAccessInfo(info);
-      setHasAccess(info.has_access);
     } catch (error) {
       console.error('Failed to check vault access:', error);
-      setHasAccess(false);
-      setAccessInfo(null);
     }
   };
 

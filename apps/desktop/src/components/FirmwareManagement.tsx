@@ -15,7 +15,6 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo } from '../types/assets';
 import { ConfigurationVersionInfo, FirmwareVersionInfo as RecoveryFirmwareVersionInfo } from '../types/recovery';
-import { FirmwareVersionInfo } from '../types/firmware';
 import useAuthStore from '../store/auth';
 import useFirmwareStore from '../store/firmware';
 import FirmwareUploadModal from './FirmwareUploadModal';
