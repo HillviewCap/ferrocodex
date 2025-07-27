@@ -19,9 +19,9 @@ export interface FirmwareVersion {
 
 export interface FirmwareVersionInfo {
   id: number;
-  asset_id: number;
-  author_id: number;
-  author_username: string;
+  assetId: number;
+  authorId: number;
+  authorUsername: string;
   vendor: string | null;
   model: string | null;
   version: string;
@@ -30,10 +30,10 @@ export interface FirmwareVersionInfo {
   status_changed_at?: string;
   status_changed_by?: number;
   status_changed_by_username?: string;
-  file_path: string;
-  file_hash: string;
-  file_size: number;
-  created_at: string;
+  filePath: string;
+  fileHash: string;
+  fileSize: number;
+  createdAt: string;
 }
 
 export interface FirmwareStatusHistory {
@@ -48,12 +48,12 @@ export interface FirmwareStatusHistory {
 }
 
 export interface UploadFirmwareRequest {
-  asset_id: number;
+  assetId: number;
   vendor: string | null;
   model: string | null;
   version: string;
   notes: string | null;
-  file_path: string;
+  filePath: string;
 }
 
 export interface FirmwareUploadProgress {
@@ -171,8 +171,8 @@ export const formatFirmwareHash = (hash: string | null | undefined): string => {
 
 export const sortFirmwareVersions = (versions: FirmwareVersionInfo[]): FirmwareVersionInfo[] => {
   return [...versions].sort((a, b) => {
-    // Sort by created_at descending (latest first)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    // Sort by createdAt descending (latest first)
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 };
 
