@@ -4591,6 +4591,42 @@ async fn get_user_vault_permissions(
 }
 
 #[tauri::command]
+async fn get_vault_permissions(
+    token: String,
+    vault_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<VaultPermission>, String> {
+    // Validate session and get current user
+    let user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    let user = user.ok_or("Invalid session")?;
+
+    // Only administrators can view vault permissions
+    if user.role != UserRole::Administrator {
+        return Err("Only administrators can view vault permissions".to_string());
+    }
+
+    info!("Administrator {} viewing permissions for vault {}", user.username, vault_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Get vault permissions
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
+    vault_repo.get_vault_permissions(vault_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_vault_access_log(
     token: String,
     vault_id: i64,
@@ -5184,6 +5220,7 @@ pub fn run() {
             grant_vault_access,
             revoke_vault_access,
             get_user_vault_permissions,
+            get_vault_permissions,
             get_vault_access_log,
             create_permission_request,
             // Password rotation commands for Story 4.6
