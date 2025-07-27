@@ -129,16 +129,8 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     try {
       const info = await invoke<VaultAccessInfo>('check_vault_access', {
         token,
-
         vaultId: vaultId,
         permissionType: 'Read'
-=======
-        request: {
-          user_id: user.id,
-          vault_id: vaultId,
-          permission_type: 'Read'
-        }
->>>>>>> origin/main
       });
       
       setAccessInfo(info);
