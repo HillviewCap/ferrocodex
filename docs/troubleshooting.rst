@@ -301,11 +301,252 @@ Import Problems
 * Administrator privileges
 * No corrupt ZIP file
 
+Identity Vault Issues
+---------------------
+
+Cannot Create Vault
+^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Create Vault" button disabled or missing**
+
+*Solutions:*
+
+1. Verify you have Engineer or Administrator role
+2. Check if vault already exists for the asset
+3. Ensure asset is saved before creating vault
+4. Refresh the page and try again
+
+**Issue: Vault creation fails with error**
+
+*Common Causes:*
+
+* Database space limitations
+* Concurrent modification conflict
+* Browser compatibility issues
+
+*Solutions:*
+
+1. Check available disk space
+2. Close and reopen asset view
+3. Try different browser
+4. Contact administrator if persists
+
+Password Generation Problems
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Generate button not working**
+
+*Solutions:*
+
+1. Check browser JavaScript is enabled
+2. Clear browser cache
+3. Try manual password entry
+4. Verify password policy settings
+
+**Issue: Generated password rejected**
+
+*Causes:*
+
+* Password policy requirements changed
+* Special characters not allowed
+* Length requirements not met
+
+*Solutions:*
+
+1. Review password requirements
+2. Adjust generation settings
+3. Try shorter/longer password
+4. Remove special characters if needed
+
+Vault Access Denied
+^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Access Denied" when opening vault**
+
+*Solutions:*
+
+1. Verify you have vault permissions:
+   
+   * Ask administrator for access
+   * Check permission expiration
+   * Review audit log for changes
+
+2. If recently granted access:
+   
+   * Log out and back in
+   * Clear browser cache
+   * Wait 5 minutes for sync
+
+**Issue: Cannot see vault contents**
+
+*Requirements:*
+
+* Read permission on specific vault
+* Active user session
+* Asset access rights
+
+Password Rotation Failures
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Rotation wizard won't complete**
+
+*Common Problems:*
+
+1. **Current password incorrect**:
+   
+   * Verify caps lock
+   * Check password history
+   * Try copy/paste
+
+2. **New password invalid**:
+   
+   * Check complexity requirements
+   * Avoid password reuse
+   * Try generated password
+
+3. **Network/timing issues**:
+   
+   * Check session hasn't expired
+   * Retry the operation
+   * Save work frequently
+
+**Issue: Batch rotation stuck**
+
+*Solutions:*
+
+1. Cancel batch operation
+2. Rotate passwords individually
+3. Check for locked vaults
+4. Review error messages
+
+Compliance and Alerts
+^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Not receiving rotation reminders**
+
+*Check:*
+
+1. Notification settings enabled
+2. Rotation schedule configured
+3. Email address correct
+4. Check spam folder
+
+**Issue: Compliance dashboard empty**
+
+*Solutions:*
+
+1. Verify rotation schedules set
+2. Check user has reporting access
+3. Refresh dashboard data
+4. Review date range filters
+
+Standalone Credentials Issues
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Cannot create categories**
+
+*Requirements:*
+
+* Administrator or Engineer role
+* Unique category name
+* Valid parent category
+
+*Solutions:*
+
+1. Check role permissions
+2. Use different category name
+3. Create at root level first
+
+**Issue: Search not finding credentials**
+
+*Tips:*
+
+1. Use partial search terms
+2. Check category filters
+3. Clear all filters and retry
+4. Verify credential exists
+
+Export/Import with Vaults
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Vault data not included in export**
+
+*Checklist:*
+
+1. "Include vault data" checked
+2. Export permissions granted
+3. Vaults contain data
+4. No active vault locks
+
+**Issue: Import fails with vault data**
+
+*Common Causes:*
+
+* Version incompatibility
+* Corrupted export file
+* Insufficient permissions
+* Duplicate vault conflicts
+
+*Solutions:*
+
+1. Verify export file integrity
+2. Check Ferrocodex versions match
+3. Use Administrator account
+4. Choose merge strategy
+
+Permission Management Problems
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Cannot grant vault permissions**
+
+*Requirements:*
+
+* Administrator role required
+* Target user must exist
+* Vault must be created
+
+**Issue: Time-limited access not expiring**
+
+*Solutions:*
+
+1. Check system time/timezone
+2. Review expiration settings
+3. Manually revoke if needed
+4. Check audit log
+
+Vault Performance Issues
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Vault operations slow**
+
+*Optimizations:*
+
+1. Limit vault size (< 100 entries)
+2. Archive old passwords
+3. Clear browser cache
+4. Check database performance
+
+**Issue: Search within vault slow**
+
+*Tips:*
+
+1. Use specific search terms
+2. Search by label first
+3. Use filters effectively
+4. Paginate large results
+
 Error Messages
 --------------
 
 Common Error Codes
 ^^^^^^^^^^^^^^^^^^
+
+.. figure:: _static/images/error-dialog-example.png
+   :alt: Example error dialog with error code
+   :align: center
+   :width: 500px
+
+   *Example error dialog showing error code and message*
 
 .. list-table::
    :header-rows: 1
@@ -328,6 +569,21 @@ Common Error Codes
    * - ERR_SESS_001
      - Session expired
      - Login again
+   * - ERR_VAULT_001
+     - Vault access denied
+     - Check vault permissions
+   * - ERR_VAULT_002
+     - Vault already exists
+     - Use existing vault
+   * - ERR_VAULT_003
+     - Password policy violation
+     - Meet complexity requirements
+   * - ERR_VAULT_004
+     - Rotation failed
+     - Check current password
+   * - ERR_VAULT_005
+     - Export permission denied
+     - Request export permission
 
 Getting Help
 ------------

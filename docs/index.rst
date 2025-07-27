@@ -9,8 +9,11 @@ Ferrocodex is a secure operational technology (OT) configuration management plat
 
    getting-started
    user-guide
+   firmware-guide
+   admin-guide
    security
    troubleshooting
+   migration-guide
 
 Overview
 --------
@@ -19,6 +22,7 @@ Ferrocodex helps industrial organizations manage their equipment configurations 
 
 * **Offline-First Design**: Work without internet connectivity in air-gapped environments
 * **Version Control**: Track all configuration changes with built-in branching and auditing
+* **Identity Vault**: Secure credential management with password rotation and compliance tracking
 * **Role-Based Access**: Administrator and Engineer roles with granular permissions
 * **Enterprise Security**: AES-256 encryption, secure authentication, and comprehensive audit trails
 * **Cross-Platform**: Available for Windows, macOS, and Linux
@@ -36,6 +40,7 @@ Quick Links
 
 * :doc:`getting-started` - Install and set up Ferrocodex
 * :doc:`user-guide` - Learn how to use all features
+* :doc:`admin-guide` - Administrator functions and management
 * :doc:`security` - Understand security best practices
 * :doc:`troubleshooting` - Solve common issues
 

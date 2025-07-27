@@ -58,6 +58,13 @@ Linux
 First Launch
 ------------
 
+.. figure:: _static/images/first-launch-screen.png
+   :alt: Ferrocodex first launch screen
+   :align: center
+   :width: 600px
+
+   *The Ferrocodex welcome screen on first launch*
+
 Initial Setup
 ^^^^^^^^^^^^^
 
