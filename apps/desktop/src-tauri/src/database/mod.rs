@@ -9,6 +9,7 @@ use crate::configurations::SqliteConfigurationRepository;
 use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
 use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
+use crate::vault::{SqliteVaultRepository, VaultRepository};
 
 pub struct Database {
     conn: Connection,
@@ -86,6 +87,10 @@ impl Database {
         let firmware_analysis_repo = SqliteFirmwareAnalysisRepository::new(&self.conn);
         firmware_analysis_repo.initialize_schema()?;
 
+        // Initialize vault schema
+        let vault_repo = SqliteVaultRepository::new(&self.conn);
+        vault_repo.initialize_schema()?;
+
         // Run data migrations
         self.run_data_migrations()?;
 
@@ -161,6 +166,37 @@ impl Database {
         self.set_metadata(migration_key, "applied")?;
         
         info!("Firmware metadata migration completed");
+        
+        // Story 4.6 - Password rotation migration
+        let rotation_migration_key = "password_rotation_migration_20250126";
+        if let Ok(None) = self.get_metadata(rotation_migration_key) {
+            info!("Applying password rotation migration");
+            
+            // Check if columns already exist before adding them
+            let column_check: Result<i32> = self.conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('vault_secrets') WHERE name = 'last_rotated'",
+                [],
+                |row| row.get(0),
+            );
+            
+            if let Ok(0) = column_check {
+                // Add rotation columns to existing vault_secrets table
+                self.conn.execute_batch(r#"
+                    -- Add rotation management columns to vault_secrets
+                    ALTER TABLE vault_secrets ADD COLUMN last_rotated DATETIME;
+                    ALTER TABLE vault_secrets ADD COLUMN rotation_interval_days INTEGER;
+                    ALTER TABLE vault_secrets ADD COLUMN next_rotation_due DATETIME;
+                    ALTER TABLE vault_secrets ADD COLUMN rotation_policy_id INTEGER;
+                "#)?;
+                
+                info!("Added rotation columns to vault_secrets table");
+            }
+            
+            // Mark migration as complete
+            self.set_metadata(rotation_migration_key, "applied")?;
+            info!("Password rotation migration completed");
+        }
+        
         Ok(())
     }
 }

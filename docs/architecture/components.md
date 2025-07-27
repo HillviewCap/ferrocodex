@@ -63,6 +63,7 @@ graph TB
 **Responsibility**: Render the user interface and handle user interactions.
 
 **Key Components**:
+
 - `Dashboard`: Main application dashboard showing assets and statistics
 - `AssetDetails`: Detailed view of an asset with versions and branches
 - `ConfigurationHistory`: Timeline view of configuration versions
@@ -76,6 +77,7 @@ graph TB
 - `CreateAdminForm`: Initial admin setup
 
 **Design Patterns**:
+
 - Functional components with hooks
 - Component composition for reusability
 - Controlled components for forms
@@ -88,6 +90,7 @@ graph TB
 **Responsibility**: Manage application state and provide a clean API for components.
 
 **Stores**:
+
 - `authStore`: Authentication state and session management
 - `assetStore`: Asset and configuration data management
 - `branchStore`: Branch-related state
@@ -95,6 +98,7 @@ graph TB
 - `uiStore`: UI preferences and temporary state
 
 **Features**:
+
 - Persistent state for user preferences
 - Optimistic updates with rollback
 - Computed values and selectors
@@ -107,6 +111,7 @@ graph TB
 **Responsibility**: Abstract Tauri IPC calls and handle request/response transformation.
 
 **Services**:
+
 - `authService`: Authentication and session operations
 - `assetService`: Asset and configuration CRUD operations
 - `branchService`: Branch management operations
@@ -115,6 +120,7 @@ graph TB
 - `validationService`: Client-side validation helpers
 
 **Features**:
+
 - Type-safe API calls
 - Error transformation and handling
 - Request/response logging in development
@@ -129,6 +135,7 @@ graph TB
 **Responsibility**: Bridge between frontend and backend, handling command routing.
 
 **Features**:
+
 - Command registration and routing
 - State injection for handlers
 - Error serialization for frontend
@@ -141,6 +148,7 @@ graph TB
 **Responsibility**: Process IPC commands and coordinate business logic.
 
 **Organization**:
+
 - Each domain has its own command module
 - Commands validate inputs and check permissions
 - Thin layer that delegates to core logic
@@ -153,30 +161,35 @@ graph TB
 **Modules**:
 
 #### Asset Management (`assets/`)
+
 - Asset CRUD operations
 - Configuration version management
 - Version history tracking
 - Golden image workflow
 
 #### Branch Management (`branches/`)
+
 - Branch creation and hierarchy
 - Version isolation
 - Branch merging preparation
 - Parent-child relationships
 
 #### Configuration Management (`configurations/`)
+
 - Configuration import/export
 - Version control logic
 - Status transitions
 - File encryption/decryption
 
 #### Firmware Management (`firmware/`)
+
 - Firmware upload handling
 - Metadata extraction
 - Status workflow
 - Binary file management
 
 #### Recovery Operations (`recovery/`)
+
 - Complete asset recovery
 - Bundle generation
 - Manifest creation
@@ -189,12 +202,14 @@ graph TB
 **Responsibility**: Handle user authentication and session management.
 
 **Components**:
+
 - `SessionManager`: Token generation and validation
 - `LoginAttemptTracker`: Brute force protection
 - `PasswordHasher`: Secure password hashing
 - `RoleChecker`: Permission verification
 
 **Features**:
+
 - Session token management
 - Role-based access control
 - Login attempt throttling
@@ -207,11 +222,13 @@ graph TB
 **Responsibility**: Manage database connections and provide repository pattern.
 
 **Components**:
+
 - `DatabaseManager`: Connection pooling and initialization
 - `MigrationRunner`: Schema version management
 - Repository implementations for each entity
 
 **Features**:
+
 - Connection pooling
 - Automatic migrations
 - Transaction support
@@ -224,11 +241,13 @@ graph TB
 **Responsibility**: Handle all encryption/decryption operations.
 
 **Components**:
+
 - `EncryptionManager`: Key derivation and management
 - `FileEncryptor`: File encryption/decryption
 - `DatabaseEncryptor`: Transparent database encryption
 
 **Features**:
+
 - AES-256-GCM encryption
 - Key derivation from user credentials
 - Secure key storage
@@ -241,6 +260,7 @@ graph TB
 **Responsibility**: Manage file system operations for large files.
 
 **Features**:
+
 - Secure file storage paths
 - Atomic file operations
 - Storage quota management
@@ -253,11 +273,13 @@ graph TB
 **Responsibility**: Analyze firmware binaries for metadata and security issues.
 
 **Components**:
+
 - `AnalysisQueue`: Background job processing
 - `BinwalkAnalyzer`: Firmware analysis engine
 - `ResultProcessor`: Analysis result formatting
 
 **Features**:
+
 - Asynchronous analysis
 - Queue-based processing
 - Metadata extraction
@@ -270,6 +292,7 @@ graph TB
 **Responsibility**: Log all security-relevant operations.
 
 **Features**:
+
 - Comprehensive operation logging
 - User action tracking
 - Tamper-resistant storage
@@ -282,6 +305,7 @@ graph TB
 **Responsibility**: Input validation and sanitization.
 
 **Features**:
+
 - Input sanitization
 - Pattern validation
 - Business rule enforcement
@@ -294,6 +318,7 @@ graph TB
 **Responsibility**: Prevent abuse and brute force attacks.
 
 **Features**:
+
 - Per-user rate limiting
 - Sliding window algorithm
 - Configurable limits
@@ -347,28 +372,33 @@ sequenceDiagram
 ## Design Principles
 
 ### 1. Separation of Concerns
+
 - Each component has a single, well-defined responsibility
 - Business logic separated from infrastructure
 - UI logic separated from state management
 
 ### 2. Dependency Injection
+
 - Components receive dependencies through constructors
 - Enables testing and loose coupling
 - State management through Tauri's state system
 
 ### 3. Security by Design
+
 - All inputs validated at boundaries
 - Encryption applied transparently
 - Audit logging automatic
 - Rate limiting built-in
 
 ### 4. Error Handling
+
 - Errors handled at appropriate levels
 - User-friendly error messages
 - Detailed logging for debugging
 - Graceful degradation
 
 ### 5. Performance
+
 - Async operations for I/O
 - Database connection pooling
 - Efficient file streaming
@@ -377,18 +407,21 @@ sequenceDiagram
 ## Testing Strategy
 
 ### Frontend Testing
+
 - Component testing with React Testing Library
 - Store testing with Zustand test utilities
 - Integration tests for workflows
 - Visual regression testing
 
 ### Backend Testing
+
 - Unit tests for each module
 - Integration tests for command handlers
 - Repository tests with test database
 - Security tests for authentication
 
 ### End-to-End Testing
+
 - Critical user journeys
 - Cross-platform compatibility
 - Performance benchmarks

@@ -19,6 +19,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { DashboardStats } from '../types/dashboard';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
+import StandaloneCredentials from './StandaloneCredentials';
 import { canAccessUserManagement } from '../utils/roleUtils';
 
 const { Header, Sider, Content } = Layout;
@@ -101,6 +102,11 @@ const Dashboard: React.FC = () => {
       key: 'assets',
       icon: <DatabaseOutlined />,
       label: 'Assets',
+    },
+    {
+      key: 'standalone-credentials',
+      icon: <LockOutlined />,
+      label: 'Standalone Credentials',
     },
     {
       key: 'passwords',
@@ -202,7 +208,7 @@ const Dashboard: React.FC = () => {
           <Content
             style={{
               background: '#fff',
-              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets') ? '0' : '24px',
+              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials') ? '0' : '24px',
               margin: 0,
               minHeight: 280,
               borderRadius: '8px',
@@ -213,6 +219,8 @@ const Dashboard: React.FC = () => {
               <UserManagement />
             ) : selectedMenuItem === 'assets' ? (
               <AssetManagement />
+            ) : selectedMenuItem === 'standalone-credentials' ? (
+              <StandaloneCredentials />
             ) : selectedMenuItem === 'dashboard' ? (
               <Space direction="vertical" size="large" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

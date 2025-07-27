@@ -1,4 +1,5 @@
 use super::*;
+use crate::vault::{VaultRepository, IdentityVault, VaultInfo, VaultSecret, CreateVaultRequest, AddSecretRequest, SecretType};
 use crate::{
     configurations::{ConfigurationVersion, ConfigurationStatus},
     firmware::{FirmwareVersion, FirmwareStatus},
@@ -185,6 +186,212 @@ use tempfile::TempDir;
         }
     }
 
+    struct MockVaultRepository {
+        vaults: HashMap<i64, VaultInfo>,
+    }
+
+    impl MockVaultRepository {
+        fn new() -> Self {
+            let mut vaults = HashMap::new();
+            let vault = IdentityVault {
+                id: 1,
+                asset_id: 1,
+                name: "Test Vault".to_string(),
+                description: "Test vault for unit tests".to_string(),
+                created_by: 1,
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+            };
+            
+            let secrets = vec![
+                VaultSecret {
+                    id: 1,
+                    vault_id: 1,
+                    secret_type: SecretType::Password,
+                    label: "Admin Password".to_string(),
+                    encrypted_value: "encrypted_password_data".to_string(),
+                    created_at: "2024-01-01T00:00:00Z".to_string(),
+                    updated_at: "2024-01-01T00:00:00Z".to_string(),
+                    strength_score: Some(90),
+                    last_changed: Some("2024-01-01T00:00:00Z".to_string()),
+                    generation_method: Some("manual".to_string()),
+                    policy_version: Some(1),
+                },
+                VaultSecret {
+                    id: 2,
+                    vault_id: 1,
+                    secret_type: SecretType::IpAddress,
+                    label: "PLC IP".to_string(),
+                    encrypted_value: "encrypted_ip_data".to_string(),
+                    created_at: "2024-01-01T00:00:00Z".to_string(),
+                    updated_at: "2024-01-01T00:00:00Z".to_string(),
+                    strength_score: None,
+                    last_changed: None,
+                    generation_method: None,
+                    policy_version: None,
+                },
+            ];
+            
+            vaults.insert(1, VaultInfo {
+                vault,
+                secrets: secrets.clone(),
+                secret_count: secrets.len(),
+            });
+            
+            Self { vaults }
+        }
+    }
+
+    impl VaultRepository for MockVaultRepository {
+        fn create_vault(&self, _request: CreateVaultRequest) -> Result<IdentityVault> {
+            unimplemented!()
+        }
+        
+        fn get_vault_by_id(&self, _vault_id: i64) -> Result<Option<IdentityVault>> {
+            unimplemented!()
+        }
+        
+        fn get_vault_by_asset_id(&self, asset_id: i64) -> Result<Option<VaultInfo>> {
+            if asset_id == 1 {
+                Ok(self.vaults.get(&1).cloned())
+            } else {
+                Ok(None)
+            }
+        }
+        
+        fn update_vault(&self, _vault: &IdentityVault) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn delete_vault(&self, _vault_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn add_secret(&self, _request: AddSecretRequest) -> Result<VaultSecret> {
+            unimplemented!()
+        }
+        
+        fn get_vault_secrets(&self, _vault_id: i64) -> Result<Vec<VaultSecret>> {
+            unimplemented!()
+        }
+        
+        fn get_secret_by_id(&self, _secret_id: i64) -> Result<Option<VaultSecret>> {
+            unimplemented!()
+        }
+        
+        fn update_secret(&self, _secret: &VaultSecret, _author_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn delete_secret(&self, _secret_id: i64, _author_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn add_version_history(&self, _vault_id: i64, _change_type: crate::vault::ChangeType, _author: i64, _notes: &str, _changes: HashMap<String, String>) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_vault_history(&self, _vault_id: i64) -> Result<Vec<crate::vault::VaultVersion>> {
+            unimplemented!()
+        }
+        
+        fn import_vault(&self, _vault_info: &VaultInfo, _author_id: i64) -> Result<IdentityVault> {
+            Ok(self.vaults.get(&1).unwrap().vault.clone())
+        }
+        
+        fn initialize_schema(&self) -> Result<()> {
+            Ok(())
+        }
+        
+        // Password management methods
+        fn add_password_history(&self, _secret_id: i64, _password_hash: &str) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_password_history(&self, _secret_id: i64) -> Result<Vec<crate::vault::PasswordHistory>> {
+            unimplemented!()
+        }
+        
+        fn check_password_reuse(&self, _password_hash: &str, _exclude_secret_id: Option<i64>) -> Result<bool> {
+            unimplemented!()
+        }
+        
+        fn update_password(&self, _request: crate::vault::UpdateCredentialPasswordRequest, _password_hash: &str, _strength_score: i32) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_default_password_policy(&self) -> Result<crate::vault::PasswordPolicy> {
+            unimplemented!()
+        }
+        
+        fn cleanup_password_history(&self, _secret_id: i64, _keep_count: usize) -> Result<()> {
+            unimplemented!()
+        }
+        
+        // Standalone credential methods
+        fn create_standalone_credential(&self, _request: crate::vault::CreateStandaloneCredentialRequest) -> Result<crate::vault::StandaloneCredential> {
+            unimplemented!()
+        }
+        
+        fn get_standalone_credential(&self, _credential_id: i64) -> Result<Option<crate::vault::StandaloneCredentialInfo>> {
+            unimplemented!()
+        }
+        
+        fn update_standalone_credential(&self, _request: crate::vault::UpdateStandaloneCredentialRequest) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn delete_standalone_credential(&self, _credential_id: i64, _author_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn search_standalone_credentials(&self, _request: crate::vault::SearchCredentialsRequest) -> Result<crate::vault::SearchCredentialsResponse> {
+            unimplemented!()
+        }
+        
+        fn get_standalone_credential_history(&self, _credential_id: i64) -> Result<Vec<crate::vault::StandaloneCredentialHistory>> {
+            unimplemented!()
+        }
+        
+        fn update_credential_last_accessed(&self, _credential_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        // Category management methods
+        fn create_credential_category(&self, _request: crate::vault::CreateCategoryRequest) -> Result<crate::vault::CredentialCategory> {
+            unimplemented!()
+        }
+        
+        fn get_credential_categories(&self) -> Result<Vec<crate::vault::CategoryWithChildren>> {
+            unimplemented!()
+        }
+        
+        fn update_credential_category(&self, _category_id: i64, _request: crate::vault::CreateCategoryRequest) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn delete_credential_category(&self, _category_id: i64) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_category_by_id(&self, _category_id: i64) -> Result<Option<crate::vault::CredentialCategory>> {
+            unimplemented!()
+        }
+        
+        // Tag management methods
+        fn add_credential_tags(&self, _credential_id: i64, _tags: &[String]) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn remove_credential_tag(&self, _credential_id: i64, _tag_name: &str) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_all_tags(&self) -> Result<Vec<String>> {
+            unimplemented!()
+        }
+    }
+
     struct MockAuditRepository;
 
     impl AuditRepository for MockAuditRepository {
@@ -312,4 +519,64 @@ use tempfile::TempDir;
         // );
         // assert!(result.is_err());
         // assert!(result.unwrap_err().to_string().contains("Export directory cannot be empty"));
+    }
+
+    #[test]
+    fn test_bundle_validation_with_vault() {
+        let temp_dir = TempDir::new().unwrap();
+        let bundle_path = temp_dir.path();
+
+        // Create a mock manifest with vault
+        let manifest = RecoveryManifest {
+            asset_id: 1,
+            export_date: "2024-01-01T00:00:00Z".to_string(),
+            exported_by: "test_user".to_string(),
+            configuration: ConfigurationExportInfo {
+                version_id: 1,
+                version_number: "1.0.0".to_string(),
+                filename: "test_config.json".to_string(),
+                checksum: "config_checksum".to_string(),
+                file_size: 1024,
+            },
+            firmware: FirmwareExportInfo {
+                version_id: 1,
+                version: "2.0.0".to_string(),
+                filename: "test_firmware.bin".to_string(),
+                checksum: "firmware_checksum".to_string(),
+                vendor: "Test Vendor".to_string(),
+                model: "Test Model".to_string(),
+                file_size: 2048,
+            },
+            vault: Some(VaultExportInfo {
+                vault_id: 1,
+                vault_name: "Test Vault".to_string(),
+                filename: "test_vault.json".to_string(),
+                checksum: "vault_checksum".to_string(),
+                secret_count: 2,
+                file_size: 512,
+                encrypted: true,
+            }),
+            compatibility_verified: true,
+        };
+
+        // Write manifest file
+        let manifest_path = bundle_path.join("test_recovery_manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+
+        // Test validation fails without actual files
+        let result = RecoveryImporter::validate_bundle_integrity(bundle_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Configuration file not found"));
+    }
+
+    #[test]
+    fn test_checksum_consistency() {
+        let data = b"test configuration data";
+        let checksum1 = RecoveryExporter::calculate_checksum(data);
+        let checksum2 = RecoveryExporter::calculate_checksum(data);
+        assert_eq!(checksum1, checksum2);
+        
+        let different_data = b"different data";
+        let checksum3 = RecoveryExporter::calculate_checksum(different_data);
+        assert_ne!(checksum1, checksum3);
     }

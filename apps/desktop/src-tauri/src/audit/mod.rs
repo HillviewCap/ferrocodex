@@ -30,6 +30,24 @@ pub enum AuditEventType {
     FirmwareStatusChange,
     FirmwareGoldenPromotion,
     FirmwareNotesUpdate,
+    // Vault access events for Story 4.5
+    VaultAccessGranted,
+    VaultAccessRevoked,
+    VaultAccessDenied,
+    VaultCreated,
+    VaultUpdated,
+    VaultDeleted,
+    VaultSecretAdded,
+    VaultSecretUpdated,
+    VaultSecretDeleted,
+    VaultExported,
+    VaultImported,
+    VaultPermissionRequested,
+    VaultPermissionApproved,
+    VaultPermissionDenied,
+    VaultPermissionExpired,
+    // Password rotation event for Story 4.6
+    VaultSecretRotated,
 }
 
 impl fmt::Display for AuditEventType {
@@ -59,6 +77,23 @@ impl fmt::Display for AuditEventType {
             AuditEventType::FirmwareStatusChange => write!(f, "FW_006"),
             AuditEventType::FirmwareGoldenPromotion => write!(f, "FW_007"),
             AuditEventType::FirmwareNotesUpdate => write!(f, "FW_008"),
+            // Vault access events
+            AuditEventType::VaultAccessGranted => write!(f, "VAULT_001"),
+            AuditEventType::VaultAccessRevoked => write!(f, "VAULT_002"),
+            AuditEventType::VaultAccessDenied => write!(f, "VAULT_003"),
+            AuditEventType::VaultCreated => write!(f, "VAULT_004"),
+            AuditEventType::VaultUpdated => write!(f, "VAULT_005"),
+            AuditEventType::VaultDeleted => write!(f, "VAULT_006"),
+            AuditEventType::VaultSecretAdded => write!(f, "VAULT_007"),
+            AuditEventType::VaultSecretUpdated => write!(f, "VAULT_008"),
+            AuditEventType::VaultSecretDeleted => write!(f, "VAULT_009"),
+            AuditEventType::VaultExported => write!(f, "VAULT_010"),
+            AuditEventType::VaultImported => write!(f, "VAULT_011"),
+            AuditEventType::VaultPermissionRequested => write!(f, "VAULT_012"),
+            AuditEventType::VaultPermissionApproved => write!(f, "VAULT_013"),
+            AuditEventType::VaultPermissionDenied => write!(f, "VAULT_014"),
+            AuditEventType::VaultPermissionExpired => write!(f, "VAULT_015"),
+            AuditEventType::VaultSecretRotated => write!(f, "VAULT_016"),
         }
     }
 }
@@ -141,6 +176,22 @@ impl<'a> SqliteAuditRepository<'a> {
             "FW_006" => AuditEventType::FirmwareStatusChange,
             "FW_007" => AuditEventType::FirmwareGoldenPromotion,
             "FW_008" => AuditEventType::FirmwareNotesUpdate,
+            "VAULT_001" => AuditEventType::VaultAccessGranted,
+            "VAULT_002" => AuditEventType::VaultAccessRevoked,
+            "VAULT_003" => AuditEventType::VaultAccessDenied,
+            "VAULT_004" => AuditEventType::VaultCreated,
+            "VAULT_005" => AuditEventType::VaultUpdated,
+            "VAULT_006" => AuditEventType::VaultDeleted,
+            "VAULT_007" => AuditEventType::VaultSecretAdded,
+            "VAULT_008" => AuditEventType::VaultSecretUpdated,
+            "VAULT_009" => AuditEventType::VaultSecretDeleted,
+            "VAULT_010" => AuditEventType::VaultExported,
+            "VAULT_011" => AuditEventType::VaultImported,
+            "VAULT_012" => AuditEventType::VaultPermissionRequested,
+            "VAULT_013" => AuditEventType::VaultPermissionApproved,
+            "VAULT_014" => AuditEventType::VaultPermissionDenied,
+            "VAULT_015" => AuditEventType::VaultPermissionExpired,
+            "VAULT_016" => AuditEventType::VaultSecretRotated,
             _ => return Err(rusqlite::Error::InvalidColumnType(0, "event_type".to_string(), rusqlite::types::Type::Text)),
         };
 
@@ -375,6 +426,149 @@ pub fn create_user_reactivated_event(
         target_username: Some(target_username.to_string()),
         description: format!("Administrator '{}' reactivated user '{}'", admin_username, target_username),
         metadata: None,
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+// Vault audit event helpers for Story 4.5
+pub fn create_vault_access_granted_event(
+    admin_user_id: i64,
+    admin_username: &str,
+    target_user_id: i64,
+    target_username: &str,
+    vault_id: i64,
+    permission_type: &str,
+) -> AuditEventRequest {
+    AuditEventRequest {
+        event_type: AuditEventType::VaultAccessGranted,
+        user_id: Some(admin_user_id),
+        username: Some(admin_username.to_string()),
+        admin_user_id: Some(admin_user_id),
+        admin_username: Some(admin_username.to_string()),
+        target_user_id: Some(target_user_id),
+        target_username: Some(target_username.to_string()),
+        description: format!("Administrator '{}' granted {} access to user '{}' for vault {}", 
+                           admin_username, permission_type, target_username, vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, vault_id, permission_type)),
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+pub fn create_vault_access_revoked_event(
+    admin_user_id: i64,
+    admin_username: &str,
+    target_user_id: i64,
+    target_username: &str,
+    vault_id: i64,
+    permission_type: Option<&str>,
+) -> AuditEventRequest {
+    let permission_desc = permission_type.unwrap_or("all");
+    AuditEventRequest {
+        event_type: AuditEventType::VaultAccessRevoked,
+        user_id: Some(admin_user_id),
+        username: Some(admin_username.to_string()),
+        admin_user_id: Some(admin_user_id),
+        admin_username: Some(admin_username.to_string()),
+        target_user_id: Some(target_user_id),
+        target_username: Some(target_username.to_string()),
+        description: format!("Administrator '{}' revoked {} access from user '{}' for vault {}", 
+                           admin_username, permission_desc, target_username, vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, vault_id, permission_desc)),
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+pub fn create_vault_access_denied_event(
+    user_id: i64,
+    username: &str,
+    vault_id: i64,
+    access_type: &str,
+    reason: &str,
+) -> AuditEventRequest {
+    AuditEventRequest {
+        event_type: AuditEventType::VaultAccessDenied,
+        user_id: Some(user_id),
+        username: Some(username.to_string()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: None,
+        target_username: None,
+        description: format!("User '{}' was denied {} access to vault {}: {}", 
+                           username, access_type, vault_id, reason),
+        metadata: Some(format!(r#"{{"vault_id": {}, "access_type": "{}", "reason": "{}"}}"#, 
+                             vault_id, access_type, reason)),
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+pub fn create_vault_exported_event(
+    user_id: i64,
+    username: &str,
+    vault_id: i64,
+    vault_name: &str,
+) -> AuditEventRequest {
+    AuditEventRequest {
+        event_type: AuditEventType::VaultExported,
+        user_id: Some(user_id),
+        username: Some(username.to_string()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: None,
+        target_username: None,
+        description: format!("User '{}' exported vault '{}' (ID: {})", username, vault_name, vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "vault_name": "{}"}}"#, vault_id, vault_name)),
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+pub fn create_vault_permission_approved_event(
+    admin_user_id: i64,
+    admin_username: &str,
+    requester_id: i64,
+    requester_username: &str,
+    vault_id: i64,
+    permission_type: &str,
+) -> AuditEventRequest {
+    AuditEventRequest {
+        event_type: AuditEventType::VaultPermissionApproved,
+        user_id: Some(admin_user_id),
+        username: Some(admin_username.to_string()),
+        admin_user_id: Some(admin_user_id),
+        admin_username: Some(admin_username.to_string()),
+        target_user_id: Some(requester_id),
+        target_username: Some(requester_username.to_string()),
+        description: format!("Administrator '{}' approved {} permission request from user '{}' for vault {}", 
+                           admin_username, permission_type, requester_username, vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, vault_id, permission_type)),
+        ip_address: None,
+        user_agent: None,
+    }
+}
+
+pub fn create_vault_permission_denied_event(
+    admin_user_id: i64,
+    admin_username: &str,
+    requester_id: i64,
+    requester_username: &str,
+    vault_id: i64,
+    permission_type: &str,
+) -> AuditEventRequest {
+    AuditEventRequest {
+        event_type: AuditEventType::VaultPermissionDenied,
+        user_id: Some(admin_user_id),
+        username: Some(admin_username.to_string()),
+        admin_user_id: Some(admin_user_id),
+        admin_username: Some(admin_username.to_string()),
+        target_user_id: Some(requester_id),
+        target_username: Some(requester_username.to_string()),
+        description: format!("Administrator '{}' denied {} permission request from user '{}' for vault {}", 
+                           admin_username, permission_type, requester_username, vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, vault_id, permission_type)),
         ip_address: None,
         user_agent: None,
     }

@@ -10,14 +10,18 @@ import {
   Spin,
   Tag,
   Card,
-  Divider
+  Divider,
+  Checkbox,
+  Tooltip
 } from 'antd';
 import {
   DownloadOutlined,
   FileOutlined,
   RocketOutlined,
   FolderOpenOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  LockOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import * as dialog from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,6 +30,12 @@ import { FirmwareVersionInfo } from '../types/firmware';
 import useAuthStore from '../store/auth';
 
 const { Text, Title } = Typography;
+
+interface ExportOptions {
+  includeVault: boolean;
+  vaultAvailable: boolean;
+  vaultSecretCount: number;
+}
 
 interface ExportRecoveryPackageModalProps {
   visible: boolean;
@@ -52,10 +62,16 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [firmwareInfo, setFirmwareInfo] = useState<FirmwareVersionInfo | null>(null);
   const [loadingFirmware, setLoadingFirmware] = useState(false);
+  const [exportOptions, setExportOptions] = useState<ExportOptions | null>(null);
+  const [includeVault, setIncludeVault] = useState(false);
+  const [_loadingOptions, setLoadingOptions] = useState(false);
 
   useEffect(() => {
-    if (visible && linkedFirmwareId) {
-      fetchFirmwareInfo();
+    if (visible) {
+      if (linkedFirmwareId) {
+        fetchFirmwareInfo();
+      }
+      fetchExportOptions();
     }
   }, [visible, linkedFirmwareId]);
 
@@ -79,6 +95,25 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
       console.error('Failed to fetch firmware info:', err);
     } finally {
       setLoadingFirmware(false);
+    }
+  };
+
+  const fetchExportOptions = async () => {
+    if (!token) return;
+    
+    setLoadingOptions(true);
+    try {
+      const options = await invoke<ExportOptions>('get_export_options', {
+        token,
+        assetId
+      });
+      
+      setExportOptions(options);
+      setIncludeVault(options.includeVault);
+    } catch (err) {
+      console.error('Failed to fetch export options:', err);
+    } finally {
+      setLoadingOptions(false);
     }
   };
 
@@ -116,10 +151,11 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
       const manifestPath = await invoke<string>('export_complete_recovery', {
         app: null, // Will be injected by Tauri
         token: token!,
-        asset_id: assetId,
-        config_version_id: configuration.id,
-        firmware_version_id: linkedFirmwareId,
-        export_directory: selectedPath
+        assetId,
+        configVersionId: configuration.id,
+        firmwareVersionId: linkedFirmwareId,
+        exportDirectory: selectedPath,
+        includeVault: includeVault && exportOptions?.vaultAvailable
       });
       
       message.success('Recovery package exported successfully!');
@@ -223,6 +259,27 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
               </div>
             </div>
 
+            {exportOptions?.vaultAvailable && (
+              <>
+                <Divider style={{ margin: '12px 0' }} />
+                <div>
+                  <Space>
+                    <LockOutlined style={{ color: '#fa8c16' }} />
+                    <Text strong>Identity Vault</Text>
+                    <Tooltip title="Contains encrypted credentials and secrets for this asset">
+                      <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+                    </Tooltip>
+                  </Space>
+                  <div style={{ marginLeft: 24 }}>
+                    <Space wrap>
+                      <Tag color="orange">{exportOptions.vaultSecretCount} secrets</Tag>
+                      <Text type="secondary">Encrypted credentials and passwords</Text>
+                    </Space>
+                  </div>
+                </div>
+              </>
+            )}
+
             <Divider style={{ margin: '12px 0' }} />
 
             <div>
@@ -253,6 +310,32 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
               {selectedPath || 'Click to select export directory...'}
             </Button>
           </Form.Item>
+
+          {exportOptions?.vaultAvailable && (
+            <Form.Item>
+              <Checkbox
+                checked={includeVault}
+                onChange={(e) => setIncludeVault(e.target.checked)}
+              >
+                <Space>
+                  <LockOutlined />
+                  Include Identity Vault
+                  <Tooltip title="Export encrypted credentials and secrets with the recovery package">
+                    <InfoCircleOutlined style={{ color: '#8c8c8c' }} />
+                  </Tooltip>
+                </Space>
+              </Checkbox>
+              {includeVault && (
+                <Alert
+                  message="Security Notice"
+                  description="The vault data will remain encrypted during export. Only users with appropriate permissions can access the vault contents after import."
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </Form.Item>
+          )}
         </Form>
 
         {selectedPath && (
