@@ -4457,9 +4457,12 @@ async fn grant_vault_access(
         .map_err(|e| e.to_string())?
         .ok_or("Target user not found")?;
 
-    // Grant the permission
+    // Grant the permission - Set the correct granted_by value
+    let mut updated_request = request.clone();
+    updated_request.granted_by = admin_user.user_id;
+    
     let vault_repo = SqliteVaultRepository::new(db.get_connection());
-    let permission = vault_repo.grant_vault_access(request.clone())
+    let permission = vault_repo.grant_vault_access(updated_request)
         .map_err(|e| e.to_string())?;
 
     // Log audit event
