@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Space,
-  Spin,
   Empty,
   App,
   Table,
@@ -23,7 +22,6 @@ import {
   Divider,
   Badge,
   Dropdown,
-  Menu,
   TreeProps
 } from 'antd';
 import {
@@ -38,7 +36,6 @@ import {
   FileTextOutlined,
   SearchOutlined,
   FolderOutlined,
-  FolderOpenOutlined,
   CloudServerOutlined,
   DatabaseOutlined,
   CloudOutlined,
@@ -58,12 +55,7 @@ import {
   SearchCredentialsRequest,
   SearchCredentialsResponse,
   SecretType,
-  CreateCategoryRequest,
-  secretTypeDisplayNames,
-  secretTypeIcons,
-  defaultCategoryIcons,
-  getStrengthColor,
-  getStrengthLabel
+  secretTypeDisplayNames
 } from '../types/vault';
 import useAuthStore from '../store/auth';
 import PasswordGenerator from './PasswordGenerator';
@@ -71,7 +63,6 @@ import PasswordInput from './PasswordInput';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-const { TabPane } = Tabs;
 
 const StandaloneCredentials: React.FC = () => {
   const { token, user } = useAuthStore();
@@ -82,7 +73,6 @@ const StandaloneCredentials: React.FC = () => {
   const [categories, setCategories] = useState<CategoryWithChildren[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedCredential, setSelectedCredential] = useState<StandaloneCredentialInfo | null>(null);
   const [visibleCredentials, setVisibleCredentials] = useState<Set<number>>(new Set());
   const [decryptedValues, setDecryptedValues] = useState<Map<number, string>>(new Map());
@@ -97,11 +87,10 @@ const StandaloneCredentials: React.FC = () => {
   // Form instances
   const [createCredentialForm] = Form.useForm();
   const [editCredentialForm] = Form.useForm();
-  const [categoryForm] = Form.useForm();
   const [searchForm] = Form.useForm();
   
   // Search and pagination
-  const [searchParams, setSearchParams] = useState<SearchCredentialsRequest>({
+  const [searchParams] = useState<SearchCredentialsRequest>({
     limit: 50,
     offset: 0
   });
@@ -773,8 +762,8 @@ const StandaloneCredentials: React.FC = () => {
       {/* Password Generator Modal */}
       <PasswordGenerator
         visible={passwordGeneratorVisible}
-        onClose={() => setPasswordGeneratorVisible(false)}
-        onGenerate={handlePasswordGenerated}
+        onCancel={() => setPasswordGeneratorVisible(false)}
+        onGenerated={handlePasswordGenerated}
       />
 
       {/* Category Management Modal */}

@@ -15,15 +15,15 @@ mod vault;
 use database::Database;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
 use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
-use audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
+use audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event, create_vault_access_granted_event, create_vault_access_revoked_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
 use assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo};
 use configurations::{ConfigurationRepository, SqliteConfigurationRepository, CreateConfigurationRequest, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, file_utils, FileMetadata};
 use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, BranchInfo, CreateBranchVersionRequest, BranchVersionInfo};
 use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
 use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
-use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
-use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer, CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren};
+use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest, RecoveryImporter, RecoveryImportRequest};
+use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer, CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService, PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest, VaultAccessLog, CreatePermissionRequest, PermissionRequest, rotation::{PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule, RotationBatch, BatchRotationService, PasswordRotationHistory, RotationAlert, CreateRotationScheduleRequest, UpdateRotationScheduleRequest, CreateRotationBatchRequest, BatchRotationRequest}};
 use encryption::FileEncryption;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -2619,6 +2619,7 @@ async fn export_complete_recovery(
     config_version_id: i64,
     firmware_version_id: i64,
     export_directory: String,
+    include_vault: Option<bool>,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<RecoveryManifest, String> {
@@ -2659,7 +2660,7 @@ async fn export_complete_recovery(
                 config_version_id,
                 firmware_version_id,
                 export_directory,
-                include_vault: None, // Default behavior - will be updated when frontend supports it
+                include_vault,
             };
 
             match exporter.export_complete_recovery(
@@ -4109,6 +4110,964 @@ async fn decrypt_standalone_credential(
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ExportOptions {
+    include_vault: bool,
+    vault_available: bool,
+    vault_secret_count: usize,
+}
+
+#[tauri::command]
+async fn get_export_options(
+    token: String,
+    asset_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<ExportOptions, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            
+            // Check if vault exists for this asset
+            let vault_info = vault_repo.get_vault_by_asset_id(asset_id)
+                .map_err(|e| format!("Failed to check vault existence: {}", e))?;
+            
+            let (vault_available, vault_secret_count) = match vault_info {
+                Some(info) => (true, info.secret_count),
+                None => (false, 0),
+            };
+            
+            Ok(ExportOptions {
+                include_vault: vault_available, // Default to include if available
+                vault_available,
+                vault_secret_count,
+            })
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BundlePreview {
+    manifest: RecoveryManifest,
+    estimated_size: i64,
+}
+
+#[tauri::command]
+async fn preview_recovery_bundle(
+    token: String,
+    asset_id: i64,
+    config_version_id: i64,
+    firmware_version_id: i64,
+    include_vault: Option<bool>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<BundlePreview, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            
+            // Get asset details
+            let asset = match asset_repo.get_asset_by_id(asset_id) {
+                Ok(Some(asset)) => asset,
+                Ok(None) => return Err("Asset not found".to_string()),
+                Err(e) => return Err(format!("Failed to get asset: {}", e)),
+            };
+            
+            // Get configuration details
+            let config = config_repo.get_configuration_by_id(config_version_id)
+                .map_err(|e| format!("Failed to get configuration: {}", e))?
+                .ok_or_else(|| "Configuration not found".to_string())?;
+            
+            // Get firmware details
+            let firmware = firmware_repo.get_firmware_by_id(firmware_version_id)
+                .map_err(|e| format!("Failed to get firmware: {}", e))?
+                .ok_or_else(|| "Firmware not found".to_string())?;
+            
+            // Get vault info if requested
+            let vault_info = if include_vault.unwrap_or(false) {
+                vault_repo.get_vault_by_asset_id(asset_id)
+                    .map_err(|e| format!("Failed to get vault info: {}", e))?
+            } else {
+                None
+            };
+            
+            // Create preview manifest
+            use recovery::{ConfigurationExportInfo, FirmwareExportInfo, VaultExportInfo};
+            
+            let mut estimated_size = config.file_size;
+            estimated_size += 1024 * 1024; // Default 1MB for firmware size estimate
+            
+            let vault_export_info = vault_info.as_ref().map(|info| {
+                // Estimate vault size
+                let vault_size_estimate = 1024 + (info.secret_count as i64 * 512); // Rough estimate
+                estimated_size += vault_size_estimate;
+                
+                VaultExportInfo {
+                    vault_id: info.vault.id,
+                    vault_name: info.vault.name.clone(),
+                    filename: format!("{}_vault.json", RecoveryExporter::sanitize_filename(&asset.name)),
+                    checksum: "preview".to_string(),
+                    secret_count: info.secret_count,
+                    file_size: vault_size_estimate,
+                    encrypted: true,
+                }
+            });
+            
+            let manifest = RecoveryManifest {
+                asset_id,
+                export_date: chrono::Utc::now().to_rfc3339(),
+                exported_by: session.username.clone(),
+                configuration: ConfigurationExportInfo {
+                    version_id: config.id,
+                    version_number: config.version_number.clone(),
+                    filename: format!("{}_config_v{}.{}", 
+                        RecoveryExporter::sanitize_filename(&asset.name),
+                        config.version_number,
+                        std::path::Path::new(&config.file_name)
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .unwrap_or("json")
+                    ),
+                    checksum: "preview".to_string(),
+                    file_size: config.file_size,
+                },
+                firmware: FirmwareExportInfo {
+                    version_id: firmware.id,
+                    version: firmware.version.clone(),
+                    filename: format!("{}_firmware_v{}.bin", 
+                        RecoveryExporter::sanitize_filename(&asset.name),
+                        firmware.version
+                    ),
+                    checksum: "preview".to_string(),
+                    vendor: firmware.vendor.unwrap_or_else(|| "Unknown".to_string()),
+                    model: firmware.model.unwrap_or_else(|| "Unknown".to_string()),
+                    file_size: 1024 * 1024, // Default firmware size
+                },
+                vault: vault_export_info,
+                compatibility_verified: config.firmware_version_id == Some(firmware_version_id),
+            };
+            
+            estimated_size += 4096; // Add manifest file size
+            
+            Ok(BundlePreview {
+                manifest,
+                estimated_size,
+            })
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn import_recovery_bundle(
+    app: AppHandle,
+    token: String,
+    bundle_path: String,
+    target_asset_id: i64,
+    import_vault: bool,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<RecoveryManifest, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            let audit_repo = SqliteAuditRepository::new(db.get_connection());
+            
+            let importer = RecoveryImporter::new(&config_repo, &firmware_repo, &vault_repo, &audit_repo);
+            
+            let request = RecoveryImportRequest {
+                bundle_path,
+                target_asset_id,
+                import_vault,
+            };
+
+            match importer.import_recovery_bundle(
+                &app,
+                request,
+                session.user_id,
+                &session.username,
+                &session.role,
+            ) {
+                Ok(manifest) => Ok(manifest),
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn validate_bundle_integrity(
+    token: String,
+    bundle_path: String,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<RecoveryManifest, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let _session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    match RecoveryImporter::validate_bundle_integrity(&bundle_path) {
+        Ok(manifest) => Ok(manifest),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+// Vault permission commands for Story 4.5
+#[tauri::command]
+async fn check_vault_access(
+    token: String,
+    vault_id: i64,
+    permission_type: PermissionType,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<VaultAccessInfo, String> {
+    // Validate session and get current user
+    let user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    info!("User {} checking access to vault {} with permission {:?}", 
+          user.username, vault_id, permission_type);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Use access control service to check permissions
+    let access_control = VaultAccessControlService::new(db.clone());
+    
+    // Get user details
+    let user_repo = SqliteUserRepository::new(db);
+    let full_user = user_repo.find_by_id(user.id)
+        .map_err(|e| e.to_string())?
+        .ok_or("User not found")?;
+    
+    access_control.check_vault_access(&full_user, vault_id, permission_type)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn grant_vault_access(
+    token: String,
+    request: GrantVaultAccessRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<VaultPermission, String> {
+    // Validate session and get current user
+    let admin_user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    // Verify administrator role
+    if admin_user.role != UserRole::Administrator {
+        return Err("Only administrators can grant vault access".to_string());
+    }
+
+    info!("Administrator {} granting {} access to user {} for vault {}", 
+          admin_user.username, request.permission_type.to_string(), 
+          request.user_id, request.vault_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Get target user details for audit
+    let user_repo = SqliteUserRepository::new(db);
+    let target_user = user_repo.find_by_id(request.user_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Target user not found")?;
+
+    // Grant the permission
+    let vault_repo = SqliteVaultRepository::new(db);
+    let permission = vault_repo.grant_vault_access(request.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Log audit event
+    let audit_repo = SqliteAuditRepository::new(db.get_connection());
+    let audit_event = create_vault_access_granted_event(
+        admin_user.id,
+        &admin_user.username,
+        request.user_id,
+        &target_user.username,
+        request.vault_id,
+        &request.permission_type.to_string(),
+    );
+    
+    audit_repo.log_event(audit_event)
+        .map_err(|e| e.to_string())?;
+
+    Ok(permission)
+}
+
+#[tauri::command]
+async fn revoke_vault_access(
+    token: String,
+    request: RevokeVaultAccessRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session and get current user
+    let admin_user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    // Verify administrator role
+    if admin_user.role != UserRole::Administrator {
+        return Err("Only administrators can revoke vault access".to_string());
+    }
+
+    let permission_desc = request.permission_type
+        .as_ref()
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| "all".to_string());
+
+    info!("Administrator {} revoking {} access from user {} for vault {}", 
+          admin_user.username, permission_desc, request.user_id, request.vault_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Get target user details for audit
+    let user_repo = SqliteUserRepository::new(db);
+    let target_user = user_repo.find_by_id(request.user_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Target user not found")?;
+
+    // Revoke the permission
+    let vault_repo = SqliteVaultRepository::new(db);
+    vault_repo.revoke_vault_access(request.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Log audit event
+    let audit_repo = SqliteAuditRepository::new(db.get_connection());
+    let audit_event = create_vault_access_revoked_event(
+        admin_user.id,
+        &admin_user.username,
+        request.user_id,
+        &target_user.username,
+        request.vault_id,
+        request.permission_type.as_ref().map(|p| p.to_string().as_str()),
+    );
+    
+    audit_repo.log_event(audit_event)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_user_vault_permissions(
+    token: String,
+    user_id: Option<i64>,
+    vault_id: Option<i64>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<VaultPermission>, String> {
+    // Validate session and get current user
+    let current_user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    // Determine which user's permissions to query
+    let target_user_id = if let Some(uid) = user_id {
+        // Only administrators can query other users' permissions
+        if uid != current_user.id && current_user.role != UserRole::Administrator {
+            return Err("Only administrators can view other users' permissions".to_string());
+        }
+        uid
+    } else {
+        // Default to current user
+        current_user.id
+    };
+
+    info!("Getting vault permissions for user {}", target_user_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Get permissions
+    let vault_repo = SqliteVaultRepository::new(db);
+    vault_repo.get_user_vault_permissions(target_user_id, vault_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_vault_access_log(
+    token: String,
+    vault_id: i64,
+    limit: Option<i32>,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<VaultAccessLog>, String> {
+    // Validate session and get current user
+    let user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    // Only administrators can view access logs
+    if user.role != UserRole::Administrator {
+        return Err("Only administrators can view vault access logs".to_string());
+    }
+
+    info!("Administrator {} viewing access log for vault {}", user.username, vault_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Get access log
+    let vault_repo = SqliteVaultRepository::new(db);
+    vault_repo.get_vault_access_log(vault_id, limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_permission_request(
+    token: String,
+    request: CreatePermissionRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<PermissionRequest, String> {
+    // Validate session and get current user
+    let user = {
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session lock".to_string())?;
+        session_manager.validate_session(&token)
+            .map_err(|e| e.to_string())?
+    };
+
+    info!("User {} requesting {} permission for vault {}", 
+          user.username, request.requested_permission.to_string(), request.vault_id);
+
+    // Get database connection
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+
+    // Create the permission request
+    let vault_repo = SqliteVaultRepository::new(db);
+    let permission_request = vault_repo.create_permission_request(request.clone(), user.id)
+        .map_err(|e| e.to_string())?;
+
+    // Log audit event
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+    
+    let audit_repo = SqliteAuditRepository::new(db.get_connection());
+    let audit_event = AuditEventRequest {
+        event_type: AuditEventType::VaultPermissionRequested,
+        user_id: Some(user.id),
+        username: Some(user.username.clone()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: None,
+        target_username: None,
+        description: format!("User '{}' requested {} permission for vault {}", 
+                           user.username, request.requested_permission.to_string(), request.vault_id),
+        metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, 
+                             request.vault_id, request.requested_permission.to_string())),
+        ip_address: None,
+        user_agent: None,
+    };
+    
+    audit_repo.log_event(audit_event)
+        .map_err(|e| e.to_string())?;
+
+    Ok(permission_request)
+}
+
+// Task 5: Password Rotation Commands for Story 4.6
+
+// Task 5.1: Rotate password command
+#[tauri::command]
+async fn rotate_password(
+    token: String,
+    request: PasswordRotationRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Check permissions - Engineers can rotate passwords
+    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+        return Err("Insufficient permissions to rotate passwords".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let vault_repo = Box::new(SqliteVaultRepository::new(conn));
+            let audit_repo = Box::new(SqliteAuditRepository::new(conn));
+            
+            let rotation_service = PasswordRotationService::new(conn, vault_repo, audit_repo);
+            
+            // Validate rotation before executing
+            rotation_service.validate_rotation(request.secret_id, &request.new_password)
+                .map_err(|e| e.to_string())?;
+            
+            // Execute rotation with author_id set to session user
+            let mut rotation_request = request;
+            rotation_request.author_id = session.user_id;
+            
+            rotation_service.rotate_password(rotation_request)
+                .map_err(|e| {
+                    error!("Failed to rotate password: {}", e);
+                    format!("Failed to rotate password: {}", e)
+                })?;
+            
+            info!("Password rotated successfully by user {}", session.username);
+            Ok(())
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Task 5.2: Get rotation schedule command
+#[tauri::command]
+async fn get_rotation_schedule(
+    token: String,
+    vault_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Option<RotationSchedule>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let scheduler = RotationScheduler::new(conn);
+            
+            scheduler.get_active_schedule(vault_id)
+                .map_err(|e| format!("Failed to get rotation schedule: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Task 5.3: Create rotation batch command
+#[tauri::command]
+async fn create_rotation_batch(
+    token: String,
+    request: CreateRotationBatchRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<RotationBatch, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    // Check permissions
+    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+        return Err("Insufficient permissions to create rotation batch".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let vault_repo = Box::new(SqliteVaultRepository::new(conn));
+            let audit_repo = Box::new(SqliteAuditRepository::new(conn));
+            
+            let batch_service = BatchRotationService::new(conn, vault_repo, audit_repo);
+            
+            // Set created_by to session user
+            let mut batch_request = request;
+            batch_request.created_by = session.user_id;
+            
+            batch_service.create_batch(batch_request)
+                .map_err(|e| format!("Failed to create rotation batch: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Task 5.4: Get rotation history command
+#[tauri::command]
+async fn get_rotation_history(
+    token: String,
+    secret_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<PasswordRotationHistory>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let vault_repo = Box::new(SqliteVaultRepository::new(conn));
+            let audit_repo = Box::new(SqliteAuditRepository::new(conn));
+            
+            let rotation_service = PasswordRotationService::new(conn, vault_repo, audit_repo);
+            
+            rotation_service.get_rotation_history(secret_id)
+                .map_err(|e| format!("Failed to get rotation history: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Task 5.5: Update rotation policy command
+#[tauri::command]
+async fn update_rotation_policy(
+    token: String,
+    request: UpdateRotationScheduleRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    // Only administrators can update rotation policies
+    if session.user_role != "Administrator" {
+        return Err("Only administrators can update rotation policies".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let scheduler = RotationScheduler::new(conn);
+            
+            scheduler.update_rotation_schedule(request)
+                .map_err(|e| format!("Failed to update rotation policy: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Task 5.6: Get rotation alerts command
+#[tauri::command]
+async fn get_rotation_alerts(
+    token: String,
+    days_ahead: i32,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<RotationAlert>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let scheduler = RotationScheduler::new(conn);
+            
+            scheduler.get_rotation_alerts(days_ahead)
+                .map_err(|e| format!("Failed to get rotation alerts: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Additional rotation commands
+
+// Execute batch rotation
+#[tauri::command]
+async fn execute_batch_rotation(
+    token: String,
+    request: BatchRotationRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    // Check permissions
+    if session.user_role != "Administrator" && session.user_role != "Engineer" {
+        return Err("Insufficient permissions to execute rotation batch".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let vault_repo = Box::new(SqliteVaultRepository::new(conn));
+            let audit_repo = Box::new(SqliteAuditRepository::new(conn));
+            
+            let batch_service = BatchRotationService::new(conn, vault_repo, audit_repo);
+            
+            // Set author_id to session user
+            let mut batch_request = request;
+            batch_request.author_id = session.user_id;
+            
+            batch_service.execute_batch_rotation(batch_request)
+                .map_err(|e| format!("Failed to execute batch rotation: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Create rotation schedule
+#[tauri::command]
+async fn create_rotation_schedule(
+    token: String,
+    request: CreateRotationScheduleRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<RotationSchedule, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    // Only administrators can create rotation schedules
+    if session.user_role != "Administrator" {
+        return Err("Only administrators can create rotation schedules".to_string());
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let scheduler = RotationScheduler::new(conn);
+            
+            // Set created_by to session user
+            let mut schedule_request = request;
+            schedule_request.created_by = session.user_id;
+            
+            scheduler.create_rotation_schedule(schedule_request)
+                .map_err(|e| format!("Failed to create rotation schedule: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Get rotation compliance metrics
+#[tauri::command]
+async fn get_rotation_compliance_metrics(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<std::collections::HashMap<String, serde_json::Value>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let scheduler = RotationScheduler::new(conn);
+            
+            scheduler.get_rotation_compliance_metrics()
+                .map_err(|e| format!("Failed to get compliance metrics: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+// Get batch rotation history
+#[tauri::command]
+async fn get_batch_rotation_history(
+    token: String,
+    limit: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<Vec<RotationBatch>, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let vault_repo = Box::new(SqliteVaultRepository::new(conn));
+            let audit_repo = Box::new(SqliteAuditRepository::new(conn));
+            
+            let batch_service = BatchRotationService::new(conn, vault_repo, audit_repo);
+            
+            batch_service.get_batch_history(limit)
+                .map_err(|e| format!("Failed to get batch history: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -4192,7 +5151,30 @@ pub fn run() {
             update_standalone_credential,
             delete_standalone_credential,
             get_standalone_credential,
-            decrypt_standalone_credential
+            decrypt_standalone_credential,
+            // Recovery bundle commands
+            get_export_options,
+            preview_recovery_bundle,
+            import_recovery_bundle,
+            validate_bundle_integrity,
+            // Vault permission commands for Story 4.5
+            check_vault_access,
+            grant_vault_access,
+            revoke_vault_access,
+            get_user_vault_permissions,
+            get_vault_access_log,
+            create_permission_request,
+            // Password rotation commands for Story 4.6
+            rotate_password,
+            get_rotation_schedule,
+            create_rotation_batch,
+            get_rotation_history,
+            update_rotation_policy,
+            get_rotation_alerts,
+            execute_batch_rotation,
+            create_rotation_schedule,
+            get_rotation_compliance_metrics,
+            get_batch_rotation_history
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

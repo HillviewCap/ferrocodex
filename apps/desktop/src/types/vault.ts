@@ -245,3 +245,238 @@ export const defaultCategoryIcons: Record<string, string> = {
   'Applications': 'apps',
   'Cloud Services': 'cloud',
 };
+
+// Vault permission types for Story 4.5
+export interface VaultPermission {
+  permission_id: number;
+  user_id: number;
+  vault_id: number;
+  permission_type: PermissionType;
+  granted_by: number;
+  granted_at: string;
+  expires_at?: string;
+  is_active: boolean;
+}
+
+export type PermissionType = 'Read' | 'Write' | 'Export' | 'Share';
+
+export interface VaultAccessLog {
+  access_id: number;
+  user_id: number;
+  vault_id: number;
+  access_type: AccessType;
+  accessed_at: string;
+  ip_address?: string;
+  user_agent?: string;
+  result: AccessResult;
+  error_message?: string;
+}
+
+export type AccessType = 'View' | 'Edit' | 'Export' | 'Share' | 'Denied';
+export type AccessResult = 'Success' | 'Denied' | 'Error';
+
+export interface PermissionRequest {
+  request_id: number;
+  user_id: number;
+  vault_id: number;
+  requested_permission: PermissionType;
+  requested_by: number;
+  status: RequestStatus;
+  approved_by?: number;
+  created_at: string;
+  updated_at: string;
+  approval_notes?: string;
+}
+
+export type RequestStatus = 'Pending' | 'Approved' | 'Denied' | 'Expired';
+
+export interface GrantVaultAccessRequest {
+  user_id: number;
+  vault_id: number;
+  permission_type: PermissionType;
+  granted_by: number;
+  expires_at?: string;
+}
+
+export interface RevokeVaultAccessRequest {
+  user_id: number;
+  vault_id: number;
+  permission_type?: PermissionType;
+  revoked_by: number;
+}
+
+export interface CheckVaultAccessRequest {
+  user_id: number;
+  vault_id: number;
+  permission_type: PermissionType;
+}
+
+export interface VaultAccessInfo {
+  has_access: boolean;
+  permissions: VaultPermission[];
+  is_administrator: boolean;
+}
+
+export interface CreatePermissionRequest {
+  vault_id: number;
+  requested_permission: PermissionType;
+  requested_by: number;
+}
+
+export const permissionTypeDisplayNames: Record<PermissionType, string> = {
+  Read: 'Read',
+  Write: 'Write',
+  Export: 'Export',
+  Share: 'Share',
+};
+
+export const permissionTypeIcons: Record<PermissionType, string> = {
+  Read: 'eye',
+  Write: 'edit',
+  Export: 'export',
+  Share: 'share-alt',
+};
+
+export const requestStatusColors: Record<RequestStatus, string> = {
+  Pending: '#faad14', // Yellow
+  Approved: '#52c41a', // Green
+  Denied: '#f5222d', // Red
+  Expired: '#8c8c8c', // Gray
+};
+
+export const accessResultIcons: Record<AccessResult, string> = {
+  Success: 'check-circle',
+  Denied: 'close-circle',
+  Error: 'exclamation-circle',
+};
+
+// Password rotation types for Story 4.6
+export interface PasswordRotationRequest {
+  secret_id: number;
+  new_password: string;
+  rotation_reason: string;
+  author_id: number;
+  batch_id?: number;
+}
+
+export interface RotationSchedule {
+  schedule_id: number;
+  vault_id: number;
+  rotation_interval: number; // days
+  alert_days_before: number;
+  is_active: boolean;
+  created_at: string;
+  created_by: number;
+  updated_at: string;
+}
+
+export interface RotationBatch {
+  batch_id: number;
+  batch_name: string;
+  created_by: number;
+  started_at: string;
+  completed_at?: string;
+  status: BatchStatus;
+  notes?: string;
+}
+
+export type BatchStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+
+export interface PasswordRotationHistory {
+  rotation_id: number;
+  secret_id: number;
+  old_password_hash: string;
+  rotation_reason: string;
+  rotated_by: number;
+  rotated_at: string;
+  batch_id?: number;
+}
+
+export interface RotationAlert {
+  secret_id: number;
+  vault_id: number;
+  secret_label: string;
+  asset_name: string;
+  days_until_rotation: number;
+  next_rotation_due: string;
+  last_rotated?: string;
+}
+
+export interface CreateRotationScheduleRequest {
+  vault_id: number;
+  rotation_interval: number;
+  alert_days_before: number;
+  created_by: number;
+}
+
+export interface UpdateRotationScheduleRequest {
+  schedule_id: number;
+  rotation_interval?: number;
+  alert_days_before?: number;
+  is_active?: boolean;
+}
+
+export interface CreateRotationBatchRequest {
+  batch_name: string;
+  created_by: number;
+  notes?: string;
+}
+
+export interface BatchRotationItem {
+  secret_id: number;
+  new_password: string;
+  rotation_reason: string;
+}
+
+export interface BatchRotationRequest {
+  batch_id: number;
+  items: BatchRotationItem[];
+  author_id: number;
+}
+
+export const batchStatusColors: Record<BatchStatus, string> = {
+  pending: '#faad14', // Yellow
+  in_progress: '#1890ff', // Blue
+  completed: '#52c41a', // Green
+  failed: '#f5222d', // Red
+  cancelled: '#8c8c8c', // Gray
+};
+
+export const batchStatusIcons: Record<BatchStatus, string> = {
+  pending: 'clock-circle',
+  in_progress: 'sync',
+  completed: 'check-circle',
+  failed: 'close-circle',
+  cancelled: 'stop',
+};
+
+export const rotationIntervalOptions = [
+  { value: 30, label: '30 days' },
+  { value: 60, label: '60 days' },
+  { value: 90, label: '90 days' },
+  { value: 120, label: '120 days' },
+  { value: 180, label: '180 days' },
+  { value: 365, label: '1 year' },
+];
+
+export const rotationAlertOptions = [
+  { value: 7, label: '7 days before' },
+  { value: 14, label: '14 days before' },
+  { value: 30, label: '30 days before' },
+];
+
+export const rotationTemplates = [
+  { key: 'all_plc_credentials', name: 'All PLC Credentials', description: 'Rotate all PLC passwords in an asset' },
+  { key: 'vendor_default_passwords', name: 'Vendor Default Passwords', description: 'Rotate all vendor default passwords' },
+  { key: 'expired_passwords', name: 'Expired Passwords', description: 'Rotate all overdue passwords' },
+  { key: 'security_incident_response', name: 'Security Incident Response', description: 'Emergency rotation for security incident' },
+  { key: 'quarterly_rotation', name: 'Quarterly Rotation', description: 'Scheduled quarterly password rotation' },
+];
+
+export interface RotationComplianceMetrics {
+  total_passwords: number;
+  overdue_passwords: number;
+  due_within_7_days: number;
+  avg_days_since_rotation: number;
+  compliance_percentage: number;
+}

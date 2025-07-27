@@ -21,7 +21,8 @@ import {
   UserOutlined,
   PlusOutlined,
   HistoryOutlined,
-  StarFilled
+  StarFilled,
+  SafetyOutlined
 } from '@ant-design/icons';
 import { AssetInfo } from '../types/assets';
 import { formatVersion } from '../types/assets';
@@ -29,6 +30,9 @@ import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
 import ImportConfigurationModal from './ImportConfigurationModal';
 import ConfigurationHistoryView from './ConfigurationHistoryView';
+import { invoke } from '@tauri-apps/api/core';
+import { VaultInfo } from '../types/vault';
+import VaultAccessIndicator from './VaultAccessIndicator';
 
 const { Title, Text } = Typography;
 
@@ -116,6 +120,29 @@ const AssetManagement: React.FC = () => {
   const AssetCard: React.FC<{ asset: AssetInfo }> = ({ asset }) => {
     const goldenVersion = goldenVersions[asset.id];
     const hasGolden = goldenVersion !== null && goldenVersion !== undefined;
+    const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);
+    const [vaultLoading, setVaultLoading] = useState(true);
+
+    useEffect(() => {
+      // Load vault info for this asset
+      const loadVaultInfo = async () => {
+        if (!token) return;
+        
+        try {
+          const result = await invoke<VaultInfo | null>('get_vault_by_asset_id', {
+            token,
+            assetId: asset.id
+          });
+          setVaultInfo(result);
+        } catch (error) {
+          console.error(`Failed to load vault info for asset ${asset.id}:`, error);
+        } finally {
+          setVaultLoading(false);
+        }
+      };
+
+      loadVaultInfo();
+    }, [asset.id, token]);
 
     return (
       <Card 
@@ -189,6 +216,13 @@ const AssetManagement: React.FC = () => {
             <Tag color="green">
               {asset.version_count} {asset.version_count === 1 ? 'version' : 'versions'}
             </Tag>
+            {vaultInfo && !vaultLoading && (
+              <Tooltip title={`Identity Vault: ${vaultInfo.vault.name}`}>
+                <Tag icon={<SafetyOutlined />} color="purple">
+                  {vaultInfo.secret_count} {vaultInfo.secret_count === 1 ? 'secret' : 'secrets'}
+                </Tag>
+              </Tooltip>
+            )}
           </Space>
         </div>
       </div>
@@ -222,6 +256,11 @@ const AssetManagement: React.FC = () => {
             {asset.created_by_username}
           </Text>
         </Space>
+        {vaultInfo && !vaultLoading && (
+          <div style={{ marginTop: '8px' }}>
+            <VaultAccessIndicator vaultId={vaultInfo.vault.id} compact={true} />
+          </div>
+        )}
       </div>
       </Card>
     );

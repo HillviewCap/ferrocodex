@@ -9,6 +9,20 @@ use chrono;
 pub mod password_services;
 pub use password_services::{PasswordGenerator, PasswordStrengthAnalyzer, PasswordReuseChecker};
 
+pub mod access_control;
+pub use access_control::VaultAccessControlService;
+
+pub mod secure_repository;
+pub use secure_repository::SecureVaultRepository;
+
+pub mod rotation;
+pub use rotation::{
+    PasswordRotationService, PasswordRotationRequest, RotationSchedule, RotationBatch,
+    BatchStatus, PasswordRotationHistory, RotationAlert, CreateRotationScheduleRequest,
+    UpdateRotationScheduleRequest, CreateRotationBatchRequest, BatchRotationItem,
+    BatchRotationRequest
+};
+
 #[cfg(test)]
 mod password_performance_tests;
 
@@ -343,6 +357,216 @@ pub struct CategoryWithChildren {
     pub credential_count: i64,
 }
 
+// Vault permission structures for Story 4.5
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultPermission {
+    pub permission_id: i64,
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub permission_type: PermissionType,
+    pub granted_by: i64,
+    pub granted_at: String,
+    pub expires_at: Option<String>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PermissionType {
+    Read,
+    Write,
+    Export,
+    Share,
+}
+
+impl PermissionType {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "read" => Ok(PermissionType::Read),
+            "write" => Ok(PermissionType::Write),
+            "export" => Ok(PermissionType::Export),
+            "share" => Ok(PermissionType::Share),
+            _ => Err(anyhow::anyhow!("Invalid permission type: {}", s)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            PermissionType::Read => "read".to_string(),
+            PermissionType::Write => "write".to_string(),
+            PermissionType::Export => "export".to_string(),
+            PermissionType::Share => "share".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultAccessLog {
+    pub access_id: i64,
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub access_type: AccessType,
+    pub accessed_at: String,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub result: AccessResult,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccessType {
+    View,
+    Edit,
+    Export,
+    Share,
+    Denied,
+}
+
+impl AccessType {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "view" => Ok(AccessType::View),
+            "edit" => Ok(AccessType::Edit),
+            "export" => Ok(AccessType::Export),
+            "share" => Ok(AccessType::Share),
+            "denied" => Ok(AccessType::Denied),
+            _ => Err(anyhow::anyhow!("Invalid access type: {}", s)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            AccessType::View => "view".to_string(),
+            AccessType::Edit => "edit".to_string(),
+            AccessType::Export => "export".to_string(),
+            AccessType::Share => "share".to_string(),
+            AccessType::Denied => "denied".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccessResult {
+    Success,
+    Denied,
+    Error,
+}
+
+impl AccessResult {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "success" => Ok(AccessResult::Success),
+            "denied" => Ok(AccessResult::Denied),
+            "error" => Ok(AccessResult::Error),
+            _ => Err(anyhow::anyhow!("Invalid access result: {}", s)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            AccessResult::Success => "success".to_string(),
+            AccessResult::Denied => "denied".to_string(),
+            AccessResult::Error => "error".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PermissionRequest {
+    pub request_id: i64,
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub requested_permission: PermissionType,
+    pub requested_by: i64,
+    pub status: RequestStatus,
+    pub approved_by: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub approval_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RequestStatus {
+    Pending,
+    Approved,
+    Denied,
+    Expired,
+}
+
+impl RequestStatus {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "pending" => Ok(RequestStatus::Pending),
+            "approved" => Ok(RequestStatus::Approved),
+            "denied" => Ok(RequestStatus::Denied),
+            "expired" => Ok(RequestStatus::Expired),
+            _ => Err(anyhow::anyhow!("Invalid request status: {}", s)),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            RequestStatus::Pending => "pending".to_string(),
+            RequestStatus::Approved => "approved".to_string(),
+            RequestStatus::Denied => "denied".to_string(),
+            RequestStatus::Expired => "expired".to_string(),
+        }
+    }
+}
+
+// Request/Response types for vault permissions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrantVaultAccessRequest {
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub permission_type: PermissionType,
+    pub granted_by: i64,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevokeVaultAccessRequest {
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub permission_type: Option<PermissionType>,
+    pub revoked_by: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckVaultAccessRequest {
+    pub user_id: i64,
+    pub vault_id: i64,
+    pub permission_type: PermissionType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultAccessInfo {
+    pub has_access: bool,
+    pub permissions: Vec<VaultPermission>,
+    pub is_administrator: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePermissionRequest {
+    pub vault_id: i64,
+    pub requested_permission: PermissionType,
+    pub requested_by: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovePermissionRequest {
+    pub request_id: i64,
+    pub approved_by: i64,
+    pub approval_notes: Option<String>,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DenyPermissionRequest {
+    pub request_id: i64,
+    pub denied_by: i64,
+    pub denial_notes: Option<String>,
+}
+
 // Repository trait
 pub trait VaultRepository {
     fn create_vault(&self, request: CreateVaultRequest) -> Result<IdentityVault>;
@@ -391,6 +615,28 @@ pub trait VaultRepository {
     fn add_credential_tags(&self, credential_id: i64, tags: &[String]) -> Result<()>;
     fn remove_credential_tag(&self, credential_id: i64, tag_name: &str) -> Result<()>;
     fn get_all_tags(&self) -> Result<Vec<String>>;
+    
+    // Vault permission methods for Story 4.5
+    fn grant_vault_access(&self, request: GrantVaultAccessRequest) -> Result<VaultPermission>;
+    fn revoke_vault_access(&self, request: RevokeVaultAccessRequest) -> Result<()>;
+    fn check_vault_access(&self, request: CheckVaultAccessRequest) -> Result<VaultAccessInfo>;
+    fn get_user_vault_permissions(&self, user_id: i64, vault_id: Option<i64>) -> Result<Vec<VaultPermission>>;
+    fn get_vault_permissions(&self, vault_id: i64) -> Result<Vec<VaultPermission>>;
+    fn update_permission_expiry(&self, permission_id: i64, new_expires_at: Option<String>) -> Result<()>;
+    fn expire_permissions(&self) -> Result<u64>;
+    
+    // Access log methods
+    fn log_vault_access(&self, user_id: i64, vault_id: i64, access_type: AccessType, result: AccessResult, error_message: Option<String>) -> Result<()>;
+    fn get_vault_access_log(&self, vault_id: i64, limit: Option<i32>) -> Result<Vec<VaultAccessLog>>;
+    fn get_user_access_log(&self, user_id: i64, limit: Option<i32>) -> Result<Vec<VaultAccessLog>>;
+    
+    // Permission request methods
+    fn create_permission_request(&self, request: CreatePermissionRequest, user_id: i64) -> Result<PermissionRequest>;
+    fn approve_permission_request(&self, request: ApprovePermissionRequest) -> Result<PermissionRequest>;
+    fn deny_permission_request(&self, request: DenyPermissionRequest) -> Result<PermissionRequest>;
+    fn get_pending_permission_requests(&self, admin_id: i64) -> Result<Vec<PermissionRequest>>;
+    fn get_user_permission_requests(&self, user_id: i64) -> Result<Vec<PermissionRequest>>;
+    fn expire_permission_requests(&self) -> Result<u64>;
 }
 
 // SQLite implementation
@@ -507,6 +753,68 @@ impl<'a> SqliteVaultRepository<'a> {
             changes_json: row.get("changes_json").ok(),
         })
     }
+
+    fn row_to_vault_permission(row: &Row) -> rusqlite::Result<VaultPermission> {
+        let permission_type_str: String = row.get("permission_type")?;
+        let permission_type = PermissionType::from_str(&permission_type_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "permission_type".to_string(), rusqlite::types::Type::Text))?;
+
+        Ok(VaultPermission {
+            permission_id: row.get("permission_id")?,
+            user_id: row.get("user_id")?,
+            vault_id: row.get("vault_id")?,
+            permission_type,
+            granted_by: row.get("granted_by")?,
+            granted_at: row.get("granted_at")?,
+            expires_at: row.get("expires_at").ok(),
+            is_active: row.get("is_active")?,
+        })
+    }
+
+    fn row_to_vault_access_log(row: &Row) -> rusqlite::Result<VaultAccessLog> {
+        let access_type_str: String = row.get("access_type")?;
+        let access_type = AccessType::from_str(&access_type_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "access_type".to_string(), rusqlite::types::Type::Text))?;
+        
+        let result_str: String = row.get("result")?;
+        let result = AccessResult::from_str(&result_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "result".to_string(), rusqlite::types::Type::Text))?;
+
+        Ok(VaultAccessLog {
+            access_id: row.get("access_id")?,
+            user_id: row.get("user_id")?,
+            vault_id: row.get("vault_id")?,
+            access_type,
+            accessed_at: row.get("accessed_at")?,
+            ip_address: row.get("ip_address").ok(),
+            user_agent: row.get("user_agent").ok(),
+            result,
+            error_message: row.get("error_message").ok(),
+        })
+    }
+
+    fn row_to_permission_request(row: &Row) -> rusqlite::Result<PermissionRequest> {
+        let permission_type_str: String = row.get("requested_permission")?;
+        let requested_permission = PermissionType::from_str(&permission_type_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "requested_permission".to_string(), rusqlite::types::Type::Text))?;
+        
+        let status_str: String = row.get("status")?;
+        let status = RequestStatus::from_str(&status_str)
+            .map_err(|_| rusqlite::Error::InvalidColumnType(0, "status".to_string(), rusqlite::types::Type::Text))?;
+
+        Ok(PermissionRequest {
+            request_id: row.get("request_id")?,
+            user_id: row.get("user_id")?,
+            vault_id: row.get("vault_id")?,
+            requested_permission,
+            requested_by: row.get("requested_by")?,
+            status,
+            approved_by: row.get("approved_by").ok(),
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            approval_notes: row.get("approval_notes").ok(),
+        })
+    }
 }
 
 impl<'a> VaultRepository for SqliteVaultRepository<'a> {
@@ -543,6 +851,11 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 last_changed DATETIME,
                 generation_method TEXT,
                 policy_version INTEGER,
+                -- Rotation management fields for Story 4.6 - Task 1.1
+                last_rotated DATETIME,
+                rotation_interval_days INTEGER,
+                next_rotation_due DATETIME,
+                rotation_policy_id INTEGER,
                 FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
                 UNIQUE(vault_id, label)
             );
@@ -683,6 +996,131 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 (3, 'Network Equipment', 'Switches, routers, and firewalls', NULL, '#FF9800', 'network'),
                 (4, 'Applications', 'Application and service credentials', NULL, '#9C27B0', 'apps'),
                 (5, 'Cloud Services', 'Cloud platform credentials', NULL, '#00BCD4', 'cloud');
+
+            -- Vault permissions table for Story 4.5
+            CREATE TABLE IF NOT EXISTS vault_permissions (
+                permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                vault_id INTEGER NOT NULL,
+                permission_type TEXT NOT NULL CHECK(permission_type IN ('read', 'write', 'export', 'share')),
+                granted_by INTEGER NOT NULL,
+                granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME,
+                is_active BOOLEAN DEFAULT 1,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
+                FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE RESTRICT,
+                UNIQUE(user_id, vault_id, permission_type)
+            );
+
+            -- Vault access log table for Story 4.5
+            CREATE TABLE IF NOT EXISTS vault_access_log (
+                access_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                vault_id INTEGER NOT NULL,
+                access_type TEXT NOT NULL CHECK(access_type IN ('view', 'edit', 'export', 'share', 'denied')),
+                accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ip_address TEXT,
+                user_agent TEXT,
+                result TEXT NOT NULL CHECK(result IN ('success', 'denied', 'error')),
+                error_message TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+                FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE
+            );
+
+            -- Permission requests table for Story 4.5
+            CREATE TABLE IF NOT EXISTS permission_requests (
+                request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                vault_id INTEGER NOT NULL,
+                requested_permission TEXT NOT NULL CHECK(requested_permission IN ('read', 'write', 'export', 'share')),
+                requested_by INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'denied', 'expired')),
+                approved_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                approval_notes TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
+                FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            -- Password rotation history table for Story 4.6 - Task 1.2
+            CREATE TABLE IF NOT EXISTS password_rotation_history (
+                rotation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                secret_id INTEGER NOT NULL,
+                old_password_hash TEXT NOT NULL,
+                rotation_reason TEXT NOT NULL,
+                rotated_by INTEGER NOT NULL,
+                rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                batch_id INTEGER,
+                FOREIGN KEY (secret_id) REFERENCES vault_secrets(id) ON DELETE CASCADE,
+                FOREIGN KEY (rotated_by) REFERENCES users(id) ON DELETE RESTRICT,
+                FOREIGN KEY (batch_id) REFERENCES rotation_batches(batch_id) ON DELETE SET NULL
+            );
+
+            -- Rotation schedules table for Story 4.6 - Task 1.3
+            CREATE TABLE IF NOT EXISTS rotation_schedules (
+                schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vault_id INTEGER NOT NULL,
+                rotation_interval INTEGER NOT NULL CHECK(rotation_interval > 0),
+                alert_days_before INTEGER NOT NULL CHECK(alert_days_before >= 0),
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            -- Rotation batches table for Story 4.6 - Task 1.4
+            CREATE TABLE IF NOT EXISTS rotation_batches (
+                batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_name TEXT NOT NULL,
+                created_by INTEGER NOT NULL,
+                started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                completed_at DATETIME,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'failed', 'cancelled')),
+                notes TEXT,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            -- Indexes for vault permissions performance
+            CREATE INDEX IF NOT EXISTS idx_vault_permissions_user_id ON vault_permissions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_vault_permissions_vault_id ON vault_permissions(vault_id);
+            CREATE INDEX IF NOT EXISTS idx_vault_permissions_expires_at ON vault_permissions(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_vault_permissions_is_active ON vault_permissions(is_active);
+            CREATE INDEX IF NOT EXISTS idx_vault_permissions_granted_by ON vault_permissions(granted_by);
+
+            CREATE INDEX IF NOT EXISTS idx_vault_access_log_user_id ON vault_access_log(user_id);
+            CREATE INDEX IF NOT EXISTS idx_vault_access_log_vault_id ON vault_access_log(vault_id);
+            CREATE INDEX IF NOT EXISTS idx_vault_access_log_accessed_at ON vault_access_log(accessed_at);
+            CREATE INDEX IF NOT EXISTS idx_vault_access_log_result ON vault_access_log(result);
+
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_user_id ON permission_requests(user_id);
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_vault_id ON permission_requests(vault_id);
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_status ON permission_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_requested_by ON permission_requests(requested_by);
+
+            -- Indexes for password rotation - Story 4.6 - Task 1.5
+            CREATE INDEX IF NOT EXISTS idx_vault_secrets_next_rotation_due ON vault_secrets(next_rotation_due);
+            CREATE INDEX IF NOT EXISTS idx_vault_secrets_last_rotated ON vault_secrets(last_rotated);
+            CREATE INDEX IF NOT EXISTS idx_vault_secrets_rotation_interval ON vault_secrets(rotation_interval_days);
+            
+            CREATE INDEX IF NOT EXISTS idx_password_rotation_history_secret_id ON password_rotation_history(secret_id);
+            CREATE INDEX IF NOT EXISTS idx_password_rotation_history_rotated_at ON password_rotation_history(rotated_at);
+            CREATE INDEX IF NOT EXISTS idx_password_rotation_history_batch_id ON password_rotation_history(batch_id);
+            CREATE INDEX IF NOT EXISTS idx_password_rotation_history_rotated_by ON password_rotation_history(rotated_by);
+            
+            CREATE INDEX IF NOT EXISTS idx_rotation_schedules_vault_id ON rotation_schedules(vault_id);
+            CREATE INDEX IF NOT EXISTS idx_rotation_schedules_is_active ON rotation_schedules(is_active);
+            CREATE INDEX IF NOT EXISTS idx_rotation_schedules_created_by ON rotation_schedules(created_by);
+            
+            CREATE INDEX IF NOT EXISTS idx_rotation_batches_status ON rotation_batches(status);
+            CREATE INDEX IF NOT EXISTS idx_rotation_batches_created_by ON rotation_batches(created_by);
+            CREATE INDEX IF NOT EXISTS idx_rotation_batches_started_at ON rotation_batches(started_at);
+            CREATE INDEX IF NOT EXISTS idx_rotation_batches_completed_at ON rotation_batches(completed_at);
             "#,
         )?;
 
@@ -1717,10 +2155,390 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         Ok(tags)
     }
+
+    // Vault permission implementations for Story 4.5
+    fn grant_vault_access(&self, request: GrantVaultAccessRequest) -> Result<VaultPermission> {
+        debug!("Granting {} access to user {} for vault {}", 
+               request.permission_type.to_string(), request.user_id, request.vault_id);
+
+        // Check if permission already exists
+        let existing_check: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM vault_permissions 
+             WHERE user_id = ?1 AND vault_id = ?2 AND permission_type = ?3 AND is_active = 1",
+            (&request.user_id, &request.vault_id, &request.permission_type.to_string()),
+            |row| row.get(0),
+        )?;
+
+        if existing_check > 0 {
+            return Err(anyhow::anyhow!("Permission already exists for this user and vault"));
+        }
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO vault_permissions (user_id, vault_id, permission_type, granted_by, expires_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5) 
+             RETURNING permission_id, user_id, vault_id, permission_type, granted_by, granted_at, expires_at, is_active"
+        )?;
+
+        let permission = stmt.query_row(
+            (&request.user_id, &request.vault_id, &request.permission_type.to_string(), 
+             &request.granted_by, &request.expires_at),
+            Self::row_to_vault_permission,
+        )?;
+
+        info!("Granted {} access to user {} for vault {}", 
+              request.permission_type.to_string(), request.user_id, request.vault_id);
+        Ok(permission)
+    }
+
+    fn revoke_vault_access(&self, request: RevokeVaultAccessRequest) -> Result<()> {
+        let rows_affected = if let Some(permission_type) = request.permission_type {
+            self.conn.execute(
+                "UPDATE vault_permissions 
+                 SET is_active = 0 
+                 WHERE user_id = ?1 AND vault_id = ?2 AND permission_type = ?3 AND is_active = 1",
+                (&request.user_id, &request.vault_id, &permission_type.to_string()),
+            )?
+        } else {
+            // Revoke all permissions for the user on this vault
+            self.conn.execute(
+                "UPDATE vault_permissions 
+                 SET is_active = 0 
+                 WHERE user_id = ?1 AND vault_id = ?2 AND is_active = 1",
+                (&request.user_id, &request.vault_id),
+            )?
+        };
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("No active permissions found to revoke"));
+        }
+
+        info!("Revoked vault access for user {} on vault {}", request.user_id, request.vault_id);
+        Ok(())
+    }
+
+    fn check_vault_access(&self, request: CheckVaultAccessRequest) -> Result<VaultAccessInfo> {
+        // First check if user is administrator
+        let user_role: Option<String> = self.conn.query_row(
+            "SELECT role FROM users WHERE id = ?1 AND is_active = 1",
+            [request.user_id],
+            |row| row.get(0),
+        ).ok();
+
+        if let Some(role) = user_role {
+            if role == "Administrator" {
+                return Ok(VaultAccessInfo {
+                    has_access: true,
+                    permissions: vec![],
+                    is_administrator: true,
+                });
+            }
+        }
+
+        // For non-administrators, check specific permissions
+        let permissions = self.get_user_vault_permissions(request.user_id, Some(request.vault_id))?;
+        
+        let has_access = permissions.iter().any(|p| {
+            p.permission_type == request.permission_type && 
+            p.is_active &&
+            self.is_permission_valid(p)
+        });
+
+        Ok(VaultAccessInfo {
+            has_access,
+            permissions,
+            is_administrator: false,
+        })
+    }
+
+    fn get_user_vault_permissions(&self, user_id: i64, vault_id: Option<i64>) -> Result<Vec<VaultPermission>> {
+        let mut query = String::from(
+            "SELECT permission_id, user_id, vault_id, permission_type, granted_by, granted_at, expires_at, is_active 
+             FROM vault_permissions WHERE user_id = ?1 AND is_active = 1"
+        );
+        
+        if vault_id.is_some() {
+            query.push_str(" AND vault_id = ?2");
+        }
+        
+        query.push_str(" ORDER BY granted_at DESC");
+
+        let mut stmt = self.conn.prepare(&query)?;
+        
+        let permission_iter = if let Some(vault_id) = vault_id {
+            stmt.query_map((user_id, vault_id), Self::row_to_vault_permission)?
+        } else {
+            stmt.query_map([user_id], Self::row_to_vault_permission)?
+        };
+        
+        let mut permissions = Vec::new();
+        for permission in permission_iter {
+            permissions.push(permission?);
+        }
+
+        Ok(permissions)
+    }
+
+    fn get_vault_permissions(&self, vault_id: i64) -> Result<Vec<VaultPermission>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT permission_id, user_id, vault_id, permission_type, granted_by, granted_at, expires_at, is_active 
+             FROM vault_permissions WHERE vault_id = ?1 ORDER BY user_id, permission_type"
+        )?;
+
+        let permission_iter = stmt.query_map([vault_id], Self::row_to_vault_permission)?;
+        let mut permissions = Vec::new();
+
+        for permission in permission_iter {
+            permissions.push(permission?);
+        }
+
+        Ok(permissions)
+    }
+
+    fn update_permission_expiry(&self, permission_id: i64, new_expires_at: Option<String>) -> Result<()> {
+        let rows_affected = self.conn.execute(
+            "UPDATE vault_permissions SET expires_at = ?1 WHERE permission_id = ?2",
+            (&new_expires_at, &permission_id),
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Permission not found"));
+        }
+
+        debug!("Updated expiry for permission {}", permission_id);
+        Ok(())
+    }
+
+    fn expire_permissions(&self) -> Result<u64> {
+        let rows_affected = self.conn.execute(
+            "UPDATE vault_permissions 
+             SET is_active = 0 
+             WHERE is_active = 1 AND expires_at IS NOT NULL AND expires_at < datetime('now')",
+            [],
+        )?;
+
+        debug!("Expired {} permissions", rows_affected);
+        Ok(rows_affected as u64)
+    }
+
+    // Access log implementations
+    fn log_vault_access(&self, user_id: i64, vault_id: i64, access_type: AccessType, result: AccessResult, error_message: Option<String>) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO vault_access_log (user_id, vault_id, access_type, result, error_message) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&user_id, &vault_id, &access_type.to_string(), &result.to_string(), &error_message),
+        )?;
+
+        debug!("Logged {} access attempt by user {} on vault {} with result {}", 
+               access_type.to_string(), user_id, vault_id, result.to_string());
+        Ok(())
+    }
+
+    fn get_vault_access_log(&self, vault_id: i64, limit: Option<i32>) -> Result<Vec<VaultAccessLog>> {
+        let limit = limit.unwrap_or(100).min(1000);
+        
+        let mut stmt = self.conn.prepare(
+            "SELECT access_id, user_id, vault_id, access_type, accessed_at, ip_address, user_agent, result, error_message 
+             FROM vault_access_log WHERE vault_id = ?1 
+             ORDER BY accessed_at DESC LIMIT ?2"
+        )?;
+
+        let log_iter = stmt.query_map((vault_id, limit), Self::row_to_vault_access_log)?;
+        let mut logs = Vec::new();
+
+        for log in log_iter {
+            logs.push(log?);
+        }
+
+        Ok(logs)
+    }
+
+    fn get_user_access_log(&self, user_id: i64, limit: Option<i32>) -> Result<Vec<VaultAccessLog>> {
+        let limit = limit.unwrap_or(100).min(1000);
+        
+        let mut stmt = self.conn.prepare(
+            "SELECT access_id, user_id, vault_id, access_type, accessed_at, ip_address, user_agent, result, error_message 
+             FROM vault_access_log WHERE user_id = ?1 
+             ORDER BY accessed_at DESC LIMIT ?2"
+        )?;
+
+        let log_iter = stmt.query_map((user_id, limit), Self::row_to_vault_access_log)?;
+        let mut logs = Vec::new();
+
+        for log in log_iter {
+            logs.push(log?);
+        }
+
+        Ok(logs)
+    }
+
+    // Permission request implementations
+    fn create_permission_request(&self, request: CreatePermissionRequest, user_id: i64) -> Result<PermissionRequest> {
+        // Check if there's already a pending request
+        let pending_check: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM permission_requests 
+             WHERE user_id = ?1 AND vault_id = ?2 AND requested_permission = ?3 AND status = 'pending'",
+            (&user_id, &request.vault_id, &request.requested_permission.to_string()),
+            |row| row.get(0),
+        )?;
+
+        if pending_check > 0 {
+            return Err(anyhow::anyhow!("A pending request already exists for this permission"));
+        }
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO permission_requests (user_id, vault_id, requested_permission, requested_by) 
+             VALUES (?1, ?2, ?3, ?4) 
+             RETURNING request_id, user_id, vault_id, requested_permission, requested_by, status, 
+                       approved_by, created_at, updated_at, approval_notes"
+        )?;
+
+        let permission_request = stmt.query_row(
+            (&user_id, &request.vault_id, &request.requested_permission.to_string(), &request.requested_by),
+            Self::row_to_permission_request,
+        )?;
+
+        info!("Created permission request {} for user {} on vault {}", 
+              permission_request.request_id, user_id, request.vault_id);
+        Ok(permission_request)
+    }
+
+    fn approve_permission_request(&self, request: ApprovePermissionRequest) -> Result<PermissionRequest> {
+        // Get the permission request details
+        let mut stmt = self.conn.prepare(
+            "SELECT request_id, user_id, vault_id, requested_permission, requested_by, status, 
+                    approved_by, created_at, updated_at, approval_notes 
+             FROM permission_requests WHERE request_id = ?1"
+        )?;
+
+        let permission_request = stmt.query_row([request.request_id], Self::row_to_permission_request)?;
+
+        if permission_request.status != RequestStatus::Pending {
+            return Err(anyhow::anyhow!("Request is not in pending status"));
+        }
+
+        // Update the request status
+        self.conn.execute(
+            "UPDATE permission_requests 
+             SET status = 'approved', approved_by = ?1, updated_at = CURRENT_TIMESTAMP, approval_notes = ?2 
+             WHERE request_id = ?3",
+            (&request.approved_by, &request.approval_notes, &request.request_id),
+        )?;
+
+        // Grant the actual permission
+        let grant_request = GrantVaultAccessRequest {
+            user_id: permission_request.user_id,
+            vault_id: permission_request.vault_id,
+            permission_type: permission_request.requested_permission,
+            granted_by: request.approved_by,
+            expires_at: request.expires_at,
+        };
+
+        self.grant_vault_access(grant_request)?;
+
+        // Return updated permission request
+        let updated_request = stmt.query_row([request.request_id], Self::row_to_permission_request)?;
+        
+        info!("Approved permission request {} for user {}", request.request_id, permission_request.user_id);
+        Ok(updated_request)
+    }
+
+    fn deny_permission_request(&self, request: DenyPermissionRequest) -> Result<PermissionRequest> {
+        // Get the permission request details
+        let mut stmt = self.conn.prepare(
+            "SELECT request_id, user_id, vault_id, requested_permission, requested_by, status, 
+                    approved_by, created_at, updated_at, approval_notes 
+             FROM permission_requests WHERE request_id = ?1"
+        )?;
+
+        let permission_request = stmt.query_row([request.request_id], Self::row_to_permission_request)?;
+
+        if permission_request.status != RequestStatus::Pending {
+            return Err(anyhow::anyhow!("Request is not in pending status"));
+        }
+
+        // Update the request status
+        self.conn.execute(
+            "UPDATE permission_requests 
+             SET status = 'denied', approved_by = ?1, updated_at = CURRENT_TIMESTAMP, approval_notes = ?2 
+             WHERE request_id = ?3",
+            (&request.denied_by, &request.denial_notes, &request.request_id),
+        )?;
+
+        // Return updated permission request
+        let updated_request = stmt.query_row([request.request_id], Self::row_to_permission_request)?;
+        
+        info!("Denied permission request {} for user {}", request.request_id, permission_request.user_id);
+        Ok(updated_request)
+    }
+
+    fn get_pending_permission_requests(&self, admin_id: i64) -> Result<Vec<PermissionRequest>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT request_id, user_id, vault_id, requested_permission, requested_by, status, 
+                    approved_by, created_at, updated_at, approval_notes 
+             FROM permission_requests WHERE status = 'pending' 
+             ORDER BY created_at ASC"
+        )?;
+
+        let request_iter = stmt.query_map([], Self::row_to_permission_request)?;
+        let mut requests = Vec::new();
+
+        for request in request_iter {
+            requests.push(request?);
+        }
+
+        Ok(requests)
+    }
+
+    fn get_user_permission_requests(&self, user_id: i64) -> Result<Vec<PermissionRequest>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT request_id, user_id, vault_id, requested_permission, requested_by, status, 
+                    approved_by, created_at, updated_at, approval_notes 
+             FROM permission_requests WHERE user_id = ?1 OR requested_by = ?1 
+             ORDER BY created_at DESC"
+        )?;
+
+        let request_iter = stmt.query_map([user_id], Self::row_to_permission_request)?;
+        let mut requests = Vec::new();
+
+        for request in request_iter {
+            requests.push(request?);
+        }
+
+        Ok(requests)
+    }
+
+    fn expire_permission_requests(&self) -> Result<u64> {
+        // Expire requests older than 30 days
+        let rows_affected = self.conn.execute(
+            "UPDATE permission_requests 
+             SET status = 'expired', updated_at = CURRENT_TIMESTAMP 
+             WHERE status = 'pending' AND created_at < datetime('now', '-30 days')",
+            [],
+        )?;
+
+        debug!("Expired {} permission requests", rows_affected);
+        Ok(rows_affected as u64)
+    }
 }
 
 // Helper methods
 impl<'a> SqliteVaultRepository<'a> {
+    fn is_permission_valid(&self, permission: &VaultPermission) -> bool {
+        if !permission.is_active {
+            return false;
+        }
+
+        if let Some(expires_at) = &permission.expires_at {
+            // Parse the expiry date and check if it's in the past
+            if let Ok(expiry_time) = chrono::DateTime::parse_from_rfc3339(expires_at) {
+                let now = chrono::Utc::now();
+                return expiry_time > now;
+            }
+        }
+
+        true
+    }
+
     fn add_standalone_history(&self, credential_id: i64, change_type: StandaloneChangeType, author: i64, notes: &str, changes: HashMap<String, String>) -> Result<()> {
         let changes_json = serde_json::to_string(&changes)?;
         

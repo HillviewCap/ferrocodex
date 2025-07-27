@@ -14,7 +14,8 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo } from '../types/assets';
-import { ConfigurationVersionInfo, FirmwareVersionInfo } from '../types/recovery';
+import { ConfigurationVersionInfo, FirmwareVersionInfo as RecoveryFirmwareVersionInfo } from '../types/recovery';
+import { FirmwareVersionInfo } from '../types/firmware';
 import useAuthStore from '../store/auth';
 import useFirmwareStore from '../store/firmware';
 import FirmwareUploadModal from './FirmwareUploadModal';
@@ -195,7 +196,7 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
           assetId={asset.id}
           assetName={asset.name}
           configurationVersions={configurationVersions}
-          firmwareVersions={assetFirmware as FirmwareVersionInfo[]}
+          firmwareVersions={assetFirmware as unknown as RecoveryFirmwareVersionInfo[]}
         />
       )}
     </div>

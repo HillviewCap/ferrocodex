@@ -33,7 +33,8 @@ import {
   CopyOutlined,
   KeyOutlined,
   ReloadOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo } from '../types/assets';
@@ -54,6 +55,9 @@ import useAuthStore from '../store/auth';
 import PasswordGenerator from './PasswordGenerator';
 import PasswordInput from './PasswordInput';
 import PasswordHistory from './PasswordHistory';
+import VaultAccessIndicator from './VaultAccessIndicator';
+import VaultPermissionManager from './VaultPermissionManager';
+import VaultExportButton from './VaultExportButton';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -75,6 +79,9 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const [visibleSecrets, setVisibleSecrets] = useState<Set<number>>(new Set());
   const [decryptedSecrets, setDecryptedSecrets] = useState<Map<number, string>>(new Map());
   const [activeTab, setActiveTab] = useState('secrets');
+  const [hasAccess, setHasAccess] = useState(false);
+  const [accessInfo, setAccessInfo] = useState<VaultAccessInfo | null>(null);
+  const [permissionManagerVisible, setPermissionManagerVisible] = useState(false);
   
   // Password management state
   const [passwordGeneratorVisible, setPasswordGeneratorVisible] = useState(false);
@@ -103,11 +110,38 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
         assetId: asset.id
       });
       setVaultInfo(result);
+      
+      // Check access permissions if vault exists
+      if (result && user) {
+        await checkVaultAccess(result.vault.id);
+      }
     } catch (err) {
       console.error('Failed to fetch vault info:', err);
       message.error('Failed to load vault information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkVaultAccess = async (vaultId: number) => {
+    if (!token || !user) return;
+    
+    try {
+      const info = await invoke<VaultAccessInfo>('check_vault_access', {
+        token,
+        request: {
+          user_id: user.id,
+          vault_id: vaultId,
+          permission_type: 'Read'
+        }
+      });
+      
+      setAccessInfo(info);
+      setHasAccess(info.has_access);
+    } catch (error) {
+      console.error('Failed to check vault access:', error);
+      setHasAccess(false);
+      setAccessInfo(null);
     }
   };
 
@@ -397,9 +431,12 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <SafetyOutlined style={{ fontSize: '48px', color: '#52c41a' }} />
           <div style={{ flex: 1 }}>
-            <Title level={4} style={{ margin: 0 }}>
-              {vaultInfo.vault.name}
-            </Title>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <Title level={4} style={{ margin: 0 }}>
+                {vaultInfo.vault.name}
+              </Title>
+              <VaultAccessIndicator vaultId={vaultInfo.vault.id} showDetails={true} />
+            </div>
             <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>
               {vaultInfo.vault.description || 'No description'}
             </Text>
@@ -410,6 +447,20 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 Created: {formatDate(vaultInfo.vault.created_at)}
               </Text>
+              {user?.role === 'Administrator' && (
+                <Button
+                  size="small"
+                  icon={<TeamOutlined />}
+                  onClick={() => setPermissionManagerVisible(true)}
+                >
+                  Manage Permissions
+                </Button>
+              )}
+              <VaultExportButton
+                vault={vaultInfo}
+                buttonSize="small"
+                buttonText="Export"
+              />
             </Space>
           </div>
         </div>
@@ -867,6 +918,29 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           secretId={selectedSecret.id}
           secretLabel={selectedSecret.label}
         />
+      )}
+      
+      {/* Permission Manager Modal */}
+      {vaultInfo && (
+        <Modal
+          title="Vault Permissions"
+          open={permissionManagerVisible}
+          onCancel={() => setPermissionManagerVisible(false)}
+          footer={null}
+          width={800}
+        >
+          <VaultPermissionManager
+            vaultId={vaultInfo.vault.id}
+            vaultName={vaultInfo.vault.name}
+            onClose={() => {
+              setPermissionManagerVisible(false);
+              // Refresh access info after permission changes
+              if (vaultInfo) {
+                checkVaultAccess(vaultInfo.vault.id);
+              }
+            }}
+          />
+        </Modal>
       )}
     </div>
   );
