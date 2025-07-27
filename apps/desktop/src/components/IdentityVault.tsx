@@ -129,11 +129,8 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     try {
       const info = await invoke<VaultAccessInfo>('check_vault_access', {
         token,
-        request: {
-          user_id: user.id,
-          vault_id: vaultId,
-          permission_type: 'Read'
-        }
+        vaultId: vaultId,
+        permissionType: 'Read'
       });
       
       setAccessInfo(info);
@@ -213,7 +210,14 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
       fetchVaultInfo();
     } catch (err) {
       console.error('Failed to add secret:', err);
-      message.error('Failed to add secret');
+      
+      // Handle specific error cases
+      const errorMessage = String(err);
+      if (errorMessage.includes('UNIQUE constraint failed') && errorMessage.includes('vault_secrets.vault_id, vault_secrets.label')) {
+        message.error('A secret with this label already exists in the vault. Please use a different label.');
+      } else {
+        message.error('Failed to add secret: ' + errorMessage);
+      }
     }
   };
 

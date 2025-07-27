@@ -3,7 +3,7 @@ import { Button, Modal, Alert, Space, Typography, notification, Tooltip } from '
 import { ExportOutlined, LockOutlined, WarningOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/api/fs';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import useAuthStore from '../store/auth';
 import { VaultInfo, VaultAccessInfo } from '../types/vault';
 
@@ -41,11 +41,8 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
     try {
       const accessInfo = await invoke<VaultAccessInfo>('check_vault_access', {
         token,
-        request: {
-          user_id: user.id,
-          vault_id: vault.vault.id,
-          permission_type: 'Export'
-        }
+        vaultId: vault.vault.id,
+        permissionType: 'Export'
       });
 
       setHasExportPermission(accessInfo.has_access);
