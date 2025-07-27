@@ -44,11 +44,8 @@ const VaultAccessIndicator: React.FC<VaultAccessIndicatorProps> = ({
     try {
       const info = await invoke<VaultAccessInfo>('check_vault_access', {
         token,
-        request: {
-          user_id: user.id,
-          vault_id: vaultId,
-          permission_type: 'Read'
-        }
+        vaultId: vaultId,
+        permissionType: 'Read'
       });
       
       setAccessInfo(info);
@@ -202,3 +199,4 @@ const VaultAccessIndicator: React.FC<VaultAccessIndicatorProps> = ({
 };
 
 export default VaultAccessIndicator;
+
