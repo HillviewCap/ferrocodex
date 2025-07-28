@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { vi, expect, describe, it, beforeEach } from 'vitest';
 import PromotionConfirmationModal from '../PromotionConfirmationModal';
 import { ConfigurationVersionInfo } from '../../types/assets';
@@ -52,7 +52,11 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('renders modal with version information', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
+    });
     
     const promoteElements = screen.getAllByText('Promote to Golden Image');
     expect(promoteElements.length).toBeGreaterThan(0);
@@ -62,12 +66,14 @@ describe('PromotionConfirmationModal', () => {
     expect(configJsonElements.length).toBeGreaterThan(0);
     const v2Elements = screen.getAllByText('v2');
     expect(v2Elements.length).toBeGreaterThan(0);
-    const johnDoeElements = screen.getAllByText('john.doe');
-    expect(johnDoeElements.length).toBeGreaterThan(0);
+    // Check that the author username appears in the component
+    expect(screen.getByText(/Created by john\.doe/)).toBeInTheDocument();
   });
 
   it('checks promotion eligibility on mount', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_promotion_eligibility', {
@@ -78,7 +84,11 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('checks for existing golden version on mount', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
+    });
     
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('get_golden_version', {
@@ -89,7 +99,11 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('displays eligibility success when version is eligible', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
+    });
     
     await waitFor(() => {
       const readyElements = screen.getAllByText('Ready for Promotion');
@@ -109,7 +123,9 @@ describe('PromotionConfirmationModal', () => {
       }
     });
 
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     await waitFor(() => {
       const notEligibleElements = screen.getAllByText('Not Eligible for Promotion');
@@ -140,7 +156,9 @@ describe('PromotionConfirmationModal', () => {
       }
     });
     
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     await waitFor(() => {
       const existingGoldenElements = screen.getAllByText('Existing Golden Version Will Be Archived');
@@ -151,7 +169,9 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('displays promotion effects when eligible', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     await waitFor(() => {
       const effectsElements = screen.getAllByText('Promotion Effects');
@@ -166,7 +186,9 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('requires promotion reason for submission', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     // Wait for eligibility check
     await waitFor(() => {
@@ -184,7 +206,9 @@ describe('PromotionConfirmationModal', () => {
   });
 
   it('successfully promotes version with valid reason', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     // Wait for eligibility check
     await waitFor(() => {
@@ -226,7 +250,9 @@ describe('PromotionConfirmationModal', () => {
       }
     });
     
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     // Wait for eligibility check
     await waitFor(() => {
@@ -248,20 +274,26 @@ describe('PromotionConfirmationModal', () => {
     });
   });
 
-  it('calls onCancel when cancel button is clicked', () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+  it('calls onCancel when cancel button is clicked', async () => {
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     fireEvent.click(screen.getByText('Cancel'));
     expect(mockProps.onCancel).toHaveBeenCalled();
   });
 
-  it('does not render when version is null', () => {
-    render(<PromotionConfirmationModal {...mockProps} version={null} />);
+  it('does not render when version is null', async () => {
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} version={null} />);
+    });
     expect(screen.queryByText('Promote to Golden Image')).not.toBeInTheDocument();
   });
 
   it('validates reason length limit', async () => {
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     // Wait for eligibility check
     await waitFor(() => {
@@ -297,7 +329,9 @@ describe('PromotionConfirmationModal', () => {
       }
     });
     
-    render(<PromotionConfirmationModal {...mockProps} />);
+    await act(async () => {
+      render(<PromotionConfirmationModal {...mockProps} />);
+    });
     
     // Wait for eligibility check
     await waitFor(() => {

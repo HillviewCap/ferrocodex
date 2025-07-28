@@ -328,6 +328,14 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
           />
         )}
 
+        {/* Export Information */}
+        <Alert
+          message="Export Information"
+          description="The export process includes integrity verification to ensure the configuration file is complete and accurate."
+          type="info"
+          showIcon
+        />
+
         {/* Success Information */}
         {exportProgress.step === 'completed' && (
           <Alert

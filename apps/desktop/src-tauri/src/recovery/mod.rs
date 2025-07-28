@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use std::path::Path;
 use tauri::AppHandle;
+use uuid::Uuid;
 use crate::{
     configurations::{ConfigurationRepository, CreateConfigurationRequest},
     firmware::{FirmwareRepository, FirmwareFileStorage, CreateFirmwareRequest},
@@ -369,6 +370,7 @@ impl<'a> RecoveryExporter<'a> {
             }).to_string()),
             ip_address: None,
             user_agent: None,
+            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
         };
 
         if let Err(e) = self.audit_repo.log_event(&audit_event) {
@@ -648,6 +650,7 @@ impl<'a> RecoveryImporter<'a> {
             }).to_string()),
             ip_address: None,
             user_agent: None,
+            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
         };
 
         if let Err(e) = self.audit_repo.log_event(&audit_event) {

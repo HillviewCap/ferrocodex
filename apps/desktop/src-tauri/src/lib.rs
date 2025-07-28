@@ -11,6 +11,7 @@ mod firmware;
 mod firmware_analysis;
 mod recovery;
 mod vault;
+mod error_handling;
 
 use database::Database;
 use rusqlite::Connection;
@@ -31,6 +32,7 @@ use std::time::Duration;
 use tauri::{AppHandle, State, Manager};
 use tracing::{error, info, warn};
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
 type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
@@ -2001,6 +2003,7 @@ async fn link_firmware_to_configuration(
                         }).to_string()),
                         ip_address: None,
                         user_agent: None,
+                        // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                     };
                     
                     if let Err(e) = audit_repo.log_event(&audit_event) {
@@ -2071,6 +2074,7 @@ async fn unlink_firmware_from_configuration(
                         }).to_string()),
                         ip_address: None,
                         user_agent: None,
+                        // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                     };
                     
                     if let Err(e) = audit_repo.log_event(&audit_event) {
@@ -2386,6 +2390,7 @@ async fn upload_firmware(
                         }).to_string()),
                         ip_address: None,
                         user_agent: None,
+                        // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                     };
                     if let Err(e) = audit_repo.log_event(&audit_event) {
                         error!("Failed to log audit event: {}", e);
@@ -2536,6 +2541,7 @@ async fn delete_firmware(
                             }).to_string()),
                             ip_address: None,
                             user_agent: None,
+                            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                         };
                         if let Err(e) = audit_repo.log_event(&audit_event) {
                             error!("Failed to log audit event: {}", e);
@@ -2828,6 +2834,7 @@ async fn update_firmware_status(
                                 }).to_string()),
                                 ip_address: None,
                                 user_agent: None,
+                                // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                             };
                             if let Err(e) = audit_repo.log_event(&audit_event) {
                                 error!("Failed to log audit event: {}", e);
@@ -2991,6 +2998,7 @@ async fn promote_firmware_to_golden(
                                 }).to_string()),
                                 ip_address: None,
                                 user_agent: None,
+                                // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                             };
                             if let Err(e) = audit_repo.log_event(&audit_event) {
                                 error!("Failed to log audit event: {}", e);
@@ -3075,6 +3083,7 @@ async fn update_firmware_notes(
                                 }).to_string()),
                                 ip_address: None,
                                 user_agent: None,
+                                // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                             };
                             if let Err(e) = audit_repo.log_event(&audit_event) {
                                 error!("Failed to log audit event: {}", e);
@@ -4783,6 +4792,7 @@ async fn create_permission_request(
                              request.vault_id, request.requested_permission.to_string())),
         ip_address: None,
         user_agent: None,
+        // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
     };
     
     audit_repo.log_event(&audit_event)

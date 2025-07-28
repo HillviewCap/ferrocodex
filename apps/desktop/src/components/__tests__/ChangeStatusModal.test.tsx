@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ChangeStatusModal from '../ChangeStatusModal';
 import { ConfigurationVersionInfo } from '../../types/assets';
@@ -44,7 +44,9 @@ describe('ChangeStatusModal', () => {
   });
 
   it('renders modal with version information', async () => {
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     expect(screen.getByText('Change Configuration Status')).toBeInTheDocument();
     expect(screen.getByText('config.json')).toBeInTheDocument();
@@ -54,7 +56,9 @@ describe('ChangeStatusModal', () => {
   });
 
   it('loads available status transitions on mount', async () => {
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(async () => {
       const invoke = await getMockInvoke();
@@ -66,7 +70,9 @@ describe('ChangeStatusModal', () => {
   });
 
   it('displays available status options after loading', async () => {
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       const selectStatusElements = screen.getAllByText('Select new status');
@@ -87,7 +93,9 @@ describe('ChangeStatusModal', () => {
   it('shows loading state while fetching transitions', async () => {
     const invoke = await getMockInvoke();
     invoke.mockImplementation(() => new Promise(() => {})); // Never resolves
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     expect(screen.getByText('Loading available status transitions...')).toBeInTheDocument();
   });
@@ -95,7 +103,9 @@ describe('ChangeStatusModal', () => {
   it('shows error when transitions fail to load', async () => {
     const invoke = await getMockInvoke();
     invoke.mockRejectedValue('Failed to load transitions');
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Failed to load transitions')).toBeInTheDocument();
@@ -105,7 +115,9 @@ describe('ChangeStatusModal', () => {
   it('shows no transitions message when none available', async () => {
     const invoke = await getMockInvoke();
     invoke.mockResolvedValue([]);
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('No status changes available')).toBeInTheDocument();
@@ -118,29 +130,39 @@ describe('ChangeStatusModal', () => {
       .mockResolvedValueOnce(['Approved'])
       .mockResolvedValueOnce(undefined);
 
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
 
     const select = screen.getByRole('combobox');
-    fireEvent.mouseDown(select);
+    await act(async () => {
+      fireEvent.mouseDown(select);
+    });
     
     await waitFor(() => {
       const approvedOption = screen.getAllByText('Approved')[0];
-      fireEvent.click(approvedOption);
+      act(() => {
+        fireEvent.click(approvedOption);
+      });
     });
 
     const reasonInput = screen.getByPlaceholderText('Provide a reason for this status change...');
-    fireEvent.change(reasonInput, { target: { value: 'Ready for production' } });
+    await act(async () => {
+      fireEvent.change(reasonInput, { target: { value: 'Ready for production' } });
+    });
 
     const submitButtons = screen.getAllByText('Update Status');
     const submitButton = submitButtons[0];
-    fireEvent.click(submitButton);
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith('update_configuration_status', {
+      expect(invoke).toHaveBeenNthCalledWith(2, 'update_configuration_status', {
         token: 'test-token',
         versionId: 1,
         newStatus: 'Approved',
@@ -157,21 +179,31 @@ describe('ChangeStatusModal', () => {
       .mockResolvedValueOnce(['Approved'])
       .mockRejectedValueOnce(new Error('Permission denied'));
 
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
-      const select = screen.getByRole('combobox');
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    const select = screen.getByRole('combobox');
+    await act(async () => {
       fireEvent.mouseDown(select);
     });
 
     await waitFor(() => {
       const approvedOption = screen.getAllByText('Approved')[0];
-      fireEvent.click(approvedOption);
+      act(() => {
+        fireEvent.click(approvedOption);
+      });
     });
 
     const submitButtons = screen.getAllByText('Update Status');
     const submitButton = submitButtons[0];
-    fireEvent.click(submitButton);
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
 
     await waitFor(() => {
       const errorElements = screen.getAllByText('Permission denied');
@@ -184,7 +216,9 @@ describe('ChangeStatusModal', () => {
   it('validates required status field', async () => {
     const invoke = await getMockInvoke();
     invoke.mockResolvedValue(['Approved']);
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       const submitButtons = screen.getAllByText('Update Status');
@@ -201,7 +235,9 @@ describe('ChangeStatusModal', () => {
   it('validates reason length', async () => {
     const invoke = await getMockInvoke();
     invoke.mockResolvedValue(['Approved']);
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     const reasonInput = screen.getByPlaceholderText('Provide a reason for this status change...');
     const longReason = 'a'.repeat(501);
@@ -216,8 +252,10 @@ describe('ChangeStatusModal', () => {
     });
   });
 
-  it('cancels modal and resets form', () => {
-    render(<ChangeStatusModal {...defaultProps} />);
+  it('cancels modal and resets form', async () => {
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     const cancelButton = screen.getByText('Cancel');
     fireEvent.click(cancelButton);
@@ -225,8 +263,10 @@ describe('ChangeStatusModal', () => {
     expect(defaultProps.onCancel).toHaveBeenCalled();
   });
 
-  it('does not render when version is null', () => {
-    render(<ChangeStatusModal {...defaultProps} version={null} />);
+  it('does not render when version is null', async () => {
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} version={null} />);
+    });
     
     expect(screen.queryByText('Change Configuration Status')).not.toBeInTheDocument();
   });
@@ -234,7 +274,9 @@ describe('ChangeStatusModal', () => {
   it('disables submit button when no transitions available', async () => {
     const invoke = await getMockInvoke();
     invoke.mockResolvedValue([]);
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
       const submitButtons = screen.getAllByText('Update Status');
@@ -249,21 +291,31 @@ describe('ChangeStatusModal', () => {
       .mockResolvedValueOnce(['Approved'])
       .mockImplementation(() => new Promise(() => {})); // Never resolves
 
-    render(<ChangeStatusModal {...defaultProps} />);
+    await act(async () => {
+      render(<ChangeStatusModal {...defaultProps} />);
+    });
     
     await waitFor(() => {
-      const select = screen.getByRole('combobox');
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    const select = screen.getByRole('combobox');
+    await act(async () => {
       fireEvent.mouseDown(select);
     });
 
     await waitFor(() => {
       const approvedOption = screen.getAllByText('Approved')[0];
-      fireEvent.click(approvedOption);
+      act(() => {
+        fireEvent.click(approvedOption);
+      });
     });
 
     const submitButtons = screen.getAllByText('Update Status');
     const submitButton = submitButtons[0];
-    fireEvent.click(submitButton);
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
 
     await waitFor(() => {
       expect(submitButton).toHaveAttribute('disabled');
