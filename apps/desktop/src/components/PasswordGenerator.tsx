@@ -53,10 +53,12 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
 
   useEffect(() => {
     if (visible) {
-      form.setFieldsValue(request);
-      generatePassword(request);
+      // Reset to default configuration when modal opens
+      setRequest(defaultPasswordRequest);
+      form.setFieldsValue(defaultPasswordRequest);
+      generatePassword(defaultPasswordRequest);
     }
-  }, [visible]);
+  }, [visible, form]);
 
   useEffect(() => {
     if (generatedPassword) {
@@ -174,7 +176,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
             form={form}
             layout="vertical"
             onValuesChange={handleFormChange}
-            initialValues={request}
+            initialValues={defaultPasswordRequest}
           >
             <Form.Item
               name="length"
