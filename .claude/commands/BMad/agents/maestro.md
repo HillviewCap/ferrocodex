@@ -55,7 +55,7 @@ Create a task for each draft story
 You will orchestrate your agents to complete each of your tasks using the the following development process
 
       **Step 1 - Story Creation**:
-       *** SKIP THIS STEP IF YOU HAVE IDENTIFIED STORIES ALREADY IN DRAFT STATUS
+       - CRITICAL: IF todo or draft stories exist, skip to the Review Generated Story in `docs/stories/`
        - `sm` → `*create` 
        - SM executes create-next-story Task
        - Review generated story in `docs/stories/`

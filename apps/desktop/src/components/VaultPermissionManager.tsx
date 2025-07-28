@@ -36,7 +36,7 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
     try {
       const result = await invoke<VaultPermission[]>('get_vault_permissions', {
         token,
-        vaultId
+        vaultId: vaultId
       });
       setPermissions(result);
     } catch (error) {

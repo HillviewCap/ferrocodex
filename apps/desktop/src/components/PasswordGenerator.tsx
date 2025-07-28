@@ -53,10 +53,12 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
 
   useEffect(() => {
     if (visible) {
-      form.setFieldsValue(request);
-      generatePassword();
+      // Reset to default configuration when modal opens
+      setRequest(defaultPasswordRequest);
+      form.resetFields();
+      generatePassword(defaultPasswordRequest);
     }
-  }, [visible]);
+  }, [visible, form]);
 
   useEffect(() => {
     if (generatedPassword) {
@@ -64,14 +66,15 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
     }
   }, [generatedPassword]);
 
-  const generatePassword = async () => {
+  const generatePassword = async (customRequest?: GeneratePasswordRequest) => {
     if (!token) return;
 
+    const requestToUse = customRequest || request;
     setGenerating(true);
     try {
       const password = await invoke<string>('generate_secure_password', {
         token,
-        request
+        request: requestToUse
       });
       setGeneratedPassword(password);
     } catch (err) {
@@ -108,12 +111,17 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
       }
     });
     setRequest(newRequest);
+    
+    // Auto-regenerate password when settings change (but only if there's already a password)
+    if (generatedPassword && isValidConfiguration(newRequest)) {
+      generatePassword(newRequest);
+    }
   };
 
   const handleRegenerate = () => {
     const formValues = form.getFieldsValue();
     setRequest(formValues);
-    generatePassword();
+    generatePassword(formValues);
   };
 
   const handleCopyPassword = () => {
@@ -130,9 +138,10 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
     }
   };
 
-  const isValidConfiguration = () => {
-    return request.include_uppercase || request.include_lowercase || 
-           request.include_numbers || request.include_special;
+  const isValidConfiguration = (requestToCheck?: GeneratePasswordRequest) => {
+    const req = requestToCheck || request;
+    return req.include_uppercase || req.include_lowercase || 
+           req.include_numbers || req.include_special;
   };
 
   return (
@@ -167,7 +176,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
             form={form}
             layout="vertical"
             onValuesChange={handleFormChange}
-            initialValues={request}
+            initialValues={defaultPasswordRequest}
           >
             <Form.Item
               name="length"
@@ -193,47 +202,47 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
             </Form.Item>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <Form.Item name="include_uppercase" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_uppercase" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Uppercase (A-Z)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Uppercase (A-Z)</Text>
+              </Space>
 
-              <Form.Item name="include_lowercase" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_lowercase" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Lowercase (a-z)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Lowercase (a-z)</Text>
+              </Space>
 
-              <Form.Item name="include_numbers" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_numbers" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Numbers (0-9)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Numbers (0-9)</Text>
+              </Space>
 
-              <Form.Item name="include_special" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_special" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Special (!@#$...)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Special (!@#$...)</Text>
+              </Space>
             </div>
 
-            <Form.Item name="exclude_ambiguous" valuePropName="checked">
-              <Space align="start">
+            <Space align="start">
+              <Form.Item name="exclude_ambiguous" valuePropName="checked" noStyle>
                 <Switch size="small" />
-                <div>
-                  <Text>Exclude ambiguous characters</Text>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Excludes: 0, O, l, I, 1
-                  </Text>
-                </div>
-              </Space>
-            </Form.Item>
+              </Form.Item>
+              <div>
+                <Text>Exclude ambiguous characters</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  Excludes: 0, O, l, I, 1
+                </Text>
+              </div>
+            </Space>
           </Form>
 
           {!isValidConfiguration() && (

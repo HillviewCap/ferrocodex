@@ -4,6 +4,7 @@ use chrono::{Utc, Duration};
 use std::collections::HashMap;
 use std::str::FromStr;
 use tracing::{info, debug, warn};
+use uuid::Uuid;
 use rusqlite::{Connection, params};
 use crate::audit::{AuditRepository, AuditEventRequest, AuditEventType};
 use super::VaultRepository;
@@ -234,6 +235,7 @@ impl<'a> PasswordRotationService<'a> {
             }).to_string()),
             ip_address: None,
             user_agent: None,
+            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
         };
         self.audit_repo.log_event(&audit_event)?;
 
@@ -331,7 +333,7 @@ mod tests {
         let db = Database::new(temp_file.path().to_path_buf()).unwrap();
         let conn = db.get_connection();
         
-        (temp_file, conn.clone())
+        (temp_file, conn)
     }
 
     #[test]

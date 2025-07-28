@@ -11,53 +11,225 @@ This document defines the comprehensive error handling strategy for Ferrocodex, 
 - **Security-First**: Never expose sensitive system information in error messages
 - **Consistent Format**: Standardized error structures across all layers
 - **Audit Trail**: All errors are logged for monitoring and analysis
+- **Proactive Recovery**: Implement multiple recovery strategies for different error scenarios
+- **Context Preservation**: Maintain full operational context throughout error propagation
 
 ### Error Categories
-1. **User Errors**: Invalid input, permissions, business logic violations
-2. **System Errors**: Database failures, network issues, resource constraints
-3. **Security Errors**: Authentication failures, authorization violations, rate limiting
-4. **Validation Errors**: Input format errors, data constraint violations
-5. **Infrastructure Errors**: File system, external service, configuration issues
+
+#### By Severity Level
+1. **Critical**: System integrity threats, data corruption, security breaches
+2. **High**: Authentication failures, authorization violations, data access issues
+3. **Medium**: Business logic violations, validation errors, resource conflicts
+4. **Low**: User input errors, temporary service unavailability, display issues
+
+#### By Domain
+1. **Authentication & Authorization**: Session management, permissions, rate limiting
+2. **Data Management**: Database failures, validation errors, encryption issues
+3. **Asset Operations**: Firmware handling, configuration management, vault operations
+4. **System Integration**: File I/O, external services, network connectivity
+5. **User Interface**: Input validation, display errors, component failures
+
+#### By Recovery Strategy
+1. **Auto-Recoverable**: Transient network issues, temporary resource constraints
+2. **User-Recoverable**: Invalid input, authentication renewal, permission requests
+3. **Admin-Recoverable**: System configuration, resource allocation, service restart
+4. **Manual-Recoverable**: Data corruption, hardware failures, external dependencies
 
 ## Backend Error Handling (Rust)
 
-### Core Error Types
+### Enhanced Error System Architecture
+
+#### Error Context Structure
+```rust
+// Enhanced error context for comprehensive tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorContext {
+    pub request_id: String,
+    pub user_id: Option<String>,
+    pub username: Option<String>,
+    pub operation: String,
+    pub component: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub session_id: Option<String>,
+    pub correlation_data: std::collections::HashMap<String, String>,
+}
+
+impl ErrorContext {
+    pub fn new(operation: &str, component: &str) -> Self {
+        Self {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            user_id: None,
+            username: None,
+            operation: operation.to_string(),
+            component: component.to_string(),
+            timestamp: chrono::Utc::now(),
+            session_id: None,
+            correlation_data: std::collections::HashMap::new(),
+        }
+    }
+    
+    pub fn with_user(mut self, user_id: String, username: String) -> Self {
+        self.user_id = Some(user_id);
+        self.username = Some(username);
+        self
+    }
+    
+    pub fn with_session(mut self, session_id: String) -> Self {
+        self.session_id = Some(session_id);
+        self
+    }
+    
+    pub fn add_correlation(mut self, key: &str, value: &str) -> Self {
+        self.correlation_data.insert(key.to_string(), value.to_string());
+        self
+    }
+}
+```
+
+#### Core Error Types
 ```rust
 // Core error handling using Result<T, String> pattern
 pub type AppResult<T> = Result<T, String>;
 
-// Detailed error categories for internal use
-#[derive(Debug, Clone, thiserror::Error)]
+// Enhanced error categories with severity and context
+#[derive(Debug, Clone, thiserror::Error, Serialize, Deserialize)]
 pub enum AppError {
     #[error("Database operation failed: {message}")]
-    Database { message: String, source: Option<String> },
+    Database { 
+        message: String, 
+        source: Option<String>, 
+        context: ErrorContext,
+        severity: ErrorSeverity,
+        recovery_suggestion: Option<String>,
+    },
     
     #[error("Authentication failed: {message}")]
-    Authentication { message: String },
+    Authentication { 
+        message: String, 
+        context: ErrorContext,
+        reason: AuthFailureReason,
+        retry_after: Option<u64>,
+    },
     
     #[error("Authorization failed: {message}")]
-    Authorization { message: String },
+    Authorization { 
+        message: String, 
+        context: ErrorContext,
+        required_role: Option<String>,
+        current_role: Option<String>,
+        resource: Option<String>,
+    },
     
     #[error("Validation failed: {message}")]
-    Validation { message: String, field: Option<String> },
+    Validation { 
+        message: String, 
+        field: Option<String>, 
+        context: ErrorContext,
+        constraints: Vec<String>,
+        provided_value: Option<String>,
+    },
     
     #[error("Resource not found: {resource}")]
-    NotFound { resource: String },
+    NotFound { 
+        resource: String, 
+        context: ErrorContext,
+        search_criteria: Option<String>,
+        suggestions: Vec<String>,
+    },
     
     #[error("Resource conflict: {message}")]
-    Conflict { message: String },
+    Conflict { 
+        message: String, 
+        context: ErrorContext,
+        conflicting_resource: Option<String>,
+        resolution_options: Vec<String>,
+    },
     
     #[error("Rate limit exceeded: {message}")]
-    RateLimit { message: String, retry_after: Option<u64> },
+    RateLimit { 
+        message: String, 
+        retry_after: Option<u64>, 
+        context: ErrorContext,
+        limit_type: String,
+        current_usage: Option<u64>,
+        limit_threshold: Option<u64>,
+    },
     
     #[error("Internal server error: {message}")]
-    Internal { message: String, source: Option<String> },
+    Internal { 
+        message: String, 
+        source: Option<String>, 
+        context: ErrorContext,
+        severity: ErrorSeverity,
+        recovery_action: Option<String>,
+    },
     
     #[error("External service error: {service}: {message}")]
-    ExternalService { service: String, message: String },
+    ExternalService { 
+        service: String, 
+        message: String, 
+        context: ErrorContext,
+        service_status: Option<String>,
+        fallback_available: bool,
+    },
     
     #[error("File operation failed: {message}")]
-    FileOperation { message: String, path: Option<String> },
+    FileOperation { 
+        message: String, 
+        path: Option<String>, 
+        context: ErrorContext,
+        operation_type: String,
+        permissions_issue: bool,
+    },
+    
+    // New domain-specific errors
+    #[error("Asset operation failed: {message}")]
+    AssetOperation {
+        message: String,
+        asset_id: Option<String>,
+        operation: String,
+        context: ErrorContext,
+        asset_state: Option<String>,
+    },
+    
+    #[error("Vault operation failed: {message}")]
+    VaultOperation {
+        message: String,
+        vault_path: Option<String>,
+        operation: String,
+        context: ErrorContext,
+        encryption_issue: bool,
+    },
+    
+    #[error("Configuration error: {message}")]
+    Configuration {
+        message: String,
+        config_key: Option<String>,
+        context: ErrorContext,
+        expected_format: Option<String>,
+        provided_value: Option<String>,
+    },
+}
+
+// Supporting enums for enhanced error context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ErrorSeverity {
+    Critical,    // System integrity at risk
+    High,        // Major functionality impaired
+    Medium,      // Minor functionality impaired
+    Low,         // Cosmetic or easily recoverable
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AuthFailureReason {
+    InvalidCredentials,
+    SessionExpired,
+    SessionInvalidated,
+    RateLimited,
+    AccountLocked,
+    AccountDisabled,
+    MfaRequired,
+    MfaFailed,
 }
 
 impl AppError {
@@ -374,9 +546,39 @@ fn validate_password(password: &str) -> Result<(), String> {
 }
 ```
 
-## Frontend Error Handling (TypeScript)
+## Enhanced Frontend Error Handling (TypeScript)
 
-### Error Type Definitions
+### Enhanced Error Context Management
+
+#### Frontend Error Context
+```typescript
+// Enhanced frontend error context matching backend structure
+export interface FrontendErrorContext {
+  requestId: string;
+  userId?: string;
+  username?: string;
+  operation: string;
+  component: string;
+  timestamp: string;
+  sessionId?: string;
+  correlationData: Record<string, string>;
+  userAgent: string;
+  url: string;
+}
+
+// Enhanced error recovery metadata
+export interface ErrorRecoveryMetadata {
+  isRetryable: boolean;
+  maxRetries: number;
+  retryDelay?: number;
+  fallbackAvailable: boolean;
+  userActionRequired: boolean;
+  suggestedActions: string[];
+  recoveryInstructions?: string;
+}
+```
+
+### Enhanced Error Type Definitions
 ```typescript
 // Frontend error types matching backend structure
 export interface AppError {
@@ -999,7 +1201,225 @@ class ErrorLogger {
 }
 ```
 
-## Error Recovery Strategies
+## Enhanced Error Recovery Strategies
+
+### Multi-Level Recovery Architecture
+
+#### 1. Immediate Automatic Recovery
+```rust
+// Enhanced retry mechanism with context awareness
+#[derive(Debug, Clone)]
+pub struct RecoveryStrategy {
+    pub max_attempts: u32,
+    pub base_delay_ms: u64,
+    pub max_delay_ms: u64,
+    pub backoff_multiplier: f64,
+    pub circuit_breaker_threshold: u32,
+    pub recovery_actions: Vec<RecoveryAction>,
+}
+
+#[derive(Debug, Clone)]
+pub enum RecoveryAction {
+    Retry,
+    RetryWithDelay(u64),
+    Fallback(String),
+    Escalate,
+    UserIntervention(String),
+    SystemRestart,
+    CacheRefresh,
+    ReAuthenticate,
+}
+
+impl AppError {
+    pub fn get_recovery_strategy(&self) -> RecoveryStrategy {
+        match self {
+            AppError::Database { severity, .. } => match severity {
+                ErrorSeverity::Critical => RecoveryStrategy {
+                    max_attempts: 1,
+                    base_delay_ms: 0,
+                    max_delay_ms: 0,
+                    backoff_multiplier: 1.0,
+                    circuit_breaker_threshold: 1,
+                    recovery_actions: vec![RecoveryAction::Escalate, RecoveryAction::SystemRestart],
+                },
+                _ => RecoveryStrategy {
+                    max_attempts: 3,
+                    base_delay_ms: 1000,
+                    max_delay_ms: 30000,
+                    backoff_multiplier: 2.0,
+                    circuit_breaker_threshold: 5,
+                    recovery_actions: vec![
+                        RecoveryAction::Retry,
+                        RecoveryAction::RetryWithDelay(5000),
+                        RecoveryAction::Fallback("cached_data".to_string()),
+                    ],
+                },
+            },
+            AppError::Authentication { reason, .. } => match reason {
+                AuthFailureReason::SessionExpired => RecoveryStrategy {
+                    max_attempts: 1,
+                    base_delay_ms: 0,
+                    max_delay_ms: 0,
+                    backoff_multiplier: 1.0,
+                    circuit_breaker_threshold: 1,
+                    recovery_actions: vec![RecoveryAction::ReAuthenticate],
+                },
+                AuthFailureReason::RateLimited => RecoveryStrategy {
+                    max_attempts: 3,
+                    base_delay_ms: 30000,
+                    max_delay_ms: 300000,
+                    backoff_multiplier: 2.0,
+                    circuit_breaker_threshold: 3,
+                    recovery_actions: vec![
+                        RecoveryAction::RetryWithDelay(30000),
+                        RecoveryAction::UserIntervention("Rate limited. Please wait before trying again.".to_string()),
+                    ],
+                },
+                _ => RecoveryStrategy {
+                    max_attempts: 1,
+                    base_delay_ms: 0,
+                    max_delay_ms: 0,
+                    backoff_multiplier: 1.0,
+                    circuit_breaker_threshold: 1,
+                    recovery_actions: vec![RecoveryAction::UserIntervention("Please check your credentials.".to_string())],
+                },
+            },
+            AppError::ExternalService { fallback_available, .. } => {
+                if *fallback_available {
+                    RecoveryStrategy {
+                        max_attempts: 2,
+                        base_delay_ms: 2000,
+                        max_delay_ms: 10000,
+                        backoff_multiplier: 2.0,
+                        circuit_breaker_threshold: 3,
+                        recovery_actions: vec![
+                            RecoveryAction::Retry,
+                            RecoveryAction::Fallback("local_cache".to_string()),
+                        ],
+                    }
+                } else {
+                    RecoveryStrategy {
+                        max_attempts: 3,
+                        base_delay_ms: 5000,
+                        max_delay_ms: 60000,
+                        backoff_multiplier: 2.0,
+                        circuit_breaker_threshold: 5,
+                        recovery_actions: vec![
+                            RecoveryAction::RetryWithDelay(5000),
+                            RecoveryAction::UserIntervention("External service unavailable. Please try again later.".to_string()),
+                        ],
+                    }
+                }
+            },
+            _ => RecoveryStrategy {
+                max_attempts: 1,
+                base_delay_ms: 0,
+                max_delay_ms: 0,
+                backoff_multiplier: 1.0,
+                circuit_breaker_threshold: 1,
+                recovery_actions: vec![RecoveryAction::UserIntervention("An error occurred. Please try again.".to_string())],
+            },
+        }
+    }
+}
+```
+
+#### 2. Graceful Degradation Patterns
+```rust
+// Service degradation manager
+pub struct ServiceDegradationManager {
+    degraded_services: Arc<Mutex<HashSet<String>>>,
+    fallback_providers: HashMap<String, Box<dyn FallbackProvider>>,
+}
+
+pub trait FallbackProvider: Send + Sync {
+    fn can_provide_fallback(&self, service: &str) -> bool;
+    fn provide_fallback(&self, service: &str, context: &ErrorContext) -> Result<serde_json::Value, String>;
+}
+
+impl ServiceDegradationManager {
+    pub fn handle_service_failure(&self, service: &str, error: &AppError) -> RecoveryDecision {
+        let mut degraded = self.degraded_services.lock().unwrap();
+        degraded.insert(service.to_string());
+        
+        if let Some(fallback) = self.fallback_providers.get(service) {
+            if fallback.can_provide_fallback(service) {
+                return RecoveryDecision::UseFallback(service.to_string());
+            }
+        }
+        
+        match error {
+            AppError::Database { severity: ErrorSeverity::Critical, .. } => {
+                RecoveryDecision::SystemShutdown("Critical database failure".to_string())
+            },
+            AppError::ExternalService { .. } => {
+                RecoveryDecision::DisableFeature(service.to_string())
+            },
+            _ => RecoveryDecision::RetryLater(service.to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RecoveryDecision {
+    UseFallback(String),
+    DisableFeature(String),
+    RetryLater(String),
+    SystemShutdown(String),
+    UserNotification(String),
+}
+```
+
+#### 3. Context-Aware Recovery
+```rust
+// Recovery context manager
+pub struct RecoveryContextManager {
+    active_recoveries: Arc<Mutex<HashMap<String, RecoveryAttempt>>>,
+    user_preferences: Arc<Mutex<HashMap<String, UserRecoveryPreferences>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RecoveryAttempt {
+    pub request_id: String,
+    pub error_type: String,
+    pub attempt_count: u32,
+    pub last_attempt: chrono::DateTime<chrono::Utc>,
+    pub next_attempt: Option<chrono::DateTime<chrono::Utc>>,
+    pub recovery_strategy: RecoveryStrategy,
+    pub user_notified: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserRecoveryPreferences {
+    pub auto_retry_enabled: bool,
+    pub max_auto_retries: u32,
+    pub notification_threshold: u32,
+    pub preferred_recovery_actions: Vec<RecoveryAction>,
+}
+
+impl RecoveryContextManager {
+    pub fn should_attempt_recovery(&self, error: &AppError) -> bool {
+        let context = match error {
+            AppError::Database { context, .. } => context,
+            AppError::Authentication { context, .. } => context,
+            // ... other error types
+            _ => return false,
+        };
+        
+        let mut active = self.active_recoveries.lock().unwrap();
+        
+        if let Some(attempt) = active.get_mut(&context.request_id) {
+            attempt.attempt_count < attempt.recovery_strategy.max_attempts
+        } else {
+            true
+        }
+    }
+    
+    pub fn record_recovery_attempt(&self, error: &AppError, success: bool) {
+        // Implementation for tracking recovery attempts
+    }
+}
+```
 
 ### Automatic Retry
 ```typescript
@@ -1125,4 +1545,45 @@ impl CircuitBreaker {
 }
 ```
 
-This comprehensive error handling strategy ensures robust error management across all layers of the Ferrocodex application, providing excellent user experience while maintaining detailed error context for debugging and monitoring.
+## Enhanced Error Handling Architecture Summary
+
+### Key Improvements for Issue #55
+
+#### 1. Error System Architecture Enhancements
+- **Structured Error Context**: Every error now carries comprehensive context including request ID, user information, operation details, and correlation data
+- **Severity-Based Classification**: Critical, High, Medium, and Low severity levels for proper escalation
+- **Domain-Specific Errors**: New error types for Asset Operations, Vault Operations, and Configuration management
+- **Recovery Metadata**: Each error includes specific recovery suggestions and fallback options
+
+#### 2. Enhanced Error Type Hierarchy
+- **Multi-Dimensional Classification**: Errors classified by severity, domain, and recovery strategy
+- **Rich Context Propagation**: Error context flows seamlessly from frontend through backend to database
+- **Backward Compatibility**: All enhancements maintain compatibility with existing `Result<T, String>` pattern
+- **Type Safety**: Strong typing ensures compile-time error handling verification
+
+#### 3. Context Propagation Strategy
+- **Request Tracing**: Unique request IDs enable end-to-end operation tracking
+- **Cross-Layer Context**: User context, session information, and operation metadata preserved across all layers
+- **Correlation Data**: Custom key-value pairs for additional context specific to each operation
+- **Audit Integration**: All error context automatically flows to audit logging system
+
+#### 4. Advanced Recovery Mechanisms
+- **Multi-Level Recovery**: Immediate automatic retry, graceful degradation, user-guided recovery
+- **Context-Aware Strategies**: Recovery decisions based on error type, severity, user preferences, and system state
+- **Circuit Breaker Integration**: Automatic service isolation and fallback activation
+- **User Preference Support**: Configurable recovery behaviors per user
+
+#### 5. Implementation Benefits
+- **Improved Debugging**: Rich error context enables faster issue resolution
+- **Better User Experience**: Context-aware recovery provides clearer guidance to users
+- **Enhanced Monitoring**: Comprehensive error telemetry for proactive system management
+- **Reduced Downtime**: Automatic recovery mechanisms minimize service interruptions
+- **Security Compliance**: Detailed audit trails for all error conditions
+
+### Migration Path
+1. **Phase 1**: Implement enhanced error types while maintaining backward compatibility
+2. **Phase 2**: Add error context to existing operations gradually
+3. **Phase 3**: Implement recovery strategies for critical operations
+4. **Phase 4**: Roll out advanced recovery mechanisms across all features
+
+This comprehensive error handling strategy ensures robust error management across all layers of the Ferrocodex application, providing excellent user experience while maintaining detailed error context for debugging and monitoring. The enhanced architecture addresses the specific requirements of issue #55 while building a foundation for future reliability improvements.

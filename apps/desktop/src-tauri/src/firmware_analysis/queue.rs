@@ -5,6 +5,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, error};
 use tauri::{AppHandle, Manager, Emitter};
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::database::Database;
 use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository, FirmwareFileStorage};
@@ -120,6 +121,7 @@ impl AnalysisQueue {
                     }).to_string()),
                     ip_address: None,
                     user_agent: None,
+                    // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                 };
                 if let Err(e) = audit_repo.log_event(&audit_event) {
                     error!("Failed to log audit event: {}", e);
@@ -226,6 +228,7 @@ impl AnalysisQueue {
                             }).to_string()),
                             ip_address: None,
                             user_agent: None,
+                            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                         };
                         if let Err(e) = audit_repo.log_event(&audit_event) {
                             error!("Failed to log audit event: {}", e);
@@ -269,6 +272,7 @@ impl AnalysisQueue {
                             }).to_string()),
                             ip_address: None,
                             user_agent: None,
+                            // request_id: Some(Uuid::new_v4().to_string()), // Temporarily disabled for deployment
                         };
                         if let Err(e) = audit_repo.log_event(&audit_event) {
                             error!("Failed to log audit event: {}", e);

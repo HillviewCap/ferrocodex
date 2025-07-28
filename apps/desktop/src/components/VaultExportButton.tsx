@@ -3,7 +3,6 @@ import { Button, Modal, Alert, Space, Typography, notification, Tooltip } from '
 import { ExportOutlined, LockOutlined, WarningOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import useAuthStore from '../store/auth';
 import { VaultInfo, VaultAccessInfo } from '../types/vault';
 
@@ -79,7 +78,11 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
 
       if (filePath) {
         // Write the export data to the selected file
-        await writeTextFile(filePath, exportData);
+        // Write the export data using Tauri's invoke
+        await invoke('write_file', {
+          path: filePath,
+          contents: exportData
+        });
 
         notification.success({
           message: 'Vault Exported',

@@ -5,9 +5,7 @@ import {
   LogoutOutlined, 
   DashboardOutlined,
   SettingOutlined,
-  KeyOutlined,
   LockOutlined,
-  SafetyOutlined,
   TeamOutlined,
   DatabaseOutlined,
   ImportOutlined,
@@ -70,7 +68,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const userMenuItems = [
+  const userMenuItems = React.useMemo(() => [
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -90,55 +88,51 @@ const Dashboard: React.FC = () => {
       label: 'Logout',
       onClick: handleLogout,
     },
-  ];
+  ], []);
 
-  const sidebarMenuItems = [
-    {
-      key: 'dashboard',
-      icon: <DashboardOutlined />,
-      label: 'Dashboard',
-    },
-    {
-      key: 'assets',
-      icon: <DatabaseOutlined />,
-      label: 'Assets',
-    },
-    {
-      key: 'standalone-credentials',
-      icon: <LockOutlined />,
-      label: 'Standalone Credentials',
-    },
-    {
-      key: 'passwords',
-      icon: <KeyOutlined />,
-      label: 'Passwords',
-    },
-    {
-      key: 'secure-notes',
-      icon: <LockOutlined />,
-      label: 'Secure Notes',
-    },
-    {
-      key: 'security',
-      icon: <SafetyOutlined />,
-      label: 'Security',
-    },
+  const sidebarMenuItems = React.useMemo(() => {
+    const items: any[] = [
+      {
+        key: 'dashboard',
+        icon: <DashboardOutlined />,
+        label: 'Dashboard',
+      },
+      {
+        key: 'assets',
+        icon: <DatabaseOutlined />,
+        label: 'Assets',
+      },
+      {
+        key: 'standalone-credentials',
+        icon: <LockOutlined />,
+        label: 'Vault',
+      },
+    ];
+
     // Add User Management for administrators only
-    ...(canAccessUserManagement(user) ? [{
-      key: 'user-management',
-      icon: <TeamOutlined />,
-      label: 'User Management',
-    }] : []),
-    {
-      type: 'divider' as const,
-    },
-    {
-      key: 'help',
-      icon: <QuestionCircleOutlined />,
-      label: 'Help',
-      onClick: handleOpenDocumentation,
-    },
-  ];
+    if (canAccessUserManagement(user)) {
+      items.push({
+        key: 'user-management',
+        icon: <TeamOutlined />,
+        label: 'User Management',
+      });
+    }
+
+    // Add divider and help
+    items.push(
+      {
+        type: 'divider' as const,
+      },
+      {
+        key: 'help',
+        icon: <QuestionCircleOutlined />,
+        label: 'Help',
+        onClick: handleOpenDocumentation,
+      }
+    );
+
+    return items;
+  }, [user]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -261,39 +255,6 @@ const Dashboard: React.FC = () => {
                     </Card>
                   </Col>
 
-                  <Col xs={24} sm={12} lg={8}>
-                    <Card 
-                      hoverable
-                      style={{ textAlign: 'center', height: '160px' }}
-                      bodyStyle={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        justifyContent: 'center',
-                        height: '100%'
-                      }}
-                    >
-                      <KeyOutlined style={{ fontSize: '32px', color: '#1890ff', marginBottom: '12px' }} />
-                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Passwords</Title>
-                      <Text type="secondary">Manage your passwords</Text>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} sm={12} lg={8}>
-                    <Card 
-                      hoverable
-                      style={{ textAlign: 'center', height: '160px' }}
-                      bodyStyle={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        justifyContent: 'center',
-                        height: '100%'
-                      }}
-                    >
-                      <SafetyOutlined style={{ fontSize: '32px', color: '#fa8c16', marginBottom: '12px' }} />
-                      <Title level={4} style={{ margin: '0 0 8px 0' }}>Security</Title>
-                      <Text type="secondary">Security settings</Text>
-                    </Card>
-                  </Col>
                 </Row>
 
                 <Card style={{ marginTop: '24px' }} loading={statsLoading}>

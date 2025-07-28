@@ -458,7 +458,7 @@ const StandaloneCredentials: React.FC = () => {
           <Row justify="space-between" align="middle">
             <Col>
               <Title level={3}>
-                <LockOutlined /> Standalone Credentials
+                <LockOutlined /> Vault
               </Title>
               <Text type="secondary">
                 Manage passwords and credentials for IT assets not tracked as PLCs

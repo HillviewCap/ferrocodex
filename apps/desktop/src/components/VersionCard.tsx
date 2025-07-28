@@ -217,63 +217,80 @@ const VersionCard: React.FC<VersionCardProps> = React.memo(({
     token && 
     version.status === 'Approved';
 
-  const statusMenuItems: MenuProps['items'] = [
-    ...(canExport && token ? [
-      {
+  const statusMenuItems: MenuProps['items'] = React.useMemo(() => {
+    const items: MenuProps['items'] = [];
+
+    // Add export option
+    if (canExport && token) {
+      items.push({
         key: 'export',
         label: 'Export',
         icon: <DownloadOutlined />,
         onClick: handleExport
-      }
-    ] : []),
-    ...(canExport && token && version.firmware_version_id ? [
-      {
+      });
+    }
+
+    // Add export recovery package option
+    if (canExport && token && version.firmware_version_id) {
+      items.push({
         key: 'export-recovery',
         label: 'Export Recovery Package',
         icon: <RocketOutlined />,
         onClick: () => setShowRecoveryPackageModal(true)
-      }
-    ] : []),
-    ...(canShowPromoteToGolden ? [
-      {
+      });
+    }
+
+    // Add promote to golden option
+    if (canShowPromoteToGolden) {
+      items.push({
         key: 'promote-to-golden',
         label: 'Promote to Golden',
         icon: <TrophyOutlined />,
         onClick: handlePromoteToGolden
-      }
-    ] : []),
-    ...(canChangeStatus && token && !isArchived ? [
-      {
+      });
+    }
+
+    // Add change status option
+    if (canChangeStatus && token && !isArchived) {
+      items.push({
         key: 'change-status',
         label: 'Change Status',
         icon: <EditOutlined />,
         onClick: handleChangeStatus
-      }
-    ] : []),
-    ...(canArchive && token && !isArchived ? [
-      {
+      });
+    }
+
+    // Add archive option
+    if (canArchive && token && !isArchived) {
+      items.push({
         key: 'archive',
         label: 'Archive Version',
         icon: <InboxOutlined />,
         onClick: handleArchive,
         danger: true
-      }
-    ] : []),
-    ...(canRestore && token && isArchived ? [
-      {
+      });
+    }
+
+    // Add restore option
+    if (canRestore && token && isArchived) {
+      items.push({
         key: 'restore',
         label: 'Restore Version',
         icon: <UndoOutlined />,
         onClick: handleRestore
-      }
-    ] : []),
-    {
+      });
+    }
+
+    // Always add view history option
+    items.push({
       key: 'view-history',
       label: 'View Status History',
       icon: <HistoryOutlined />,
       onClick: handleViewHistory
-    }
-  ];
+    });
+
+    return items;
+  }, [canExport, canShowPromoteToGolden, canChangeStatus, canArchive, canRestore, token, isArchived, version.firmware_version_id]);
 
   return (
     <Card 

@@ -62,7 +62,7 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
       const filteredTransitions = transitions.filter(status => status !== 'Golden');
       setAvailableTransitions(filteredTransitions as ConfigurationStatus[]);
     } catch (err) {
-      setError(err as string);
+      setError(typeof err === 'string' ? err : (err as Error).message || 'Failed to load transitions');
     } finally {
       setLoadingTransitions(false);
     }
