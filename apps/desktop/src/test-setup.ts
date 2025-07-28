@@ -34,3 +34,29 @@ Object.defineProperty(window, 'getComputedStyle', {
     getPropertyValue: vi.fn().mockReturnValue(''),
   })),
 });
+
+// Mock ResizeObserver for Ant Design
+Object.defineProperty(window, 'ResizeObserver', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  })),
+});
+
+// Mock IntersectionObserver for Ant Design
+Object.defineProperty(window, 'IntersectionObserver', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  })),
+});
+
+// Mock HTMLCanvasElement.getContext for Ant Design Charts
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  writable: true,
+  value: vi.fn(),
+});

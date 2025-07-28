@@ -88,6 +88,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const [selectedSecret, setSelectedSecret] = useState<VaultSecret | null>(null);
   const [updatePasswordVisible, setUpdatePasswordVisible] = useState(false);
   const [updatePasswordForm] = Form.useForm();
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const [addSecretType, setAddSecretType] = useState<SecretType | null>(null);
 
   const [createVaultForm] = Form.useForm();
@@ -98,6 +99,15 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
       fetchVaultInfo();
     }
   }, [token, asset.id]);
+
+  useEffect(() => {
+    console.log('Auth state in IdentityVault:', { 
+      hasToken: !!token, 
+      hasUser: !!user, 
+      userId: user?.id,
+      username: user?.username 
+    });
+  }, [token, user]);
 
   const fetchVaultInfo = async () => {
     if (!token) return;
@@ -256,17 +266,45 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   };
 
   const handlePasswordUpdate = async (values: any) => {
-    if (!token || !user || !selectedSecret) return;
+    // Log auth state for debugging
+    console.log('handlePasswordUpdate - auth state:', { 
+      hasToken: !!token, 
+      hasUser: !!user, 
+      user: user,
+      hasSelectedSecret: !!selectedSecret,
+      selectedSecret: selectedSecret 
+    });
+    
+    if (!selectedSecret) {
+      message.error('No password selected for update.');
+      return;
+    }
 
+    if (!values.password || values.password.trim() === '') {
+      message.error('Please enter a valid password');
+      return;
+    }
+
+    setUpdatingPassword(true);
     try {
+      // Use the current user from auth store, with fallback
+      const currentUser = useAuthStore.getState().user;
+      const currentToken = useAuthStore.getState().token;
+      
+      console.log('Using auth state:', { currentUser, hasToken: !!currentToken });
+      
+      if (!currentToken || !currentUser || !currentUser.id) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+      
       const request: UpdateCredentialPasswordRequest = {
         secret_id: selectedSecret.id,
         new_password: values.password,
-        author_id: user.id,
+        author_id: currentUser.id,
       };
 
       await invoke('update_credential_password', {
-        token,
+        token: currentToken,
         request
       });
 
@@ -278,6 +316,8 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     } catch (err) {
       console.error('Failed to update password:', err);
       message.error(typeof err === 'string' ? err : 'Failed to update password');
+    } finally {
+      setUpdatingPassword(false);
     }
   };
 
@@ -840,11 +880,15 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
         }
         open={updatePasswordVisible}
         onCancel={() => {
-          setUpdatePasswordVisible(false);
-          updatePasswordForm.resetFields();
-          setSelectedSecret(null);
+          if (!updatingPassword) {
+            setUpdatePasswordVisible(false);
+            updatePasswordForm.resetFields();
+            setSelectedSecret(null);
+          }
         }}
         footer={null}
+        maskClosable={!updatingPassword}
+        closable={!updatingPassword}
         width={600}
       >
         <Form
@@ -879,14 +923,22 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
 
           <div style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => {
-                setUpdatePasswordVisible(false);
-                updatePasswordForm.resetFields();
-                setSelectedSecret(null);
-              }}>
+              <Button 
+                onClick={() => {
+                  setUpdatePasswordVisible(false);
+                  updatePasswordForm.resetFields();
+                  setSelectedSecret(null);
+                }}
+                disabled={updatingPassword}
+              >
                 Cancel
               </Button>
-              <Button type="primary" htmlType="submit">
+              <Button 
+                type="primary" 
+                htmlType="submit"
+                loading={updatingPassword}
+                disabled={updatingPassword}
+              >
                 Update Password
               </Button>
             </Space>

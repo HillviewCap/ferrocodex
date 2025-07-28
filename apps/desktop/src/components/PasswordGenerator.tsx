@@ -55,7 +55,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
     if (visible) {
       // Reset to default configuration when modal opens
       setRequest(defaultPasswordRequest);
-      form.setFieldsValue(defaultPasswordRequest);
+      form.resetFields();
       generatePassword(defaultPasswordRequest);
     }
   }, [visible, form]);
@@ -202,47 +202,47 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
             </Form.Item>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <Form.Item name="include_uppercase" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_uppercase" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Uppercase (A-Z)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Uppercase (A-Z)</Text>
+              </Space>
 
-              <Form.Item name="include_lowercase" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_lowercase" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Lowercase (a-z)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Lowercase (a-z)</Text>
+              </Space>
 
-              <Form.Item name="include_numbers" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_numbers" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Numbers (0-9)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Numbers (0-9)</Text>
+              </Space>
 
-              <Form.Item name="include_special" valuePropName="checked">
-                <Space>
+              <Space>
+                <Form.Item name="include_special" valuePropName="checked" noStyle>
                   <Switch size="small" />
-                  <Text>Special (!@#$...)</Text>
-                </Space>
-              </Form.Item>
+                </Form.Item>
+                <Text>Special (!@#$...)</Text>
+              </Space>
             </div>
 
-            <Form.Item name="exclude_ambiguous" valuePropName="checked">
-              <Space align="start">
+            <Space align="start">
+              <Form.Item name="exclude_ambiguous" valuePropName="checked" noStyle>
                 <Switch size="small" />
-                <div>
-                  <Text>Exclude ambiguous characters</Text>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Excludes: 0, O, l, I, 1
-                  </Text>
-                </div>
-              </Space>
-            </Form.Item>
+              </Form.Item>
+              <div>
+                <Text>Exclude ambiguous characters</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  Excludes: 0, O, l, I, 1
+                </Text>
+              </div>
+            </Space>
           </Form>
 
           {!isValidConfiguration() && (
