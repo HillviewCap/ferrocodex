@@ -3426,6 +3426,74 @@ async fn decrypt_vault_secret(
 }
 
 #[tauri::command]
+async fn export_vault(
+    token: String,
+    vault_id: i64,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<String, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            
+            // Get the vault by ID
+            match vault_repo.get_vault_by_id(vault_id) {
+                Ok(Some(vault)) => {
+                    // Get all secrets for this vault
+                    match vault_repo.get_vault_secrets(vault_id) {
+                        Ok(secrets) => {
+                            // Construct VaultInfo for export
+                            let vault_info = VaultInfo {
+                                vault,
+                                secrets: secrets.clone(),
+                                secret_count: secrets.len(),
+                            };
+                            
+                            // Serialize to JSON string for export
+                            match serde_json::to_string_pretty(&vault_info) {
+                                Ok(json_string) => {
+                                    info!("Vault {} exported by {}: {} secrets", vault_id, session.username, vault_info.secret_count);
+                                    Ok(json_string)
+                                }
+                                Err(e) => {
+                                    error!("Failed to serialize vault data: {}", e);
+                                    Err("Failed to serialize vault data".to_string())
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get vault secrets for vault {}: {}", vault_id, e);
+                            Err(format!("Failed to get vault secrets: {}", e))
+                        }
+                    }
+                }
+                Ok(None) => Err("Vault not found".to_string()),
+                Err(e) => {
+                    error!("Failed to get vault {}: {}", vault_id, e);
+                    Err(format!("Failed to get vault: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
 async fn generate_secure_password(
     token: String,
     request: GeneratePasswordRequest,
@@ -5194,6 +5262,7 @@ pub fn run() {
             get_vault_by_asset_id,
             get_vault_history,
             decrypt_vault_secret,
+            export_vault,
             import_vault_from_recovery,
             generate_secure_password,
             validate_password_strength,
