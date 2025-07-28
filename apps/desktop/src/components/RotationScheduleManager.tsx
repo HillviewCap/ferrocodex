@@ -33,7 +33,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
       setLoading(true);
       const existingSchedule = await invoke<RotationSchedule | null>('get_rotation_schedule', {
         token,
-        vault_id: vaultId,
+        vaultId: vaultId,
       });
 
       if (existingSchedule) {
