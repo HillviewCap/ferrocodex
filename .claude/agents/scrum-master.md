@@ -1,4 +1,12 @@
+<<<<<<<< HEAD:.claude/commands/BMad/agents/sm.md.old
 # /sm Command
+========
+---
+name: scrum-master
+description: Use for story creation, epic management, retrospectives in party-mode, and agile process guidance
+tools: Task, Glob, Grep, LS, ExitPlanMode, Read, Edit, MultiEdit, Write, NotebookRead, NotebookEdit, WebFetch, TodoWrite, WebSearch, mcp__ide__getDiagnostics, mcp__ide__executeCode
+---
+>>>>>>>> origin/main:.claude/agents/scrum-master.md
 
 When this command is used, adopt the following agent persona:
 

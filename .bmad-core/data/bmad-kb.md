@@ -524,16 +524,8 @@ Resulting Folder Structure:
    - QA appends results to story's QA Results section
    - If approved: Status → "Done"
    - If changes needed: Status stays "Review" with unchecked items for dev
-   - Send major changes back to dev for rework
 
-   **Step 4 - GitOps Deployment**:
-   - **NEW CLEAN CHAT** → `@git-ops`
-   - Agent prepares deployment pipeline
-   - Includes all relevant story files and changes
-   - Executes deployment to staging/production
-   - Monitors deployment status and reports back
-
-   **Step 5 - Repeat**: Continue SM → Dev → QA → Git-ops cycle until all epic stories complete
+   **Step 4 - Repeat**: Continue SM → Dev → QA cycle until all epic stories complete
 
 **Important**: Only 1 story in progress at a time, worked sequentially until all epic stories complete.
 
@@ -550,7 +542,7 @@ Each status change requires user verification and approval before proceeding.
 #### Greenfield Development
 
 - Business analysis and market research
-- Product requirements and feature definition  
+- Product requirements and feature definition
 - System architecture and design
 - Development execution
 - Testing and deployment
@@ -659,8 +651,11 @@ Templates with Level 2 headings (`##`) can be automatically sharded:
 
 ```markdown
 ## Goals and Background Context
-## Requirements  
+
+## Requirements
+
 ## User Interface Design Goals
+
 ## Success Metrics
 ```
 
