@@ -65,6 +65,16 @@ This PRD outlines the requirements for an offline-first, secure, and user-friend
 
 15. **[v0.3.0] FR15:** The system MUST support the same versioning and status workflow for firmware as for configurations.
 
+16. **[v0.5.0] FR16:** The system MUST support hierarchical asset organization with unlimited nesting depth through folder structures.
+
+17. **[v0.5.0] FR17:** Users MUST be able to define custom metadata fields for assets with validation rules and data type enforcement.
+
+18. **[v0.5.0] FR18:** The system MUST enforce cybersecurity-compliant naming conventions for all assets, folders, and uploaded files.
+
+19. **[v0.5.0] FR19:** Asset creation MUST precede configuration and firmware imports, establishing clear parent-child relationships.
+
+20. **[v0.5.0] FR20:** The system MUST provide pre-built metadata templates for common industrial asset properties (IP address, location, install date, facility, notes).
+
 #### Non-Functional
 
 1. **NFR1:** The system MUST be fully functional in a completely disconnected, offline environment.
@@ -111,7 +121,15 @@ The UX vision is to create a calm, clear, and trustworthy tool that empowers OT 
 
 - **Login Screen:** A secure screen for user authentication.
 
-- **Main Dashboard:** Lists all managed devices/assets.
+- **Main Dashboard:** Hierarchical tree view of all managed assets organized in folders (e.g., "Production Line 1" → devices).
+
+- **Asset Detail View:** Shows complete asset information including custom metadata, associated configurations, firmware, and credentials.
+
+- **Asset Creation Wizard:** Guided workflow for creating assets with metadata field selection and validation.
+
+- **[v0.5.0] Hierarchical Asset Browser:** Tree-based navigation with search, filtering, and bulk operations across asset hierarchy.
+
+- **[v0.5.0] Metadata Management:** Interface for defining custom field schemas and validation rules.
 
 - **Device Detail View:** Shows the version history timeline for a single device.
 
@@ -184,6 +202,10 @@ The application will be built using the Tauri framework. The core backend logic 
 #### Epic 4: Asset Identity Vault
 
 - **Goal:** Create a comprehensive credential and secret management system that serves as the single source of truth for all asset-related authentication information, eliminating the cognitive burden on engineers and enabling secure sharing of access credentials.
+
+#### Epic 5: Asset-Centric Hierarchical Management [v0.5.0]
+
+- **Goal:** Transform the platform into a comprehensive hierarchical asset management system with customizable metadata, cybersecurity-compliant naming, and intuitive folder-based organization that prioritizes simplicity while enabling complex asset relationships.
 
 ---
 

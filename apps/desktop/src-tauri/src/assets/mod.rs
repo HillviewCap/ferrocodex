@@ -41,6 +41,13 @@ impl From<Asset> for AssetInfo {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardStats {
+    pub total_assets: i64,
+    pub total_versions: i64,
+    pub encryption_type: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateAssetRequest {
     pub name: String,

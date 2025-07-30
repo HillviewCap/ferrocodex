@@ -1,0 +1,785 @@
+    Checking ferrocodex v0.4.2 (F:\code\ferrocodex\apps\desktop\src-tauri)
+warning: unused import: `uuid::Uuid`
+ --> src\firmware_analysis\queue.rs:8:5
+  |
+8 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `uuid::Uuid`
+ --> src\recovery\mod.rs:6:5
+  |
+6 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> src\vault\rotation.rs:7:5
+  |
+7 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+ --> src\error_handling\retry.rs:5:5
+  |
+5 | use std::pin::Pin;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+ --> src\error_handling\circuit_breaker.rs:4:5
+  |
+4 | use std::pin::Pin;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `Duration`
+ --> src\error_handling\circuit_breaker.rs:6:17
+  |
+6 | use std::time::{Duration, Instant};
+  |                 ^^^^^^^^
+
+warning: unused import: `tokio::time::sleep`
+ --> src\error_handling\circuit_breaker.rs:7:5
+  |
+7 | use tokio::time::sleep;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CircuitBreaker` and `RetryResult`
+ --> src\error_handling\recovery_coordinator.rs:5:5
+  |
+5 |     RetryResult,
+  |     ^^^^^^^^^^^
+6 |     CircuitBreaker, 
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+  --> src\error_handling\recovery_coordinator.rs:16:5
+   |
+16 | use std::pin::Pin;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `tokio::time::sleep`
+  --> src\error_handling\recovery_coordinator.rs:19:5
+   |
+19 | use tokio::time::sleep;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::time::Duration`
+ --> src\error_handling\user_notifications.rs:6:5
+  |
+6 | use std::time::Duration;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SystemDegradationLevel`
+ --> src\error_handling\degradation_preferences.rs:2:91
+  |
+2 | use crate::error_handling::graceful_degradation::{FeatureAvailability, FeatureImportance, SystemDegradationLevel};
+  |                                                                                           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `EnhancedError`, `ErrorDomain`, `ErrorSeverity`, and `RecoveryStrategy`
+ --> src\error_handling\ui_status.rs:1:29
+  |
+1 | use crate::error_handling::{EnhancedError, ErrorDomain, ErrorSeverity, RecoveryStrategy};
+  |                             ^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NotificationPriority` and `SystemDegradationNotification`
+ --> src\error_handling\ui_status.rs:4:74
+  |
+4 | ...ions::{DegradationNotification, SystemDegradationNotification, NotificationType, NotificationPriority};
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `recovery_coordinator::*`
+  --> src\error_handling\mod.rs:28:9
+   |
+28 | pub use recovery_coordinator::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `service_provider::*`
+  --> src\error_handling\mod.rs:29:9
+   |
+29 | pub use service_provider::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `offline_providers::*`
+  --> src\error_handling\mod.rs:30:9
+   |
+30 | pub use offline_providers::*;
+   |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `graceful_degradation::*`
+  --> src\error_handling\mod.rs:31:9
+   |
+31 | pub use graceful_degradation::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `user_notifications::*`
+  --> src\error_handling\mod.rs:32:9
+   |
+32 | pub use user_notifications::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `enhanced_cache::*`
+  --> src\error_handling\mod.rs:33:9
+   |
+33 | pub use enhanced_cache::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `degradation_preferences::*`
+  --> src\error_handling\mod.rs:34:9
+   |
+34 | pub use degradation_preferences::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ui_status::*`
+  --> src\error_handling\mod.rs:35:9
+   |
+35 | pub use ui_status::*;
+   |         ^^^^^^^^^^^^
+
+warning: unused imports: `AuditRepository`, `SqliteAuditRepository`, and `create_user_created_event`
+ --> src\commands\auth_commands.rs:3:20
+  |
+3 | use crate::audit::{AuditRepository, SqliteAuditRepository, create_user_created_event};
+  |                    ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InputSanitizer`, `PasswordValidator`, and `UsernameValidator`
+ --> src\commands\auth_commands.rs:4:25
+  |
+4 | use crate::validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
+  |                         ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `VaultRepository`
+  --> src\commands\firmware_commands.rs:13:20
+   |
+13 | use crate::vault::{VaultRepository, SqliteVaultRepository};
+   |                    ^^^^^^^^^^^^^^^
+
+warning: unused import: `verify_password`
+ --> src\commands\vault_commands.rs:4:35
+  |
+4 | use crate::auth::{SessionManager, verify_password};
+  |                                   ^^^^^^^^^^^^^^^
+
+warning: unused import: `UserInfo`
+ --> src\commands\vault_commands.rs:5:68
+  |
+5 | use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
+  |                                                                    ^^^^^^^^
+
+warning: unused imports: `AuditEventRequest` and `AuditEventType`
+ --> src\commands\vault_commands.rs:6:60
+  |
+6 | use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_vault_access_granted_event, create_v...
+  |                                                            ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `rusqlite::Connection`
+  --> src\commands\vault_commands.rs:24:5
+   |
+24 | use rusqlite::Connection;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Arc`
+  --> src\commands\vault_commands.rs:25:17
+   |
+25 | use std::sync::{Arc, Mutex};
+   |                 ^^^
+
+warning: unused import: `AppHandle`
+  --> src\commands\vault_commands.rs:26:13
+   |
+26 | use tauri::{AppHandle, State};
+   |             ^^^^^^^^^
+
+warning: unused import: `warn`
+  --> src\commands\vault_commands.rs:27:28
+   |
+27 | use tracing::{error, info, warn};
+   |                            ^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src\commands\vault_commands.rs:28:13
+   |
+28 | use serde::{Serialize, Deserialize};
+   |             ^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `RecoveryExporter`
+ --> src\commands\recovery_commands.rs:5:23
+  |
+5 | use crate::recovery::{RecoveryExporter, RecoveryImporter, RecoveryManifest, RecoveryImportRequest};
+  |                       ^^^^^^^^^^^^^^^^
+
+warning: unused import: `AuditRepository`
+ --> src\commands\recovery_commands.rs:9:20
+  |
+9 | use crate::audit::{AuditRepository, SqliteAuditRepository};
+  |                    ^^^^^^^^^^^^^^^
+
+warning: unused import: `info`
+  --> src\commands\recovery_commands.rs:13:22
+   |
+13 | use tracing::{error, info};
+   |                      ^^^^
+
+warning: unused import: `error`
+ --> src\commands\settings_commands.rs:9:15
+  |
+9 | use tracing::{error, info};
+  |               ^^^^^
+
+warning: unused import: `User`
+ --> src\handlers\auth_handler.rs:6:87
+  |
+6 | use crate::users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, User};
+  |                                                                                       ^^^^
+
+warning: unused imports: `SqliteUserRepository`, `UserInfo`, `UserRepository`, and `UserRole`
+ --> src\handlers\user_handler.rs:4:20
+  |
+4 | use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
+  |                    ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^  ^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\user_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Asset`
+ --> src\handlers\asset_handler.rs:3:92
+  |
+3 | use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, Asset, DashboardStats};
+  |                                                                                            ^^^^^
+
+warning: unused import: `rusqlite::Connection`
+ --> src\handlers\asset_handler.rs:6:5
+  |
+6 | use rusqlite::Connection;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BranchRepository` and `SqliteBranchRepository`
+ --> src\handlers\branch_handler.rs:4:23
+  |
+4 | use crate::branches::{BranchRepository, SqliteBranchRepository};
+  |                       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\branch_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FirmwareRepository` and `SqliteFirmwareRepository`
+ --> src\handlers\firmware_handler.rs:4:23
+  |
+4 | use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository};
+  |                       ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\firmware_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `UserRepository`
+ --> src\handlers\vault_handler.rs:5:20
+  |
+5 | use crate::users::{UserRepository, SqliteUserRepository, UserRole};
+  |                    ^^^^^^^^^^^^^^
+
+warning: unused imports: `AuditEventRequest`, `AuditEventType`, and `AuditRepository`
+ --> src\handlers\vault_handler.rs:6:20
+  |
+6 | use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType};
+  |                    ^^^^^^^^^^^^^^^                         ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `BatchRotationService`, `CategoryWithChildren`, `CreateCategoryRequest`, `CreatePermissionRequest`, `CreateRotationBatchRequest`, `DeleteVaultSecretRequest`, `GeneratePasswordRequest`, `GrantVaultAccessRequest`, `PasswordHistory`, `PasswordRotationHistory`, `PasswordRotationRequest`, `PasswordRotationService`, `PermissionRequest`, `PermissionType`, `RevokeVaultAccessRequest`, `RotationBatch`, `RotationSchedule`, `RotationScheduler`, `UpdateRotationScheduleRequest`, `UpdateStandaloneCredentialRequest`, `UpdateVaultSecretRequest`, `VaultAccessInfo`, `VaultAccessLog`, and `VaultPermission`
+  --> src\handlers\vault_handler.rs:10:20
+   |
+10 |     IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, UpdateVaultSecretRequest,
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+11 |     DeleteVaultSecretRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^
+12 |     CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest,
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+13 |     CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren,
+   |     ^^^^^^^^^^^^^^^^^^^^^                            ^^^^^^^^^^^^^^^^^^^^
+14 |     PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
+   |     ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+15 |     VaultAccessLog, CreatePermissionRequest, PermissionRequest,
+   |     ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+16 |     rotation::{
+17 |         PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+18 |         RotationBatch, BatchRotationService, PasswordRotationHistory, CreateRotationBatchRequest,
+   |         ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+19 |         UpdateRotationScheduleRequest
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `rusqlite::Connection`
+  --> src\handlers\vault_handler.rs:24:5
+   |
+24 | use rusqlite::Connection;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Arc` and `Mutex`
+  --> src\handlers\vault_handler.rs:25:17
+   |
+25 | use std::sync::{Arc, Mutex};
+   |                 ^^^  ^^^^^
+
+warning: unused import: `warn`
+  --> src\handlers\vault_handler.rs:26:28
+   |
+26 | use tracing::{error, info, warn};
+   |                            ^^^^
+
+warning: unused imports: `RecoveryExporter` and `RecoveryImporter`
+ --> src\handlers\recovery_handler.rs:4:23
+  |
+4 | use crate::recovery::{RecoveryExporter, RecoveryImporter};
+  |                       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\recovery_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `RetryPreferences`, `SqliteUserSettingsRepository`, `UserSettingsRepository`, `UserSettings`, and `settings_utils`
+ --> src\handlers\settings_handler.rs:4:28
+  |
+4 | use crate::user_settings::{UserSettings, RetryPreferences, UserSettingsRepository, SqliteUserSettingsRepository, settings_utils};
+  |                            ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\settings_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `auth_handler::*`
+  --> src\handlers\mod.rs:12:9
+   |
+12 | pub use auth_handler::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `user_handler::*`
+  --> src\handlers\mod.rs:13:9
+   |
+13 | pub use user_handler::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `asset_handler::*`
+  --> src\handlers\mod.rs:14:9
+   |
+14 | pub use asset_handler::*;
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `configuration_handler::*`
+  --> src\handlers\mod.rs:15:9
+   |
+15 | pub use configuration_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `branch_handler::*`
+  --> src\handlers\mod.rs:16:9
+   |
+16 | pub use branch_handler::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `firmware_handler::*`
+  --> src\handlers\mod.rs:17:9
+   |
+17 | pub use firmware_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `vault_handler::*`
+  --> src\handlers\mod.rs:18:9
+   |
+18 | pub use vault_handler::*;
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `recovery_handler::*`
+  --> src\handlers\mod.rs:19:9
+   |
+19 | pub use recovery_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `settings_handler::*`
+  --> src\handlers\mod.rs:20:9
+   |
+20 | pub use settings_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `system_handler::*`
+  --> src\handlers\mod.rs:21:9
+   |
+21 | pub use system_handler::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `tauri::State`
+  --> src\lib.rs:31:5
+   |
+31 | use tauri::State;
+   |     ^^^^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src\lib.rs:33:13
+   |
+33 | use serde::{Serialize, Deserialize};
+   |             ^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused variable: `start_time`
+   --> src\error_handling\circuit_breaker.rs:382:13
+    |
+382 |         let start_time = Instant::now();
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_start_time`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `manual_actions`
+   --> src\error_handling\recovery_coordinator.rs:141:29
+    |
+141 |                         let manual_actions = self.generate_manual_recovery_actions(&error);
+    |                             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manual_actions`
+
+warning: unused variable: `operation_name`
+   --> src\error_handling\recovery_coordinator.rs:173:9
+    |
+173 |         operation_name: &str,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_operation_name`
+
+warning: unused variable: `manual_actions`
+   --> src\error_handling\recovery_coordinator.rs:241:25
+    |
+241 |                     let manual_actions = self.generate_manual_recovery_actions(&final_error);
+    |                         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manual_actions`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1283:9
+     |
+1283 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1286:13
+     |
+1286 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1318:13
+     |
+1318 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1359:9
+     |
+1359 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1362:13
+     |
+1362 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+error[E0308]: mismatched types
+    --> src\commands\vault_commands.rs:1408:57
+     |
+1408 |     let access_control = VaultAccessControlService::new(db.get_connection());
+     |                          ------------------------------ ^^^^^^^^^^^^^^^^^^^ expected `Arc<Mutex<Connection>>`, found `&Connection`
+     |                          |
+     |                          arguments to this function are incorrect
+     |
+     = note: expected struct `Arc<std::sync::Mutex<Connection>>`
+             found reference `&Connection`
+note: associated function defined here
+    --> src\vault\access_control.rs:17:12
+     |
+17   |     pub fn new(db_conn: Arc<Mutex<Connection>>) -> Self {
+     |            ^^^ -------------------------------
+
+error[E0560]: struct `AuditEventRequest` has no field named `asset_id`
+    --> src\commands\vault_commands.rs:1669:9
+     |
+1669 |         asset_id: None,
+     |         ^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `asset_name`
+    --> src\commands\vault_commands.rs:1670:9
+     |
+1670 |         asset_name: None,
+     |         ^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `vault_id`
+    --> src\commands\vault_commands.rs:1671:9
+     |
+1671 |         vault_id: Some(request.vault_id),
+     |         ^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `vault_name`
+    --> src\commands\vault_commands.rs:1672:9
+     |
+1672 |         vault_name: None,
+     |         ^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `configuration_id`
+    --> src\commands\vault_commands.rs:1673:9
+     |
+1673 |         configuration_id: None,
+     |         ^^^^^^^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `configuration_name`
+    --> src\commands\vault_commands.rs:1674:9
+     |
+1674 |         configuration_name: None,
+     |         ^^^^^^^^^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `firmware_id`
+    --> src\commands\vault_commands.rs:1675:9
+     |
+1675 |         firmware_id: None,
+     |         ^^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `firmware_name`
+    --> src\commands\vault_commands.rs:1676:9
+     |
+1676 |         firmware_name: None,
+     |         ^^^^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0560]: struct `AuditEventRequest` has no field named `additional_data`
+    --> src\commands\vault_commands.rs:1677:9
+     |
+1677 |         additional_data: Some(serde_json::json!({
+     |         ^^^^^^^^^^^^^^^ `AuditEventRequest` does not have this field
+     |
+     = note: available fields are: `target_user_id`, `target_username`, `description`, `metadata`, `ip_address`, `user_agent`
+
+error[E0609]: no field `permission_type` on type `CreatePermissionRequest`
+    --> src\commands\vault_commands.rs:1678:40
+     |
+1678 |             "permission_type": request.permission_type.to_string(),
+     |                                        ^^^^^^^^^^^^^^^ unknown field
+     |
+     = note: available fields are: `vault_id`, `requested_permission`, `requested_by`
+
+error[E0609]: no field `justification` on type `CreatePermissionRequest`
+    --> src\commands\vault_commands.rs:1679:38
+     |
+1679 |             "justification": request.justification
+     |                                      ^^^^^^^^^^^^^ unknown field
+     |
+     = note: available fields are: `vault_id`, `requested_permission`, `requested_by`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1701:9
+     |
+1701 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1704:13
+     |
+1704 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1735:13
+     |
+1735 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1778:13
+     |
+1778 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1814:9
+     |
+1814 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1817:13
+     |
+1817 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1845:9
+     |
+1845 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1848:13
+     |
+1848 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1882:13
+     |
+1882 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+error[E0599]: no method named `unwrap_or` found for type `i64` in the current scope
+   --> src\commands\recovery_commands.rs:118:55
+    |
+118 |             let mut estimated_size = config.file_size.unwrap_or(0) + firmware.file_size.unwrap_or(0);
+    |                                                       ^^^^^^^^^ method not found in `i64`
+
+error[E0609]: no field `file_size` on type `FirmwareVersion`
+   --> src\commands\recovery_commands.rs:118:79
+    |
+118 |             let mut estimated_size = config.file_size.unwrap_or(0) + firmware.file_size.unwrap_or(0);
+    |                                                                               ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `id`, `asset_id`, `author_id`, `vendor`, `model` ... and 8 others
+
+error[E0609]: no field `filename` on type `ConfigurationVersion`
+   --> src\commands\recovery_commands.rs:151:38
+    |
+151 |                     filename: config.filename.clone(),
+    |                                      ^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+151 |                     filename: config.file_name.clone(),
+    |                                          +
+
+error[E0609]: no field `checksum` on type `ConfigurationVersion`
+   --> src\commands\recovery_commands.rs:152:38
+    |
+152 |                     checksum: config.checksum.clone().unwrap_or_default(),
+    |                                      ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `id`, `asset_id`, `version_number`, `file_name`, `file_content` ... and 6 others
+
+error[E0599]: no method named `unwrap_or` found for type `i64` in the current scope
+   --> src\commands\recovery_commands.rs:153:49
+    |
+153 |                     file_size: config.file_size.unwrap_or(0),
+    |                                                 ^^^^^^^^^ method not found in `i64`
+
+error[E0609]: no field `filename` on type `FirmwareVersion`
+   --> src\commands\recovery_commands.rs:158:40
+    |
+158 |                     filename: firmware.filename.clone(),
+    |                                        ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `id`, `asset_id`, `author_id`, `vendor`, `model` ... and 8 others
+
+error[E0609]: no field `checksum` on type `FirmwareVersion`
+   --> src\commands\recovery_commands.rs:159:40
+    |
+159 |                     checksum: firmware.checksum.clone().unwrap_or_default(),
+    |                                        ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `id`, `asset_id`, `author_id`, `vendor`, `model` ... and 8 others
+
+error[E0609]: no field `file_size` on type `FirmwareVersion`
+   --> src\commands\recovery_commands.rs:160:41
+    |
+160 |                     file_size: firmware.file_size.unwrap_or(0),
+    |                                         ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `id`, `asset_id`, `author_id`, `vendor`, `model` ... and 8 others
+
+warning: unused variable: `error`
+   --> src\error_handling\manual_recovery.rs:432:35
+    |
+432 |     fn generate_ui_actions(&self, error: &EnhancedError) -> Vec<ManualRecoveryAction> {
+    |                                   ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+
+warning: unused variable: `services_tried`
+   --> src\error_handling\service_provider.rs:518:62
+    |
+518 |     fn update_success_stats(&self, execution_time: Duration, services_tried: &[String]) {
+    |                                                              ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_services_tried`
+
+warning: unused variable: `services_tried`
+   --> src\error_handling\service_provider.rs:535:62
+    |
+535 |     fn update_failure_stats(&self, execution_time: Duration, services_tried: &[String]) {
+    |                                                              ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_services_tried`
+
+warning: variable does not need to be mutable
+   --> src\error_handling\offline_providers.rs:199:26
+    |
+199 |         let (data_bytes, mut metadata) = {
+    |                          ----^^^^^^^^
+    |                          |
+    |                          help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `data_type`
+   --> src\error_handling\enhanced_cache.rs:427:17
+    |
+427 |             Ok((data_type, source, data_bytes, cached_at, ttl_seconds, compressed, access_count)) => {
+    |                 ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_data_type`
+
+warning: unused variable: `access_count`
+   --> src\error_handling\enhanced_cache.rs:427:84
+    |
+427 |             Ok((data_type, source, data_bytes, cached_at, ttl_seconds, compressed, access_count)) => {
+    |                                                                                    ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_access_count`
+
+warning: unused variable: `stats`
+   --> src\error_handling\enhanced_cache.rs:760:17
+    |
+760 |         let mut stats = self.stats.lock().unwrap();
+    |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_stats`
+
+warning: unused variable: `duration`
+   --> src\error_handling\enhanced_cache.rs:759:34
+    |
+759 |     fn update_store_stats(&self, duration: std::time::Duration) {
+    |                                  ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_duration`
+
+warning: variable does not need to be mutable
+   --> src\error_handling\enhanced_cache.rs:760:13
+    |
+760 |         let mut stats = self.stats.lock().unwrap();
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\user_settings\mod.rs:396:13
+    |
+396 |         let mut migrated = false;
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `sanitized_password`
+   --> src\handlers\vault_handler.rs:282:13
+    |
+282 |         let sanitized_password = Self::validate_and_sanitize_input(&request.new_password, "password")?;
+    |             ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sanitized_password`
+
+Some errors have detailed explanations: E0308, E0560, E0599, E0609.
+For more information about an error, try `rustc --explain E0308`.
+warning: `ferrocodex` (lib) generated 97 warnings
+error: could not compile `ferrocodex` (lib) due to 20 previous errors; 97 warnings emitted

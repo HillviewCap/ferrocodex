@@ -20,6 +20,7 @@ pub struct FirmwareVersion {
     pub status: FirmwareStatus,
     pub file_path: String,
     pub file_hash: String,
+    pub file_size: i64,
     pub status_changed_at: Option<String>,
     pub status_changed_by: Option<i64>,
     pub created_at: String,
@@ -179,6 +180,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
             },
             file_path: row.get("file_path")?,
             file_hash: row.get("file_hash")?,
+            file_size: row.get("file_size")?,
             status_changed_at: row.get("status_changed_at")?,
             status_changed_by: row.get("status_changed_by")?,
             created_at: row.get("created_at")?,
@@ -224,6 +226,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
             status: FirmwareStatus::Draft,
             file_path: file_path.clone(),
             file_hash: file_hash.clone(),
+            file_size,
             status_changed_at: None,
             status_changed_by: None,
             created_at: String::new(), // Will be set by database
@@ -277,7 +280,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
 
     fn get_firmware_by_id(&self, firmware_id: i64) -> Result<Option<FirmwareVersion>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, 
+            "SELECT id, asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size,
                     status_changed_at, status_changed_by, created_at
              FROM firmware_versions
              WHERE id = ?1"

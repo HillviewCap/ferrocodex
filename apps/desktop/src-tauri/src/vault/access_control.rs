@@ -9,12 +9,12 @@ use crate::vault::{
 };
 
 /// Service for managing vault access control and permissions
-pub struct VaultAccessControlService {
-    db_conn: Arc<Mutex<Connection>>,
+pub struct VaultAccessControlService<'a> {
+    db_conn: &'a Connection,
 }
 
-impl VaultAccessControlService {
-    pub fn new(db_conn: Arc<Mutex<Connection>>) -> Self {
+impl<'a> VaultAccessControlService<'a> {
+    pub fn new(db_conn: &'a Connection) -> Self {
         Self { db_conn }
     }
 
@@ -34,7 +34,7 @@ impl VaultAccessControlService {
         }
 
         // For engineers, check specific permissions
-        let conn = self.db_conn.lock().unwrap();
+        let conn = self.db_conn;
         let repo = SqliteVaultRepository::new(&conn);
         
         let request = CheckVaultAccessRequest {
@@ -91,21 +91,21 @@ impl VaultAccessControlService {
 
     /// Get all permissions for a user on a specific vault
     pub fn get_user_vault_permissions(&self, user_id: i64, vault_id: Option<i64>) -> Result<Vec<VaultPermission>> {
-        let conn = self.db_conn.lock().unwrap();
+        let conn = self.db_conn;
         let repo = SqliteVaultRepository::new(&conn);
         repo.get_user_vault_permissions(user_id, vault_id)
     }
 
     /// Get all permissions for a vault
     pub fn get_vault_permissions(&self, vault_id: i64) -> Result<Vec<VaultPermission>> {
-        let conn = self.db_conn.lock().unwrap();
+        let conn = self.db_conn;
         let repo = SqliteVaultRepository::new(&conn);
         repo.get_vault_permissions(vault_id)
     }
 
     /// Check and expire any permissions that have passed their expiry date
     pub fn expire_permissions(&self) -> Result<u64> {
-        let conn = self.db_conn.lock().unwrap();
+        let conn = self.db_conn;
         let repo = SqliteVaultRepository::new(&conn);
         let expired_count = repo.expire_permissions()?;
         
@@ -211,7 +211,8 @@ mod tests {
     #[test]
     fn test_administrator_access() {
         let (_temp_file, db_conn) = setup_test_db();
-        let service = VaultAccessControlService::new(db_conn.clone());
+        let conn_guard = db_conn.lock().unwrap();
+        let service = VaultAccessControlService::new(&*conn_guard);
         
         let admin_user = User {
             id: 1,
@@ -233,7 +234,8 @@ mod tests {
     #[test]
     fn test_permission_inheritance() {
         let (_temp_file, db_conn) = setup_test_db();
-        let service = VaultAccessControlService::new(db_conn);
+        let conn_guard = db_conn.lock().unwrap();
+        let service = VaultAccessControlService::new(&*conn_guard);
         
         let admin_user = User {
             id: 1,
@@ -271,7 +273,8 @@ mod tests {
     #[test]
     fn test_permission_validation() {
         let (_temp_file, db_conn) = setup_test_db();
-        let service = VaultAccessControlService::new(db_conn);
+        let conn_guard = db_conn.lock().unwrap();
+        let service = VaultAccessControlService::new(&*conn_guard);
         
         let admin_user = User {
             id: 1,
@@ -303,7 +306,8 @@ mod tests {
     #[test]
     fn test_permission_expiry() {
         let (_temp_file, db_conn) = setup_test_db();
-        let service = VaultAccessControlService::new(db_conn);
+        let conn_guard = db_conn.lock().unwrap();
+        let service = VaultAccessControlService::new(&*conn_guard);
         
         // Test active permission without expiry
         let perm1 = VaultPermission {

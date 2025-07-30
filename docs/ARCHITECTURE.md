@@ -281,7 +281,97 @@ interface RotationPolicy {
 type PolicyScope = 'global' | 'role_based' | 'asset_specific';
 ```
 
-_(The section also contains the detailed definitions for the User, Asset, Branch, ConfigurationVersion, and FirmwareVersion models from previous versions.)_
+### Enhanced Asset Model (v0.5.0)
+
+**Purpose**: Represents both organizational folders and individual devices in a hierarchical structure with customizable metadata.
+
+**Attributes:**
+- `id` (string): Unique identifier (UUID v4)
+- `name` (string): Asset name following cybersecurity conventions
+- `description` (string): Asset description (0-500 chars)
+- `parent_asset_id` (string?): Parent folder reference for hierarchy
+- `asset_type` (AssetType): Either 'folder' or 'device'
+- `metadata` (object): JSON object with custom fields
+- `schema_id` (string?): Reference to metadata validation schema
+- `security_classification` (string): Security level (PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED)
+- `created_by` (number): User ID of creator
+- `created_at` (string): ISO 8601 timestamp
+- `updated_at` (string): Last modification timestamp
+
+**TypeScript Interface:**
+```typescript
+interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  parent_asset_id?: string;
+  asset_type: AssetType;
+  metadata: AssetMetadata;
+  schema_id?: string;
+  security_classification: SecurityLevel;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AssetInfo extends Asset {
+  created_by_username: string;
+  parent_asset_name?: string;
+  child_count: number;
+  configuration_count: number;
+  firmware_count: number;
+  path: string[]; // Full hierarchy path
+}
+
+interface AssetMetadata {
+  ip_address?: string;
+  location?: string;
+  install_date?: string;
+  facility?: string;
+  notes?: string;
+  [key: string]: any; // Custom fields
+}
+
+type AssetType = 'folder' | 'device';
+type SecurityLevel = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED';
+```
+
+**Business Rules:**
+- Asset names must follow cybersecurity naming pattern
+- Folder assets cannot have configurations or firmware
+- Device assets can have multiple configurations and firmware
+- Hierarchical depth unlimited but UI optimized for reasonable levels
+- Metadata validation through JSON Schema when schema_id provided
+
+### Asset Schema Model (v0.5.0)
+
+**Purpose**: Defines validation rules and field definitions for customizable asset metadata.
+
+**Attributes:**
+- `id` (string): Unique schema identifier
+- `schema_name` (string): Human-readable schema name
+- `description` (string): Schema purpose and usage
+- `json_schema` (object): JSON Schema specification for validation
+- `is_system_schema` (boolean): Whether schema is system-provided
+- `created_by` (number): User ID of creator
+- `created_at` (string): Creation timestamp
+- `updated_at` (string): Last modification timestamp
+
+**TypeScript Interface:**
+```typescript
+interface AssetSchema {
+  id: string;
+  schema_name: string;
+  description: string;
+  json_schema: object;
+  is_system_schema: boolean;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+```
+
+_(This section also contains the detailed definitions for the User, Branch, ConfigurationVersion, and FirmwareVersion models from previous versions.)_
 
 ---
 
@@ -463,6 +553,109 @@ interface HsmConfiguration {
 }
 ```
 
+#### v0.5.0 Asset Management Commands
+
+```rust
+// Hierarchical asset operations
+#[tauri::command]
+async fn asset_create_folder(
+    name: String,
+    description: Option<String>,
+    parent_id: Option<String>
+) -> Result<Asset, String>;
+
+#[tauri::command]
+async fn asset_create_device(
+    name: String,
+    description: Option<String>,
+    parent_id: Option<String>,
+    metadata: AssetMetadata,
+    schema_id: Option<String>
+) -> Result<Asset, String>;
+
+#[tauri::command]
+async fn asset_get_hierarchy(
+    root_id: Option<String>
+) -> Result<Vec<AssetHierarchyNode>, String>;
+
+#[tauri::command]
+async fn asset_move(
+    asset_id: String,
+    new_parent_id: Option<String>
+) -> Result<Asset, String>;
+
+#[tauri::command]
+async fn asset_update_metadata(
+    asset_id: String,
+    metadata: AssetMetadata
+) -> Result<Asset, String>;
+
+// Schema management
+#[tauri::command]
+async fn schema_create(
+    schema_data: CreateSchemaRequest
+) -> Result<AssetSchema, String>;
+
+#[tauri::command]
+async fn schema_list() -> Result<Vec<AssetSchema>, String>;
+
+#[tauri::command]
+async fn schema_validate_metadata(
+    schema_id: String,
+    metadata: AssetMetadata
+) -> Result<ValidationResult, String>;
+
+// Search and filtering
+#[tauri::command]
+async fn asset_search(
+    query: String,
+    filters: AssetSearchFilters
+) -> Result<Vec<AssetSearchResult>, String>;
+```
+
+**TypeScript Types for Asset Management:**
+```typescript
+interface AssetHierarchyNode {
+  asset: Asset;
+  children: AssetHierarchyNode[];
+  level: number;
+  has_children: boolean;
+}
+
+interface CreateSchemaRequest {
+  schema_name: string;
+  description: string;
+  json_schema: object;
+}
+
+interface ValidationResult {
+  is_valid: boolean;
+  errors: ValidationError[];
+}
+
+interface ValidationError {
+  field: string;
+  message: string;
+  value?: any;
+}
+
+interface AssetSearchFilters {
+  asset_type?: AssetType;
+  parent_id?: string;
+  security_classification?: SecurityLevel;
+  metadata_filters?: Record<string, any>;
+  created_after?: string;
+  created_before?: string;
+}
+
+interface AssetSearchResult {
+  asset: Asset;
+  path: string[];
+  relevance_score: number;
+  matching_fields: string[];
+}
+```
+
 _(This section also contains the existing definitions for the Local API via Tauri IPC and the OpenAPI 3.0 specification for the optional Cloud Sync REST API.)_
 
 ---
@@ -524,9 +717,64 @@ CREATE TABLE users (
     -- ... existing schema ...
 );
 
+-- Enhanced hierarchical assets with metadata
 CREATE TABLE assets (
-    -- ... existing schema ...
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    parent_asset_id TEXT,
+    asset_type TEXT NOT NULL CHECK(asset_type IN ('folder', 'device')),
+    metadata TEXT NOT NULL DEFAULT '{}', -- JSON object for custom fields
+    schema_id TEXT,
+    security_classification TEXT NOT NULL DEFAULT 'INTERNAL'
+        CHECK(security_classification IN ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED')),
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY (parent_asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (schema_id) REFERENCES asset_schemas(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+
+    -- Cybersecurity naming constraint
+    CHECK (name GLOB '[A-Z0-9][A-Z0-9_-]*' AND length(name) BETWEEN 3 AND 50)
 );
+
+CREATE INDEX idx_assets_parent ON assets(parent_asset_id);
+CREATE INDEX idx_assets_type ON assets(asset_type);
+CREATE INDEX idx_assets_name ON assets(name);
+CREATE INDEX idx_assets_classification ON assets(security_classification);
+
+-- Asset metadata schemas for validation
+CREATE TABLE asset_schemas (
+    id TEXT PRIMARY KEY NOT NULL,
+    schema_name TEXT NOT NULL UNIQUE,
+    description TEXT DEFAULT '',
+    json_schema TEXT NOT NULL, -- JSON Schema specification
+    is_system_schema BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_schemas_name ON asset_schemas(schema_name);
+CREATE INDEX idx_schemas_system ON asset_schemas(is_system_schema);
+
+-- Asset hierarchy materialized path for efficient queries
+CREATE TABLE asset_paths (
+    asset_id TEXT NOT NULL,
+    ancestor_id TEXT NOT NULL,
+    depth INTEGER NOT NULL,
+
+    PRIMARY KEY (asset_id, ancestor_id),
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (ancestor_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_asset_paths_ancestor ON asset_paths(ancestor_id);
+CREATE INDEX idx_asset_paths_depth ON asset_paths(depth);
 
 CREATE TABLE branches (
     -- ... existing schema ...

@@ -49,5 +49,18 @@
       "Bash(gh run list:*)"
     ],
     "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR\\.claude\\hooks\\log_activity.ps1\""
+          }
+        ]
+      }
+    ]
   }
 }

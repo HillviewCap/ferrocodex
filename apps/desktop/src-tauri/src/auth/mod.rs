@@ -18,6 +18,9 @@ pub struct SessionToken {
     pub expires_at: u64,
 }
 
+// Type alias for compatibility
+pub type Session = SessionToken;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub token: String,
