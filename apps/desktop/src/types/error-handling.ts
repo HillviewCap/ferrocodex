@@ -337,3 +337,82 @@ export type StringError = string; // Traditional string error type
  * Can be used alongside existing error handling patterns
  */
 export type EnhancedErrorResult<T> = Promise<T>; // Same signature for compatibility, enhanced through wrappers
+
+/**
+ * Retry Strategy Configuration - matches Rust RetryStrategy
+ */
+export interface RetryStrategy {
+  /** Maximum number of retry attempts */
+  max_attempts: number;
+  /** Initial delay before first retry (milliseconds) */
+  initial_delay_ms: number;
+  /** Maximum delay between retries (milliseconds) */
+  max_delay_ms: number;
+  /** Backoff multiplier for exponential backoff */
+  backoff_multiplier: number;
+  /** Jitter factor to prevent thundering herd (0.0 to 1.0) */
+  jitter_factor: number;
+  /** Maximum total retry duration (milliseconds) */
+  max_retry_duration_ms?: number;
+  /** Enable/disable retry mechanism */
+  enabled: boolean;
+}
+
+/**
+ * Circuit Breaker State - matches Rust CircuitState
+ */
+export type CircuitState = 'Closed' | 'Open' | 'HalfOpen';
+
+/**
+ * Circuit Breaker Configuration - matches Rust CircuitBreakerConfig
+ */
+export interface CircuitBreakerConfig {
+  /** Number of failures required to open the circuit */
+  failure_threshold: number;
+  /** Number of successes required to close circuit from half-open */
+  success_threshold: number;
+  /** Time to wait before transitioning from open to half-open (milliseconds) */
+  timeout_ms: number;
+  /** Maximum number of calls allowed in half-open state */
+  half_open_max_calls: number;
+  /** Sliding window size for failure counting */
+  sliding_window_size: number;
+  /** Enable/disable circuit breaker */
+  enabled: boolean;
+}
+
+/**
+ * Retry Preferences - matches Rust RetryPreferences
+ */
+export interface RetryPreferences {
+  /** Global retry configuration */
+  global_retry_strategy: RetryStrategy;
+  /** Per-operation retry strategies */
+  operation_specific: Record<string, RetryStrategy>;
+  /** Circuit breaker configurations by service */
+  circuit_breaker_configs: Record<string, CircuitBreakerConfig>;
+  /** Enable/disable automatic recovery globally */
+  enable_automatic_recovery: boolean;
+  /** Show retry progress in UI */
+  show_retry_progress: boolean;
+  /** Show technical details in error messages */
+  show_technical_details: boolean;
+  /** Auto-fallback to manual recovery after failures */
+  auto_fallback_to_manual: boolean;
+  /** Notification duration for recovery messages (milliseconds) */
+  recovery_notification_duration_ms: number;
+}
+
+/**
+ * User Settings - matches Rust UserSettings
+ */
+export interface UserSettings {
+  /** User ID this settings belongs to */
+  user_id: number;
+  /** Retry and recovery preferences */
+  retry_preferences: RetryPreferences;
+  /** Last updated timestamp */
+  updated_at: string;
+  /** Settings version for migration */
+  version: number;
+}

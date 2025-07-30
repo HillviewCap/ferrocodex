@@ -6,9 +6,33 @@ pub mod conversion;
 pub mod request_propagation;
 pub mod test_integration;
 pub mod compatibility_tests;
+pub mod retry;
+pub mod circuit_breaker;
+pub mod manual_recovery;
+pub mod recovery_coordinator;
+pub mod service_provider;
+pub mod offline_providers;
+pub mod graceful_degradation;
+pub mod user_notifications;
+pub mod enhanced_cache;
+pub mod degradation_preferences;
+pub mod ui_status;
+#[cfg(test)]
+#[cfg(feature = "disabled")] pub mod integration_tests;
 
 pub use types::*;
 pub use context::*;
+pub use retry::*;
+pub use circuit_breaker::*;
+pub use manual_recovery::*;
+pub use recovery_coordinator::*;
+pub use service_provider::*;
+pub use offline_providers::*;
+pub use graceful_degradation::*;
+pub use user_notifications::*;
+pub use enhanced_cache::*;
+pub use degradation_preferences::*;
+pub use ui_status::*;
 // Temporarily commented out to fix unused import warnings
 // pub use classification::*;
 // pub use repository::*;

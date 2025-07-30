@@ -12,10 +12,12 @@ mod firmware_analysis;
 mod recovery;
 mod vault;
 mod error_handling;
+mod user_settings;
 
 use database::Database;
 use rusqlite::Connection;
 use users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, UserInfo};
+use user_settings::{UserSettings, RetryPreferences, UserSettingsRepository, SqliteUserSettingsRepository, settings_utils};
 use auth::{SessionManager, LoginAttemptTracker, LoginResponse, verify_password};
 use audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event, create_vault_access_granted_event, create_vault_access_revoked_event};
 use validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
@@ -5203,6 +5205,164 @@ async fn get_batch_rotation_history(
     }
 }
 
+// User Settings Commands for Error Handling Configuration
+
+#[tauri::command]
+async fn get_user_settings(
+    token: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<UserSettings, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(_) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let settings_repo = SqliteUserSettingsRepository::new(conn);
+            
+            settings_repo.get_or_create_settings(session.user_id)
+                .map_err(|e| format!("Failed to get user settings: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_user_settings(
+    token: String,
+    retry_preferences: RetryPreferences,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(_) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let settings_repo = SqliteUserSettingsRepository::new(conn);
+            
+            // Get existing settings and update them
+            let mut settings = settings_repo.get_or_create_settings(session.user_id)
+                .map_err(|e| format!("Failed to get user settings: {}", e))?;
+            
+            settings.update(retry_preferences)
+                .map_err(|e| format!("Invalid settings: {}", e))?;
+            
+            settings_repo.update_settings(&settings)
+                .map_err(|e| format!("Failed to update user settings: {}", e))
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_retry_presets() -> Result<std::collections::HashMap<String, RetryPreferences>, String> {
+    let mut presets = std::collections::HashMap::new();
+    
+    presets.insert("conservative".to_string(), RetryPreferences::conservative_preset());
+    presets.insert("aggressive".to_string(), RetryPreferences::aggressive_preset());
+    presets.insert("minimal".to_string(), RetryPreferences::minimal_preset());
+    presets.insert("default".to_string(), RetryPreferences::default());
+    
+    Ok(presets)
+}
+
+#[tauri::command]
+async fn apply_settings_preset(
+    token: String,
+    preset_name: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<UserSettings, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(_) => return Err("Session validation error".to_string()),
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    
+    match db_guard.as_ref() {
+        Some(db) => {
+            let conn = db.get_connection();
+            let settings_repo = SqliteUserSettingsRepository::new(conn);
+            let user_repo = SqliteUserRepository::new(conn);
+            
+            // Get user role for role-based defaults
+            let user = user_repo.find_by_id(session.user_id)
+                .map_err(|e| format!("Failed to get user: {}", e))?
+                .ok_or("User not found".to_string())?;
+            
+            // Create settings with preset
+            let mut settings = UserSettings::with_preset(session.user_id, &preset_name)
+                .map_err(|e| format!("Invalid preset: {}", e))?;
+            
+            // Apply role-based defaults
+            settings_utils::apply_role_defaults(&mut settings, &user.role);
+            
+            // Update or create settings
+            if settings_repo.get_settings(session.user_id)
+                .map_err(|e| format!("Failed to check existing settings: {}", e))?.is_some() {
+                settings_repo.update_settings(&settings)
+                    .map_err(|e| format!("Failed to update settings: {}", e))?;
+            } else {
+                settings_repo.create_settings(&settings)
+                    .map_err(|e| format!("Failed to create settings: {}", e))?;
+            }
+            
+            Ok(settings)
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_operation_retry_configs() -> Result<std::collections::HashMap<String, crate::error_handling::RetryStrategy>, String> {
+    Ok(settings_utils::get_default_operation_configs())
+}
+
+#[tauri::command]
+async fn get_circuit_breaker_configs() -> Result<std::collections::HashMap<String, crate::error_handling::CircuitBreakerConfig>, String> {
+    Ok(settings_utils::get_default_circuit_breaker_configs())
+}
+
+#[tauri::command]
+async fn validate_retry_preferences(
+    retry_preferences: RetryPreferences,
+) -> Result<bool, String> {
+    match retry_preferences.validate() {
+        Ok(()) => Ok(true),
+        Err(e) => Err(format!("Validation failed: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
@@ -5312,7 +5472,15 @@ pub fn run() {
             execute_batch_rotation,
             create_rotation_schedule,
             get_rotation_compliance_metrics,
-            get_batch_rotation_history
+            get_batch_rotation_history,
+            // User settings commands for retry and circuit breaker configuration
+            get_user_settings,
+            update_user_settings,
+            get_retry_presets,
+            apply_settings_preset,
+            get_operation_retry_configs,
+            get_circuit_breaker_configs,
+            validate_retry_preferences
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

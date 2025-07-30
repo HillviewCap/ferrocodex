@@ -39,7 +39,11 @@
       "Bash(gh run view:*)",
       "Bash(gh workflow run:*)",
       "Bash(git tag:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

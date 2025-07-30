@@ -18,6 +18,7 @@ import { DashboardStats } from '../types/dashboard';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
 import StandaloneCredentials from './StandaloneCredentials';
+import RetryPreferences from './RetryPreferences';
 import { canAccessUserManagement } from '../utils/roleUtils';
 
 const { Header, Sider, Content } = Layout;
@@ -156,7 +157,16 @@ const Dashboard: React.FC = () => {
         <Space>
           <Text>Welcome, {user?.username}</Text>
           <Dropdown 
-            menu={{ items: userMenuItems }}
+            menu={{ 
+              items: userMenuItems,
+              onClick: ({ key }) => {
+                if (key === 'settings') {
+                  setSelectedMenuItem('settings');
+                } else if (key === 'profile') {
+                  setSelectedMenuItem('profile');
+                }
+              }
+            }}
             placement="bottomRight"
             arrow
           >
@@ -202,7 +212,7 @@ const Dashboard: React.FC = () => {
           <Content
             style={{
               background: '#fff',
-              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials') ? '0' : '24px',
+              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials' || selectedMenuItem === 'settings') ? '0' : '24px',
               margin: 0,
               minHeight: 280,
               borderRadius: '8px',
@@ -215,6 +225,13 @@ const Dashboard: React.FC = () => {
               <AssetManagement />
             ) : selectedMenuItem === 'standalone-credentials' ? (
               <StandaloneCredentials />
+            ) : selectedMenuItem === 'settings' ? (
+              <RetryPreferences />
+            ) : selectedMenuItem === 'profile' ? (
+              <div style={{ textAlign: 'center', padding: '48px' }}>
+                <Title level={3}>User Profile</Title>
+                <Text type="secondary">Profile management is under development</Text>
+              </div>
             ) : selectedMenuItem === 'dashboard' ? (
               <Space direction="vertical" size="large" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

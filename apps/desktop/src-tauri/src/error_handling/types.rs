@@ -220,6 +220,16 @@ impl EnhancedError {
             ErrorSeverity::Medium | ErrorSeverity::Low => self.message.clone(),
         }
     }
+    
+    /// Add context information to the error details
+    pub fn add_context(&mut self, key: &str, value: String) {
+        let context_info = format!("{}={}", key, value);
+        if let Some(ref mut details) = self.details {
+            details.push_str(&format!("; {}", context_info));
+        } else {
+            self.details = Some(context_info);
+        }
+    }
 }
 
 impl fmt::Display for EnhancedError {

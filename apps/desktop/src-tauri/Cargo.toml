@@ -1,6 +1,6 @@
 [package]
 name = "ferrocodex"
-version = "0.4.0"
+version = "0.4.2"
 description = "Secure password management and encrypted storage"
 authors = ["Ferrocodex Team"]
 edition = "2021"
@@ -44,4 +44,5 @@ base64 = "0.21"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 rand = "0.8"
+async-trait = "0.1"
 

@@ -3,6 +3,7 @@ use rusqlite::{Connection, OpenFlags};
 use std::path::PathBuf;
 use tracing::info;
 use crate::users::SqliteUserRepository;
+use crate::user_settings::SqliteUserSettingsRepository;
 use crate::audit::{SqliteAuditRepository, AuditRepository};
 use crate::assets::SqliteAssetRepository;
 use crate::configurations::SqliteConfigurationRepository;
@@ -62,6 +63,10 @@ impl Database {
         // Initialize user schema
         let user_repo = SqliteUserRepository::new(&self.conn);
         user_repo.initialize_schema()?;
+
+        // Initialize user settings schema
+        let user_settings_repo = SqliteUserSettingsRepository::new(&self.conn);
+        user_settings_repo.initialize_schema()?;
 
         // Initialize audit schema
         let audit_repo = SqliteAuditRepository::new(&self.conn);
