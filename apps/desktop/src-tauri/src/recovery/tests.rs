@@ -399,6 +399,79 @@ use tempfile::TempDir;
         fn get_all_tags(&self) -> Result<Vec<String>> {
             unimplemented!()
         }
+
+        // Missing VaultRepository methods
+        fn update_vault_secret(&self, _request: crate::vault::UpdateVaultSecretRequest) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn delete_vault_secret(&self, _request: crate::vault::DeleteVaultSecretRequest) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn grant_vault_access(&self, _request: crate::vault::GrantVaultAccessRequest) -> Result<crate::vault::VaultPermission> {
+            unimplemented!()
+        }
+
+        fn revoke_vault_access(&self, _request: crate::vault::RevokeVaultAccessRequest) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn check_vault_access(&self, _request: crate::vault::CheckVaultAccessRequest) -> Result<crate::vault::VaultAccessInfo> {
+            unimplemented!()
+        }
+
+        fn get_user_vault_permissions(&self, _user_id: i64, _vault_id: Option<i64>) -> Result<Vec<crate::vault::VaultPermission>> {
+            unimplemented!()
+        }
+
+        fn get_vault_permissions(&self, _vault_id: i64) -> Result<Vec<crate::vault::VaultPermission>> {
+            unimplemented!()
+        }
+
+        fn update_permission_expiry(&self, _permission_id: i64, _new_expires_at: Option<String>) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn expire_permissions(&self) -> Result<u64> {
+            unimplemented!()
+        }
+
+        fn log_vault_access(&self, _user_id: i64, _vault_id: i64, _access_type: crate::vault::AccessType, _result: crate::vault::AccessResult, _error_message: Option<String>) -> Result<()> {
+            unimplemented!()
+        }
+
+        fn get_vault_access_log(&self, _vault_id: i64, _limit: Option<i32>) -> Result<Vec<crate::vault::VaultAccessLog>> {
+            unimplemented!()
+        }
+
+        fn get_user_access_log(&self, _user_id: i64, _limit: Option<i32>) -> Result<Vec<crate::vault::VaultAccessLog>> {
+            unimplemented!()
+        }
+
+        fn create_permission_request(&self, _request: crate::vault::CreatePermissionRequest, _user_id: i64) -> Result<crate::vault::PermissionRequest> {
+            unimplemented!()
+        }
+
+        fn approve_permission_request(&self, _request: crate::vault::ApprovePermissionRequest) -> Result<crate::vault::PermissionRequest> {
+            unimplemented!()
+        }
+
+        fn deny_permission_request(&self, _request: crate::vault::DenyPermissionRequest) -> Result<crate::vault::PermissionRequest> {
+            unimplemented!()
+        }
+
+        fn get_pending_permission_requests(&self, _admin_id: i64) -> Result<Vec<crate::vault::PermissionRequest>> {
+            unimplemented!()
+        }
+
+        fn get_user_permission_requests(&self, _user_id: i64) -> Result<Vec<crate::vault::PermissionRequest>> {
+            unimplemented!()
+        }
+
+        fn expire_permission_requests(&self) -> Result<u64> {
+            unimplemented!()
+        }
     }
 
     struct MockAuditRepository;
