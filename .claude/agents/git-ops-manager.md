@@ -23,11 +23,26 @@ Your core responsibilities include:
 - Manage repository settings, branch protection rules, and team permissions
 
 **Release Management:**
-- Plan and execute semantic versioning strategies
+- Plan and execute semantic versioning strategies using speed-optimized workflow
 - Coordinate release branches and hotfix workflows
 - Generate comprehensive release notes and changelogs
 - Manage pre-release testing and staging deployments
 - Coordinate rollback procedures when necessary
+
+**Ferrocodex Release Workflow (Speed-Optimized):**
+- **Patch/Minor Releases (x.y.z → x.y.z+1 or x.y → x.y+1)**: Direct release branch workflow
+  1. Create release branch (release/vX.Y.Z)
+  2. Update version numbers in all files
+  3. Commit changes directly to release branch
+  4. Create and push git tag (vX.Y.Z)
+  5. Trigger automated GitHub Actions for cross-platform builds
+  6. No PR required - prioritizes speed for incremental releases
+- **Major Releases (x.y.z → x+1.0.0)**: PR-based workflow for review and approval
+  1. Create release branch and prepare changes
+  2. Create PR: release/vX.0.0 → main
+  3. Require stakeholder review for breaking changes
+  4. Merge PR, then tag and release
+- **Hotfixes**: Follow patch release workflow but branch from main/production tag
 
 **CI/CD Pipeline Operations:**
 - Design and optimize GitHub Actions workflows for the Tauri/React/Rust stack

@@ -51,16 +51,44 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
 
 ### Release & Deployment
 
+Ferrocodex uses a **speed-optimized release workflow** that prioritizes rapid deployment for incremental updates while maintaining oversight for major changes.
+
+#### Patch/Minor Releases (Fast Track)
 ```bash
-# Create a release (triggers automatic binary building):
+# For releases like 0.4.2 → 0.4.3 or 0.4.x → 0.5.0
+# Uses direct branch workflow (no PR required)
+
+git checkout -b release/v0.4.3
+# Update version numbers in:
+# - package.json (root)
+# - apps/desktop/package.json  
+# - apps/desktop/src-tauri/Cargo.toml
+# - apps/desktop/src-tauri/tauri.conf.json
+
+git add .
+git commit -m "chore: bump version to 0.4.3"
+git tag v0.4.3
+git push origin release/v0.4.3 --tags
+```
+
+#### Major Releases (Review Required)
+```bash
+# For releases like 0.4.x → 1.0.0 (breaking changes)
+# Uses PR workflow for stakeholder review
+
+git checkout -b release/v1.0.0
+# Update versions and prepare changes
+gh pr create --title "Release v1.0.0" --body "Major release with breaking changes"
+# After review and merge:
 git tag v1.0.0
 git push origin v1.0.0
-
-# GitHub Actions will automatically:
-# - Build binaries for Windows, macOS (Intel + ARM), and Linux
-# - Run all tests across platforms
-# - Create GitHub release with downloadable assets
 ```
+
+#### Automated GitHub Actions
+Both workflows trigger automatic:
+- Build binaries for Windows, macOS (Intel + ARM), and Linux
+- Run all tests across platforms
+- Create GitHub release with downloadable assets
 
 ## Architecture Overview
 
