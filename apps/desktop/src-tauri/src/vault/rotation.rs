@@ -330,9 +330,6 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let conn = Connection::open(temp_file.path()).unwrap();
         
-        let db = Database::new(temp_file.path().to_path_buf()).unwrap();
-        let conn = db.get_connection();
-        
         (temp_file, conn)
     }
 

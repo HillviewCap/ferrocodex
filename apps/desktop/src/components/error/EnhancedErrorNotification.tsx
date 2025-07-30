@@ -5,7 +5,8 @@ import {
   Space, 
   Tag, 
   Progress,
-  Typography
+  Typography,
+  Tooltip
 } from 'antd';
 import { 
   ExclamationCircleOutlined, 
@@ -14,7 +15,8 @@ import {
   CheckCircleOutlined,
   ReloadOutlined,
   EyeOutlined,
-  CloseOutlined
+  CloseOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
 import { 
   ProcessedErrorInfo,
@@ -23,6 +25,8 @@ import {
   executeRecoveryAction
 } from '../../utils/errorHandling';
 import EnhancedErrorDisplay from './EnhancedErrorDisplay';
+import RetryProgressIndicator, { RetryProgress } from './RetryProgressIndicator';
+import CircuitBreakerStatus, { CircuitBreakerMetrics } from './CircuitBreakerStatus';
 
 const { Text } = Typography;
 
@@ -30,6 +34,10 @@ interface EnhancedErrorNotificationProps {
   errorInfo: ProcessedErrorInfo;
   duration?: number;
   onRecoveryComplete?: (success: boolean) => void;
+  retryProgress?: RetryProgress;
+  circuitBreakerMetrics?: CircuitBreakerMetrics;
+  onCancelRetry?: () => void;
+  onManualRetry?: () => void;
 }
 
 /**
@@ -73,7 +81,11 @@ const getSeverityIcon = (severity: ErrorSeverity) => {
 export const showEnhancedErrorNotification = ({
   errorInfo,
   duration = 4500,
-  onRecoveryComplete
+  onRecoveryComplete,
+  retryProgress,
+  circuitBreakerMetrics,
+  onCancelRetry,
+  onManualRetry
 }: EnhancedErrorNotificationProps) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [quickRecoveryProgress, setQuickRecoveryProgress] = useState<number | null>(null);
@@ -140,8 +152,39 @@ export const showEnhancedErrorNotification = ({
   const renderNotificationActions = () => {
     const actions: React.ReactNode[] = [];
 
-    // Quick recovery action
-    if (quickRecoveryAction && quickRecoveryProgress === null) {
+    // Retry controls when retry is in progress
+    if (retryProgress && retryProgress.status === 'running' && onCancelRetry) {
+      actions.push(
+        <Button
+          key="cancel-retry"
+          size="small"
+          icon={<CloseOutlined />}
+          onClick={onCancelRetry}
+          danger
+        >
+          Cancel Retry
+        </Button>
+      );
+    }
+
+    // Manual retry when automatic retry has failed
+    if (retryProgress && retryProgress.status === 'failed' && onManualRetry) {
+      actions.push(
+        <Button
+          key="manual-retry"
+          type="primary"
+          size="small"
+          icon={<ReloadOutlined />}
+          onClick={onManualRetry}
+          style={{ backgroundColor: '#faad14', border: 'none' }}
+        >
+          Manual Retry
+        </Button>
+      );
+    }
+
+    // Quick recovery action (when no retry is in progress)
+    if (quickRecoveryAction && quickRecoveryProgress === null && (!retryProgress || retryProgress.status !== 'running')) {
       actions.push(
         <Button
           key="quick-recovery"
@@ -153,6 +196,24 @@ export const showEnhancedErrorNotification = ({
         >
           Quick Fix
         </Button>
+      );
+    }
+
+    // Circuit breaker info action
+    if (circuitBreakerMetrics && circuitBreakerMetrics.state !== 'Closed') {
+      actions.push(
+        <Tooltip key="circuit-breaker-tooltip" title={`Circuit breaker is ${circuitBreakerMetrics.state.toLowerCase()}`}>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            style={{ 
+              color: circuitBreakerMetrics.state === 'Open' ? '#ff4d4f' : '#faad14',
+              borderColor: circuitBreakerMetrics.state === 'Open' ? '#ff4d4f' : '#faad14'
+            }}
+          >
+            {circuitBreakerMetrics.state}
+          </Button>
+        </Tooltip>
       );
     }
 
@@ -189,6 +250,29 @@ export const showEnhancedErrorNotification = ({
           </Space>
         )}
         
+        {/* Retry Progress Indicator */}
+        {retryProgress && (
+          <div style={{ marginTop: 8 }}>
+            <RetryProgressIndicator 
+              progress={retryProgress}
+              onCancel={onCancelRetry}
+              onRetry={onManualRetry}
+              compact={true}
+            />
+          </div>
+        )}
+        
+        {/* Circuit Breaker Status */}
+        {circuitBreakerMetrics && circuitBreakerMetrics.state !== 'Closed' && (
+          <div style={{ marginTop: 8 }}>
+            <CircuitBreakerStatus
+              serviceName={errorInfo.context.operation?.component || 'Unknown Service'}
+              metrics={circuitBreakerMetrics}
+              compact={true}
+            />
+          </div>
+        )}
+        
         {quickRecoveryProgress !== null && (
           <div style={{ marginTop: 8 }}>
             <Text style={{ fontSize: '12px' }}>Applying quick fix...</Text>
@@ -201,7 +285,7 @@ export const showEnhancedErrorNotification = ({
           </div>
         )}
         
-        {recoveryActions.length > 0 && quickRecoveryProgress === null && (
+        {(recoveryActions.length > 0 || retryProgress || circuitBreakerMetrics) && quickRecoveryProgress === null && (
           <div style={{ marginTop: 8 }}>
             <Space wrap>
               {renderNotificationActions()}
@@ -266,6 +350,10 @@ export const showErrorNotification = (
   options?: {
     duration?: number;
     onRecoveryComplete?: (success: boolean) => void;
+    retryProgress?: RetryProgress;
+    circuitBreakerMetrics?: CircuitBreakerMetrics;
+    onCancelRetry?: () => void;
+    onManualRetry?: () => void;
   }
 ) => {
   // Import the context-aware error processor
@@ -279,7 +367,11 @@ export const showErrorNotification = (
     showEnhancedErrorNotification({
       errorInfo,
       duration: options?.duration,
-      onRecoveryComplete: options?.onRecoveryComplete
+      onRecoveryComplete: options?.onRecoveryComplete,
+      retryProgress: options?.retryProgress,
+      circuitBreakerMetrics: options?.circuitBreakerMetrics,
+      onCancelRetry: options?.onCancelRetry,
+      onManualRetry: options?.onManualRetry
     });
   });
 };
