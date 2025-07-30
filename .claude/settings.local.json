@@ -43,7 +43,10 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh run list:*)"
     ],
     "deny": []
   }
