@@ -134,7 +134,8 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
   const handleUsePassword = () => {
     if (generatedPassword) {
       onGenerated(generatedPassword);
-      onCancel();
+      // Don't call onCancel() here - let the parent handle closing
+      // This preserves the selectedSecret state for the update flow
     }
   };
 

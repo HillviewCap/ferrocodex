@@ -27,7 +27,7 @@ use branches::{BranchRepository, SqliteBranchRepository, CreateBranchRequest, Br
 use firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory};
 use firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
 use recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest, RecoveryImporter, RecoveryImportRequest};
-use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer, CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService, PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest, VaultAccessLog, CreatePermissionRequest, PermissionRequest, rotation::{PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule, RotationBatch, BatchRotationService, PasswordRotationHistory, RotationAlert, CreateRotationScheduleRequest, UpdateRotationScheduleRequest, CreateRotationBatchRequest, BatchRotationRequest}};
+use vault::{VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, UpdateVaultSecretRequest, DeleteVaultSecretRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer, CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService, PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest, VaultAccessLog, CreatePermissionRequest, PermissionRequest, rotation::{PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule, RotationBatch, BatchRotationService, PasswordRotationHistory, RotationAlert, CreateRotationScheduleRequest, UpdateRotationScheduleRequest, CreateRotationBatchRequest, BatchRotationRequest}};
 use encryption::FileEncryption;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -3724,6 +3724,105 @@ async fn update_credential_password(
     }
 }
 
+#[tauri::command]
+async fn update_vault_secret(
+    token: String,
+    request: UpdateVaultSecretRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    if let Some(ref label) = request.label {
+        let sanitized_label = InputSanitizer::sanitize_string(label);
+        if InputSanitizer::is_potentially_malicious(&sanitized_label) {
+            error!("Potentially malicious input detected in update_vault_secret");
+            return Err("Invalid input detected".to_string());
+        }
+    }
+    
+    if let Some(ref value) = request.value {
+        let sanitized_value = InputSanitizer::sanitize_string(value);
+        if InputSanitizer::is_potentially_malicious(&sanitized_value) {
+            error!("Potentially malicious input detected in update_vault_secret");
+            return Err("Invalid input detected".to_string());
+        }
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            
+            match vault_repo.update_vault_secret(request) {
+                Ok(()) => {
+                    info!("Vault secret updated by {}", session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to update vault secret: {}", e);
+                    Err(format!("Failed to update secret: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn delete_vault_secret(
+    token: String,
+    request: DeleteVaultSecretRequest,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<(), String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            
+            match vault_repo.delete_vault_secret(request) {
+                Ok(()) => {
+                    info!("Vault secret deleted by {}", session.username);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to delete vault secret: {}", e);
+                    Err(format!("Failed to delete secret: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
 // Standalone credential commands for Story 4.3
 
 #[tauri::command]
@@ -5439,6 +5538,8 @@ pub fn run() {
             check_password_reuse,
             get_password_history,
             update_credential_password,
+            update_vault_secret,
+            delete_vault_secret,
             // Standalone credential commands
             create_standalone_credential,
             search_credentials,

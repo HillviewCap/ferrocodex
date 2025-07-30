@@ -115,6 +115,18 @@ export interface UpdateCredentialPasswordRequest {
   author_id: number;
 }
 
+export interface UpdateVaultSecretRequest {
+  secret_id: number;
+  label?: string;
+  value?: string;
+  author_id: number;
+}
+
+export interface DeleteVaultSecretRequest {
+  secret_id: number;
+  author_id: number;
+}
+
 export const getStrengthColor = (score: number): string => {
   if (score >= 80) return '#52c41a'; // Green
   if (score >= 60) return '#faad14'; // Orange

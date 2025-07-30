@@ -90,6 +90,12 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const [updatePasswordForm] = Form.useForm();
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [addSecretType, setAddSecretType] = useState<SecretType | null>(null);
+  const [revealingSecrets, setRevealingSecrets] = useState<Set<number>>(new Set());
+  
+  // Edit/delete state
+  const [editSecretVisible, setEditSecretVisible] = useState(false);
+  const [editSecretForm] = Form.useForm();
+  const [deletingSecrets, setDeletingSecrets] = useState<Set<number>>(new Set());
 
   const [createVaultForm] = Form.useForm();
   const [addSecretForm] = Form.useForm();
@@ -228,6 +234,9 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const handleRevealSecret = async (secret: VaultSecret) => {
     if (!token || !vaultInfo) return;
 
+    // Add secret to revealing state
+    setRevealingSecrets(prev => new Set(prev).add(secret.id));
+
     try {
       const decryptedValue = await invoke<string>('decrypt_vault_secret', {
         token,
@@ -237,9 +246,17 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
 
       setDecryptedSecrets(prev => new Map(prev).set(secret.id, decryptedValue));
       setVisibleSecrets(prev => new Set(prev).add(secret.id));
+      message.success('Secret decrypted successfully');
     } catch (err) {
       console.error('Failed to decrypt secret:', err);
       message.error('Failed to decrypt secret');
+    } finally {
+      // Remove secret from revealing state
+      setRevealingSecrets(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(secret.id);
+        return newSet;
+      });
     }
   };
 
@@ -331,9 +348,90 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     setPasswordGeneratorVisible(true);
   };
 
+  const handleEditSecret = (secret: VaultSecret) => {
+    setSelectedSecret(secret);
+    editSecretForm.setFieldsValue({
+      label: secret.label,
+      value: '', // Don't pre-fill the encrypted value
+    });
+    setEditSecretVisible(true);
+  };
+
+  const handleEditSecretSubmit = async (values: any) => {
+    if (!selectedSecret || !user) return;
+
+    try {
+      const request = {
+        secret_id: selectedSecret.id,
+        label: values.label !== selectedSecret.label ? values.label : undefined,
+        value: values.value ? values.value : undefined,
+        author_id: user.id,
+      };
+
+      await invoke('update_vault_secret', {
+        token,
+        request
+      });
+
+      message.success('Secret updated successfully');
+      setEditSecretVisible(false);
+      editSecretForm.resetFields();
+      setSelectedSecret(null);
+      fetchVaultInfo();
+    } catch (err) {
+      console.error('Failed to update secret:', err);
+      message.error(typeof err === 'string' ? err : 'Failed to update secret');
+    }
+  };
+
+  const handleDeleteSecret = async (secret: VaultSecret) => {
+    if (!user) return;
+
+    // Add secret to deleting state
+    setDeletingSecrets(prev => new Set(prev).add(secret.id));
+
+    try {
+      const request = {
+        secret_id: secret.id,
+        author_id: user.id,
+      };
+
+      await invoke('delete_vault_secret', {
+        token,
+        request
+      });
+
+      message.success('Secret deleted successfully');
+      fetchVaultInfo();
+    } catch (err) {
+      console.error('Failed to delete secret:', err);
+      message.error(typeof err === 'string' ? err : 'Failed to delete secret');
+    } finally {
+      // Remove secret from deleting state
+      setDeletingSecrets(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(secret.id);
+        return newSet;
+      });
+    }
+  };
+
+  const canEditOrDeleteSecret = (_secret: VaultSecret): boolean => {
+    if (!user || !vaultInfo) return false;
+    
+    // Administrators can edit/delete all secrets
+    if (user.role === 'Administrator') return true;
+    
+    // Vault creators can edit/delete secrets in their vault
+    if (vaultInfo.vault.created_by === user.id) return true;
+    
+    return false;
+  };
+
   const handlePasswordGenerated = (password: string) => {
     if (selectedSecret) {
       updatePasswordForm.setFieldsValue({ password });
+      setPasswordGeneratorVisible(false); // Close the generator modal
       setUpdatePasswordVisible(true);
     }
   };
@@ -556,6 +654,9 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                     renderItem={(secret) => {
                       const isVisible = visibleSecrets.has(secret.id);
                       const decryptedValue = decryptedSecrets.get(secret.id);
+                      const isRevealing = revealingSecrets.has(secret.id);
+                      const isDeleting = deletingSecrets.has(secret.id);
+                      const canModify = canEditOrDeleteSecret(secret);
 
                       return (
                         <List.Item
@@ -565,6 +666,8 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                                 type="text"
                                 icon={isVisible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                                 onClick={() => isVisible ? handleHideSecret(secret.id) : handleRevealSecret(secret)}
+                                loading={isRevealing}
+                                disabled={isRevealing}
                               />
                             </Tooltip>,
                             isVisible && decryptedValue && (
@@ -603,30 +706,35 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                                 />
                               </Tooltip>
                             ),
-                            secret.secret_type !== 'Password' && (
+                            canModify && (
                               <Tooltip title="Edit secret">
                                 <Button
                                   type="text"
                                   icon={<EditOutlined />}
-                                  disabled
+                                  onClick={() => handleEditSecret(secret)}
+                                  disabled={isDeleting}
                                 />
                               </Tooltip>
                             ),
-                            <Popconfirm
-                              title="Delete secret"
-                              description="Are you sure you want to delete this secret? This action cannot be undone."
-                              okText="Delete"
-                              okType="danger"
-                              cancelText="Cancel"
-                              disabled
-                            >
-                              <Button
-                                type="text"
-                                danger
-                                icon={<DeleteOutlined />}
-                                disabled
-                              />
-                            </Popconfirm>
+                            canModify && (
+                              <Popconfirm
+                                title="Delete secret"
+                                description="Are you sure you want to delete this secret? This action cannot be undone."
+                                okText="Delete"
+                                okType="danger"
+                                cancelText="Cancel"
+                                onConfirm={() => handleDeleteSecret(secret)}
+                                disabled={isDeleting}
+                              >
+                                <Button
+                                  type="text"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  loading={isDeleting}
+                                  disabled={isDeleting}
+                                />
+                              </Popconfirm>
+                            )
                           ].filter(Boolean)}
                         >
                           <List.Item.Meta
@@ -651,8 +759,17 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                               <div>
                                 <div style={{ marginBottom: '8px' }}>
                                   {isVisible && decryptedValue ? (
-                                    <Text code copyable={{ text: decryptedValue }}>
-                                      {secret.secret_type === 'Password' ? '••••••••' : decryptedValue}
+                                    <Text 
+                                      code 
+                                      copyable={{ text: decryptedValue }}
+                                      style={{ 
+                                        fontFamily: 'monospace',
+                                        backgroundColor: '#f5f5f5',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px'
+                                      }}
+                                    >
+                                      {decryptedValue}
                                     </Text>
                                   ) : (
                                     <Text type="secondary">••••••••••••••••</Text>
@@ -969,6 +1086,84 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           secretLabel={selectedSecret.label}
         />
       )}
+
+      {/* Edit Secret Modal */}
+      <Modal
+        title={
+          <Space>
+            <EditOutlined />
+            Edit Secret - {selectedSecret?.label}
+          </Space>
+        }
+        open={editSecretVisible}
+        onCancel={() => {
+          setEditSecretVisible(false);
+          editSecretForm.resetFields();
+          setSelectedSecret(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={editSecretForm}
+          layout="vertical"
+          onFinish={handleEditSecretSubmit}
+        >
+          <Form.Item
+            name="label"
+            label="Label"
+            rules={[
+              { required: true, message: 'Please enter a label for this secret' },
+              { min: 1, message: 'Label cannot be empty' },
+              { max: 100, message: 'Label cannot exceed 100 characters' }
+            ]}
+          >
+            <Input placeholder="e.g., Admin Password, PLC IP Address" />
+          </Form.Item>
+
+          <Form.Item
+            name="value"
+            label="Secret Value (leave empty to keep current value)"
+          >
+            {selectedSecret?.secret_type === 'Password' ? (
+              <PasswordInput
+                placeholder="Enter new password (optional)"
+                showStrength={true}
+                showGenerator={true}
+                checkReuse={true}
+                minScore={40}
+              />
+            ) : (
+              <TextArea
+                rows={4}
+                placeholder="Enter new secret value (optional)"
+              />
+            )}
+          </Form.Item>
+
+          <Alert
+            message="Security Notice"
+            description="Only fields that are changed will be updated. Leave the value field empty to keep the current encrypted value unchanged."
+            type="info"
+            style={{ marginBottom: '16px' }}
+          />
+
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setEditSecretVisible(false);
+                editSecretForm.resetFields();
+                setSelectedSecret(null);
+              }}>
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit">
+                Update Secret
+              </Button>
+            </Space>
+          </div>
+        </Form>
+      </Modal>
       
       {/* Permission Manager Modal */}
       {vaultInfo && (

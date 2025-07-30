@@ -216,6 +216,20 @@ pub struct UpdateCredentialPasswordRequest {
     pub author_id: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateVaultSecretRequest {
+    pub secret_id: i64,
+    pub label: Option<String>,
+    pub value: Option<String>,
+    pub author_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteVaultSecretRequest {
+    pub secret_id: i64,
+    pub author_id: i64,
+}
+
 // Standalone credential structures for Story 4.3
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StandaloneCredential {
@@ -592,6 +606,10 @@ pub trait VaultRepository {
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()>;
     fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
+    
+    // Vault secret update/delete methods
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest) -> Result<()>;
+    fn delete_vault_secret(&self, request: DeleteVaultSecretRequest) -> Result<()>;
     
     // Standalone credential methods for Story 4.3
     fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest) -> Result<StandaloneCredential>;
@@ -1595,6 +1613,93 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         )?;
 
         debug!("Cleaned up password history for secret {}, keeping {} entries", secret_id, keep_count);
+        Ok(())
+    }
+
+    // Vault secret update/delete implementations
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest) -> Result<()> {
+        // Get the current secret first
+        let secret = self.get_secret_by_id(request.secret_id)?
+            .ok_or_else(|| anyhow::anyhow!("Secret not found"))?;
+
+        // Handle different update cases based on what fields are provided
+        if let (Some(ref label), Some(ref value)) = (&request.label, &request.value) {
+            // Both label and value provided
+            let encryption = FileEncryption::new(&format!("vault_{}_{}", secret.vault_id, request.author_id));
+            let encrypted_data = encryption.encrypt(value.as_bytes())?;
+            use base64::{Engine as _, engine::general_purpose};
+            let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            
+            self.conn.execute(
+                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
+                (label, encrypted_value_base64, request.secret_id),
+            )?;
+        } else if let Some(ref label) = request.label {
+            // Only label provided
+            self.conn.execute(
+                "UPDATE vault_secrets SET label = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+                (label, request.secret_id),
+            )?;
+        } else if let Some(ref value) = request.value {
+            // Only value provided
+            let encryption = FileEncryption::new(&format!("vault_{}_{}", secret.vault_id, request.author_id));
+            let encrypted_data = encryption.encrypt(value.as_bytes())?;
+            use base64::{Engine as _, engine::general_purpose};
+            let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            
+            self.conn.execute(
+                "UPDATE vault_secrets SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+                (encrypted_value_base64, request.secret_id),
+            )?;
+        } else {
+            return Err(anyhow::anyhow!("No fields to update"));
+        }
+        
+        // Add to history
+        let mut changes = HashMap::new();
+        if let Some(ref label) = request.label {
+            changes.insert("label".to_string(), format!("{} -> {}", secret.label, label));
+        }
+        if request.value.is_some() {
+            changes.insert("value".to_string(), "updated".to_string());
+        }
+        
+        self.add_version_history(
+            secret.vault_id,
+            ChangeType::SecretUpdated,
+            request.author_id,
+            &format!("Updated {} secret '{}'", secret.secret_type.to_string(), secret.label),
+            changes,
+        )?;
+        
+        info!("Updated vault secret '{}' (ID: {})", secret.label, request.secret_id);
+        Ok(())
+    }
+
+    fn delete_vault_secret(&self, request: DeleteVaultSecretRequest) -> Result<()> {
+        // Get the secret first for history logging
+        let secret = self.get_secret_by_id(request.secret_id)?
+            .ok_or_else(|| anyhow::anyhow!("Secret not found"))?;
+
+        // Delete the secret
+        self.conn.execute(
+            "DELETE FROM vault_secrets WHERE id = ?1",
+            [request.secret_id],
+        )?;
+
+        // Add to history
+        let mut changes = HashMap::new();
+        changes.insert("deleted_secret".to_string(), secret.label.clone());
+        
+        self.add_version_history(
+            secret.vault_id,
+            ChangeType::SecretDeleted,
+            request.author_id,
+            &format!("Deleted {} secret '{}'", secret.secret_type.to_string(), secret.label),
+            changes,
+        )?;
+
+        info!("Deleted vault secret '{}' (ID: {})", secret.label, request.secret_id);
         Ok(())
     }
 

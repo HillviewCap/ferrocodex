@@ -133,11 +133,12 @@ const useAuthStore = create<AuthState & AuthActions>()(
             error: null,
           });
         } catch (error) {
+          // Don't set error for session validation failures - this is expected
+          // when users haven't logged in yet or sessions have expired
           set({
             user: null,
             token: null,
             isAuthenticated: false,
-            error: error as string,
           });
         }
       },
