@@ -132,6 +132,7 @@ use tempfile::TempDir;
                 status: FirmwareStatus::Golden,
                 file_path: "1/1.enc".to_string(),
                 file_hash: "def456".to_string(),
+                file_size: 1024,
                 status_changed_at: None,
                 status_changed_by: None,
                 created_at: "2024-01-01T00:00:00Z".to_string(),

@@ -1,6 +1,6 @@
 [package]
 name = "ferrocodex"
-version = "0.4.2"
+version = "0.4.3"
 description = "Secure password management and encrypted storage"
 authors = ["Ferrocodex Team"]
 edition = "2021"
