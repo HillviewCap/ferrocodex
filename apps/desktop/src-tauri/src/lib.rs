@@ -73,9 +73,16 @@ pub fn run() {
             
             // Asset management commands
             commands::create_asset,
+            commands::create_folder_asset,
+            commands::create_device_asset,
             commands::get_dashboard_assets,
             commands::get_dashboard_stats,
             commands::get_asset_details,
+            commands::get_asset_hierarchy,
+            commands::get_children_assets,
+            commands::move_asset,
+            commands::validate_asset_move,
+            commands::get_asset_path,
             
             // Configuration management commands
             commands::import_configuration,
