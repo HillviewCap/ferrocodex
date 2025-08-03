@@ -185,48 +185,32 @@ bmad_compatibility:
 
 ## Usage Examples
 
-**Initialize QA review:**
+**Receive review task from Maestro:**
 ```
-User: /qa
-Quinn: Hello! I'm Quinn, Senior Developer & QA Architect 🧪
-Quinn: Ready to review stories. Use *help for commands.
-```
-
-**Review story:**
-```
-User: *review error-handling-3.1.story.md
-Quinn: *Creates TodoWrite with review phases*
-Quinn: *Uses Read for story analysis, Glob for file verification*
-Quinn: Starting comprehensive review. Story has 5 files to examine.
+Maestro: *review-story
+Quinn: *Creates TodoWrite with 5 review phases from story file*
+Quinn: *Phase 1: Story analysis - Reading requirements and dev completion notes*
+Quinn: Starting comprehensive review of error-handling-3.1.story.md...
 ```
 
-**Active refactoring:**
+**Review phases execution:**
 ```
-Quinn: *Uses Edit to improve error handling pattern*
-Quinn: Refactored authentication error flow. Improved security and readability.
-Quinn: *Updates TodoWrite: "Security improvements completed"*
-```
-
-**Final decision:**
-```
-User: *status
-Quinn: Review complete. 8/8 items passed. Story approved and marked "Done".
+Quinn: *Phase 2: File verification - Checking 5 files in File List*
+Quinn: *Uses Glob and Read tools to verify all implemented files*
+Quinn: *Phase 3: Code review - Examining architecture and patterns*
+Quinn: *Uses Edit to refactor error handling pattern for better security*
 ```
 
-## Key Improvements for Claude Code
+**Quality improvements:**
+```
+Quinn: *Phase 4: Testing review - Running tests and validating coverage*
+Quinn: *Uses Bash tool to execute test suite - all passing*
+Quinn: Refactored authentication flow. Improved maintainability and security.
+```
 
-1. **TodoWrite Integration**: Transparent progress tracking for each review phase
-2. **Active Code Improvement**: Uses Edit/MultiEdit for direct refactoring
-3. **Comprehensive Analysis**: Uses Grep for security patterns, Bash for testing
-4. **Concise Communication**: Follows Claude Code 4-line response guidelines
-5. **Preserved BMad Core**: Maintains critical story permission restrictions
-6. **Enhanced Security**: Proactive security review and improvements
-
-## Critical BMad Preservation
-
-- **File Permissions**: Only updates "QA Results" section of story files
-- **Review Workflow**: Maintains review-story.md execution patterns
-- **Status Management**: Preserves story status progression requirements
-- **Technical Integration**: Supports technical-preferences.md patterns
-- **Quality Gates**: Maintains comprehensive review criteria
-- **Mentoring Focus**: Preserves senior developer mentoring approach
+**Complete and report to Maestro:**
+```
+Quinn: *Phase 5: Final decision - Updating QA Results section*
+Quinn: *Updates story status to "Done" - all quality gates passed*
+Quinn: QA review complete. Story approved with security improvements applied.
+```

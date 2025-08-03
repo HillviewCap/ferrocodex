@@ -33,8 +33,10 @@ npm run lint         # Run linting across all workspaces
 npm run clean        # Clean build artifacts
 
 # From apps/desktop directory:
+npm run test         # Run frontend tests in watch mode
 npm run test:run     # Run frontend tests once
 npm run test:coverage # Run tests with coverage report
+npm run tauri:dev    # Start Tauri development mode
 npm run tauri:build  # Build production desktop app
 
 # Backend tests (from root):
@@ -74,7 +76,9 @@ git push origin v1.0.0
 ### Key Architectural Patterns
 
 1. **Tauri IPC Communication**: Frontend invokes Rust commands via `invoke` API
-   - All commands defined in `src-tauri/src/main.rs`
+   - All commands defined and registered in `src-tauri/src/lib.rs` (270+ commands)
+   - Command handlers organized in `src-tauri/src/commands/` by feature area
+   - Business logic separated into `src-tauri/src/handlers/` modules
    - TypeScript types in `src/types/` mirror Rust structures
    - Example: `await invoke('create_user', { userData })`
 
@@ -100,8 +104,15 @@ git push origin v1.0.0
 apps/desktop/
 ├── src/                    # React frontend
 │   ├── components/         # UI components organized by feature
+│   │   ├── forms/         # Dynamic metadata forms and validation
+│   │   ├── hierarchy/     # Asset hierarchy and tree views  
+│   │   ├── search/        # Metadata search and filtering
+│   │   ├── error/         # Enhanced error handling components
+│   │   ├── firmware/      # Firmware analysis and management UI
+│   │   └── recovery/      # Recovery package components
 │   ├── store/             # Zustand state management
 │   ├── types/             # TypeScript type definitions
+│   ├── contexts/          # React contexts (SearchContext)
 │   └── utils/             # Utility functions
 └── src-tauri/             # Rust backend
     └── src/
@@ -109,14 +120,20 @@ apps/desktop/
         ├── audit/         # Audit logging
         ├── auth/          # Authentication & sessions
         ├── branches/      # Configuration branching
+        ├── commands/      # Tauri command handlers
         ├── configurations/ # Config file management
         ├── database/      # SQLite database layer
         ├── encryption/    # AES-256 encryption
+        ├── error_handling/ # Enhanced error handling with circuit breakers
         ├── firmware/      # Firmware management
+        ├── firmware_analysis/ # Firmware analysis queue and processing
+        ├── handlers/      # Business logic handlers
+        ├── metadata/      # Dynamic metadata schemas and search
         ├── recovery/      # Recovery package handling
         ├── users/         # User management
+        ├── user_settings/ # User preferences and settings
         ├── validation/    # Input validation
-        └── vault/         # Asset Identity Vault (v0.4.0)
+        └── vault/         # Asset Identity Vault with password rotation
 ```
 
 ### Important Conventions
@@ -143,8 +160,27 @@ apps/desktop/
 
 ### Development Notes
 
-- **Port 1420** must be available for development server
+- **Port 1420** must be available for development server (1421 for HMR)
 - **Node.js 18+** and **Rust 1.78.0+** required
 - Database automatically created in app data directory
 - Hot reload works for both frontend and Rust backend
 - Tauri commands are async - always use await or proper promise handling
+- Extensive command system with 270+ registered Tauri commands organized by feature
+- Uses Turborepo for monorepo task orchestration and caching
+
+### Key Dependencies
+
+**Frontend:**
+- React 18 with TypeScript and Vite
+- Ant Design (~5.26.6) for UI components
+- Zustand (~5.0.6) for state management
+- React Router DOM (^7.7.0) for routing
+- Vitest for testing with jsdom environment
+
+**Backend:**
+- Tauri 2.0 with multiple plugins (dialog, fs, process, opener)
+- SQLite with rusqlite (0.31.0) and bundled features
+- bcrypt (0.17.0) for password hashing
+- AES-GCM (0.10) and PBKDF2 for encryption
+- Tokio async runtime with full features
+- Additional tools: regex, uuid, chrono, base64, csv, jsonschema

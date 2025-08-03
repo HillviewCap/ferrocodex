@@ -459,3 +459,12 @@ pub async fn get_asset_path(
         None => Err("Database not initialized".to_string()),
     }
 }
+
+// Re-export tree navigation commands
+pub use crate::assets::tree_navigation::{
+    batch_load_tree_nodes,
+    search_tree_nodes,
+    get_tree_statistics,
+    preload_tree_nodes,
+    get_node_metadata,
+};

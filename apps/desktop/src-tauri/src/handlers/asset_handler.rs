@@ -1,6 +1,6 @@
 // Asset business logic handlers
 
-use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, Asset, DashboardStats};
+use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, Asset, DashboardStats, AssetType};
 use crate::database::Database;
 use crate::validation::InputSanitizer;
 use rusqlite::Connection;
@@ -42,6 +42,8 @@ impl AssetHandler {
         let request = CreateAssetRequest {
             name,
             description,
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by,
         };
 

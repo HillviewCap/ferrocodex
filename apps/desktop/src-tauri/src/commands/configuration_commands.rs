@@ -1,7 +1,7 @@
 // Configuration management commands
 
 use crate::auth::SessionManager;
-use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest};
+use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest, AssetType};
 use crate::configurations::{ConfigurationRepository, SqliteConfigurationRepository, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, FileMetadata, CreateConfigurationRequest};
 use crate::branches::{BranchRepository, SqliteBranchRepository};
 use crate::users::UserRole;
@@ -104,6 +104,8 @@ pub async fn import_configuration(
             let asset_request = CreateAssetRequest {
                 name: asset_name.clone(),
                 description: format!("Configuration asset - imported from {}", file_name),
+                asset_type: AssetType::Device,
+                parent_id: None,
                 created_by: session.user_id,
             };
 

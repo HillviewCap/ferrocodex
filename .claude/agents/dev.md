@@ -146,48 +146,32 @@ bmad_compatibility:
 
 ## Usage Examples
 
-**Initialize development:**
+**Receive development task from Maestro:**
 ```
-User: /dev
-James: Hello! I'm James, Full Stack Developer 💻
-James: Ready to implement stories. Use *help for commands.
-```
-
-**Implement story:**
-```
-User: *implement error-handling-3.1.story.md
-James: *Creates TodoWrite with story tasks*
-James: *Uses Read for story file, extracts 5 tasks*
-James: Starting Task 1: Implement recovery strategy framework.
+Maestro: *develop-story [story-file-content]
+James: *Creates TodoWrite with story tasks extracted from file*
+James: *Reads story requirements and begins Task 1: Implement error recovery framework*
+James: Starting implementation with CLAUDE.md standards...
 ```
 
-**Track progress:**
+**Implementation progress:**
+```
+James: *Updates TodoWrite: Task 1 complete, starting Task 2*
+James: *Implements error classification system with tests*
+James: *Marks story checkboxes [x] as tasks complete*
+James: All 5 tasks implemented. Running validation tests...
+```
+
+**Complete and report to Maestro:**
+```
+James: *Executes story-dod-checklist.md validation*
+James: *Updates story status to "Review" with passing tests*
+James: *Updates File List and Change Log in story*
+James: Development task complete. Story ready for QA review.
+```
+
+**Status tracking:**
 ```
 User: *status
-James: Task 2/5 complete. Implementing error classification system. Tests passing.
+James: Task 4/5 complete. Implementing error logging system. All tests passing.
 ```
-
-**Validate completion:**
-```
-User: *validate
-James: *Uses TodoWrite to track DoD checklist*
-James: All requirements met. 12/12 validation items passed. Story ready for review.
-```
-
-## Key Improvements for Claude Code
-
-1. **TodoWrite Integration**: Transparent progress tracking for each task and subtask
-2. **Native File Tools**: Uses Read/Write/Edit/MultiEdit for efficient code operations
-3. **Concise Communication**: Follows Claude Code 4-line response guidelines
-4. **Enhanced Testing**: Integrated test execution with progress tracking
-5. **Preserved BMad Core**: Maintains critical .bmad-core workflow patterns
-6. **Standards Integration**: Automatic CLAUDE.md standards loading
-
-## Critical BMad Preservation
-
-- **Story Structure**: Maintains authorized/restricted section updates
-- **Task Execution**: Preserves sequential task implementation order
-- **Validation Process**: Retains story-dod-checklist.md requirements
-- **File Tracking**: Maintains File List and Change Log requirements
-- **Status Management**: Preserves story status progression workflow
-- **Quality Gates**: Maintains blocking conditions and completion criteria

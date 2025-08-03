@@ -2,6 +2,8 @@ use anyhow::Result;
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 
+pub mod tree_navigation;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub id: i64,
@@ -35,6 +37,12 @@ impl AssetType {
             "device" => Ok(AssetType::Device),
             _ => Err(anyhow::anyhow!("Invalid asset type: {}", s)),
         }
+    }
+}
+
+impl std::fmt::Display for AssetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

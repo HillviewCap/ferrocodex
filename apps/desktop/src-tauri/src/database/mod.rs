@@ -11,6 +11,8 @@ use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
 use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
 use crate::vault::{SqliteVaultRepository, VaultRepository};
+use crate::metadata::{SqliteMetadataRepository, SqliteMetadataSearchRepository};
+use crate::bulk::{SqliteBulkImportRepository, operations::SqliteBulkOperationsRepository};
 
 pub struct Database {
     conn: Connection,
@@ -95,6 +97,23 @@ impl Database {
         // Initialize vault schema
         let vault_repo = SqliteVaultRepository::new(&self.conn);
         vault_repo.initialize_schema()?;
+
+        // Initialize metadata schema
+        let metadata_repo = SqliteMetadataRepository::new(&self.conn);
+        metadata_repo.initialize_schema()?;
+        metadata_repo.populate_system_templates()?;
+
+        // Initialize metadata search schema
+        let metadata_search_repo = SqliteMetadataSearchRepository::new(&self.conn);
+        metadata_search_repo.initialize_search_schema()?;
+
+        // Initialize bulk import schema
+        let bulk_repo = SqliteBulkImportRepository::new(&self.conn);
+        bulk_repo.initialize_schema()?;
+
+        // Initialize bulk operations schema
+        let bulk_ops_repo = SqliteBulkOperationsRepository::new(&self.conn);
+        bulk_ops_repo.initialize_schema()?;
 
         // Run data migrations
         self.run_data_migrations()?;

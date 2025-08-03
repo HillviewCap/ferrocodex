@@ -30,7 +30,7 @@ import {
 import { AssetTreeView } from './AssetTreeView';
 import { CreateAssetModal } from './CreateAssetModal';
 import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
-import { useAuthStore } from '../../store/auth';
+import useAuthStore from '../../store/auth';
 import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyError, useSelectedAsset } from '../../store/hierarchy';
 import { invoke } from '@tauri-apps/api/core';
 import { VaultInfo } from '../../types/vault';
@@ -281,8 +281,8 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
             <div>
               <Text strong>Identity Vault: </Text>
               <VaultAccessIndicator 
-                assetId={selectedAsset.id}
-                vaultInfo={vaultInfo}
+                vaultId={vaultInfo?.vault_id || 0}
+                compact={true}
               />
             </div>
           )}

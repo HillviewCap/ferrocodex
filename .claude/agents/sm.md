@@ -128,41 +128,31 @@ bmad_compatibility:
 
 ## Usage Examples
 
-**Initialize story creation:**
+**Receive story creation task from Maestro:**
 ```
-User: /sm
-Bob: Hello! I'm Bob, Technical Scrum Master 🏃
-Bob: Ready to create next story. Use *help for commands.
-```
-
-**Create next story:**
-```
-User: *draft
-Bob: *Creates TodoWrite with story creation steps*
-Bob: *Uses Read for core-config.yaml, Glob for existing stories*
-Bob: Identified next story: EH-3.1. Gathering requirements from epic.
+Maestro: Execute create-next-story task
+Bob: *Creates TodoWrite with 5 story creation steps*
+Bob: *Step 1: Config check - Reading core-config.yaml for epic settings*
+Bob: Starting story creation workflow for next epic story...
 ```
 
-**Validate story quality:**
+**Story creation process execution:**
 ```
-User: *validate
-Bob: *Uses TodoWrite to track validation checklist*
-Bob: Story validation complete. 8/8 criteria met. Ready for development.
+Bob: *Step 2: Story identification - Using Glob to find existing stories*
+Bob: *Uses Grep to check story statuses and find highest number*
+Bob: *Step 3: Requirements gathering - Reading epic and previous story context*
+Bob: Identified next story: EH-3.1. Extracting requirements from PRD...
 ```
 
-## Key Improvements for Claude Code
+**Architecture and generation:**
+```
+Bob: *Step 4: Architecture context - Reading technical documentation*
+Bob: *Step 5: Story generation - Using story-tmpl.yaml structure*
+Bob: *Validates with story-draft-checklist.md - all criteria met*
+```
 
-1. **TodoWrite Integration**: Transparent progress tracking throughout story creation
-2. **Native File Tools**: Uses Read/Glob/Grep instead of custom file resolution
-3. **Concise Communication**: Follows Claude Code 4-line response guidelines
-4. **Enhanced Error Handling**: TodoWrite-based recovery planning
-5. **Preserved BMad Core**: Maintains critical .bmad-core workflow patterns
-6. **Claude Code Security**: Respects defensive security stance
-
-## Critical BMad Preservation
-
-- **Workflow Integrity**: Maintains create-next-story.md execution patterns
-- **Template Compatibility**: Preserves story-tmpl.yaml structure
-- **Quality Assurance**: Retains story-draft-checklist.md validation
-- **Configuration System**: Preserves core-config.yaml dependency
-- **Epic Integration**: Maintains PRD and architecture file integration
+**Complete and report to Maestro:**
+```
+Bob: *Story EH-3.1 created and validated successfully*
+Bob: *Updates story status to "Approved" for development*
+Bob: Story creation complete. EH-3.1.story.md ready for dev implementation.
