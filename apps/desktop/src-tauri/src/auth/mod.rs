@@ -27,6 +27,10 @@ pub struct LoginResponse {
     pub user: UserInfo,
 }
 
+// Type alias for service compatibility
+pub type AuthService = SessionManager;
+pub type AuthState = SessionManager;
+
 #[derive(Debug)]
 pub struct SessionManager {
     sessions: Mutex<HashMap<String, SessionToken>>,

@@ -11,12 +11,17 @@ use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
 use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
 use crate::vault::{SqliteVaultRepository, VaultRepository};
-use crate::metadata::{SqliteMetadataRepository, SqliteMetadataSearchRepository};
-use crate::bulk::{SqliteBulkImportRepository, operations::SqliteBulkOperationsRepository};
+// Epic 5 imports - temporarily disabled
+// use crate::metadata::{SqliteMetadataRepository, SqliteMetadataSearchRepository};
+// use crate::bulk::{SqliteBulkImportRepository, operations::SqliteBulkOperationsRepository};
 
 pub struct Database {
     conn: Connection,
 }
+
+// Type alias for compatibility with workflow module
+pub type DatabaseManager = Database;
+pub type DatabaseError = anyhow::Error;
 
 impl Database {
     pub fn new(db_path: PathBuf) -> Result<Self> {
@@ -98,22 +103,22 @@ impl Database {
         let vault_repo = SqliteVaultRepository::new(&self.conn);
         vault_repo.initialize_schema()?;
 
-        // Initialize metadata schema
-        let metadata_repo = SqliteMetadataRepository::new(&self.conn);
-        metadata_repo.initialize_schema()?;
-        metadata_repo.populate_system_templates()?;
+        // Epic 5 - Initialize metadata schema (temporarily disabled)
+        // let metadata_repo = SqliteMetadataRepository::new(&self.conn);
+        // metadata_repo.initialize_schema()?;
+        // metadata_repo.populate_system_templates()?;
 
-        // Initialize metadata search schema
-        let metadata_search_repo = SqliteMetadataSearchRepository::new(&self.conn);
-        metadata_search_repo.initialize_search_schema()?;
+        // Epic 5 - Initialize metadata search schema (temporarily disabled)
+        // let metadata_search_repo = SqliteMetadataSearchRepository::new(&self.conn);
+        // metadata_search_repo.initialize_search_schema()?;
 
-        // Initialize bulk import schema
-        let bulk_repo = SqliteBulkImportRepository::new(&self.conn);
-        bulk_repo.initialize_schema()?;
+        // Epic 5 - Initialize bulk import schema (temporarily disabled)
+        // let bulk_repo = SqliteBulkImportRepository::new(&self.conn);
+        // bulk_repo.initialize_schema()?;
 
-        // Initialize bulk operations schema
-        let bulk_ops_repo = SqliteBulkOperationsRepository::new(&self.conn);
-        bulk_ops_repo.initialize_schema()?;
+        // Epic 5 - Initialize bulk operations schema (temporarily disabled)
+        // let bulk_ops_repo = SqliteBulkOperationsRepository::new(&self.conn);
+        // bulk_ops_repo.initialize_schema()?;
 
         // Run data migrations
         self.run_data_migrations()?;

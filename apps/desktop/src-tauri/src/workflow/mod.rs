@@ -14,8 +14,9 @@ pub mod state;
 pub mod validation;
 
 pub use models::*;
+pub use repository::WorkflowRepository;
 pub use service::WorkflowService;
-pub use state::WorkflowStateManager;
+pub use state::{WorkflowStateManager, WorkflowResumptionManager};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

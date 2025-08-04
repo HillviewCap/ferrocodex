@@ -472,19 +472,19 @@ impl WorkflowValidator {
 
         match &rule.rule_type {
             ValidationRuleType::Required => {
-                if field_value.is_none() || field_value == Some(&Value::Null) {
+                if field_value.is_none() || field_value == Some(Value::Null) {
                     return Ok(Some(rule.message.clone()));
                 }
             }
             ValidationRuleType::Pattern(regex) => {
-                if let Some(Value::String(s)) = field_value {
+                if let Some(Value::String(s)) = &field_value {
                     if !regex.is_match(s) {
                         return Ok(Some(rule.message.clone()));
                     }
                 }
             }
             ValidationRuleType::Length { min, max } => {
-                if let Some(Value::String(s)) = field_value {
+                if let Some(Value::String(s)) = &field_value {
                     let len = s.len();
                     if let Some(min_len) = min {
                         if len < *min_len {
@@ -509,13 +509,13 @@ impl WorkflowValidator {
         Ok(None)
     }
 
-    fn get_field_value(&self, data: &WorkflowData, field: &str) -> Option<&Value> {
+    fn get_field_value(&self, data: &WorkflowData, field: &str) -> Option<Value> {
         // Convert WorkflowData to JSON for field access
         // This is a simplified implementation
         match field {
-            "asset_type" => data.asset_type.as_ref().map(|s| &Value::String(s.clone())),
-            "asset_name" => data.asset_name.as_ref().map(|s| &Value::String(s.clone())),
-            "asset_description" => data.asset_description.as_ref().map(|s| &Value::String(s.clone())),
+            "asset_type" => data.asset_type.as_ref().map(|s| Value::String(s.clone())),
+            "asset_name" => data.asset_name.as_ref().map(|s| Value::String(s.clone())),
+            "asset_description" => data.asset_description.as_ref().map(|s| Value::String(s.clone())),
             _ => None,
         }
     }

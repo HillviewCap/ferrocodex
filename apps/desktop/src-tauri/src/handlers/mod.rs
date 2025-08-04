@@ -8,6 +8,8 @@ pub mod vault_handler;
 pub mod recovery_handler;
 pub mod settings_handler;
 pub mod system_handler;
+// Epic 5 - temporarily disabled
+// pub mod workflow_handler;
 
 pub use auth_handler::*;
 pub use user_handler::*;
@@ -19,3 +21,5 @@ pub use vault_handler::*;
 pub use recovery_handler::*;
 pub use settings_handler::*;
 pub use system_handler::*;
+// Epic 5 - temporarily disabled
+// pub use workflow_handler::*;

@@ -126,6 +126,9 @@ pub struct AuditEvent {
     pub timestamp: String,
 }
 
+// Type alias for service compatibility
+pub type AuditService = SqliteAuditRepository<'static>;
+
 pub trait AuditRepository {
     fn initialize_schema(&self) -> Result<()>;
     fn log_event(&self, event: &AuditEventRequest) -> Result<AuditEvent>;

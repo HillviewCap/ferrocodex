@@ -2,7 +2,130 @@ use anyhow::Result;
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error_handling::{RetryStrategy, CircuitBreakerConfig};
+// Epic 5 import - temporarily disabled
+// use crate::error_handling::{RetryStrategy, CircuitBreakerConfig};
+
+// Temporary placeholder types for disabled Epic 5 modules
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryStrategy {
+    pub max_attempts: u32,
+    pub base_delay_ms: u64,
+    pub max_delay_ms: u64,
+    pub enabled: bool,
+}
+
+impl RetryStrategy {
+    pub fn new(max_attempts: u32, base_delay_ms: u64, max_delay_ms: u64, _multiplier: f64) -> Self {
+        Self {
+            max_attempts,
+            base_delay_ms,
+            max_delay_ms,
+            enabled: true,
+        }
+    }
+
+    pub fn aggressive() -> Self {
+        Self {
+            max_attempts: 5,
+            base_delay_ms: 100,
+            max_delay_ms: 5000,
+            enabled: true,
+        }
+    }
+    
+    pub fn conservative() -> Self {
+        Self {
+            max_attempts: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10000,
+            enabled: true,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_attempts == 0 {
+            return Err("Max attempts must be greater than 0".to_string());
+        }
+        if self.base_delay_ms > self.max_delay_ms {
+            return Err("Base delay cannot be greater than max delay".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl Default for RetryStrategy {
+    fn default() -> Self {
+        Self::conservative()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitBreakerConfig {
+    pub failure_threshold: u32,
+    pub timeout_ms: u64,
+    pub reset_timeout_ms: u64,
+    pub success_threshold: u32,
+    pub half_open_max_calls: u32,
+    pub sliding_window_size: u32,
+    pub enabled: bool,
+}
+
+impl CircuitBreakerConfig {
+    pub fn new(failure_threshold: u32, timeout_ms: u64, reset_timeout_ms: u64) -> Self {
+        Self {
+            failure_threshold,
+            timeout_ms,
+            reset_timeout_ms,
+            success_threshold: 3,
+            half_open_max_calls: 3,
+            sliding_window_size: 10,
+            enabled: true,
+        }
+    }
+
+    pub fn aggressive() -> Self {
+        Self {
+            failure_threshold: 3,
+            timeout_ms: 5000,
+            reset_timeout_ms: 30000,
+            success_threshold: 2,
+            half_open_max_calls: 2,
+            sliding_window_size: 5,
+            enabled: true,
+        }
+    }
+    
+    pub fn conservative() -> Self {
+        Self {
+            failure_threshold: 5,
+            timeout_ms: 10000,
+            reset_timeout_ms: 60000,
+            success_threshold: 3,
+            half_open_max_calls: 3,
+            sliding_window_size: 10,
+            enabled: true,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.failure_threshold == 0 {
+            return Err("Failure threshold must be greater than 0".to_string());
+        }
+        if self.success_threshold == 0 {
+            return Err("Success threshold must be greater than 0".to_string());
+        }
+        if self.timeout_ms == 0 {
+            return Err("Timeout must be greater than 0".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl Default for CircuitBreakerConfig {
+    fn default() -> Self {
+        Self::conservative()
+    }
+}
 
 /// User preference for retry and recovery settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -365,6 +488,7 @@ pub mod settings_utils {
             failure_threshold: 5,
             success_threshold: 3,
             timeout_ms: 5000,
+            reset_timeout_ms: 30000,
             half_open_max_calls: 3,
             sliding_window_size: 10,
             enabled: true,

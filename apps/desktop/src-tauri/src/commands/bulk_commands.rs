@@ -694,10 +694,11 @@ fn parse_csv_file(file_path: &str) -> Result<CSVParseResult, Box<dyn std::error:
         }
     }
 
+    let total_rows = rows.len() as i64;
     Ok(CSVParseResult {
         headers: headers.iter().map(|h| h.to_string()).collect(),
         rows,
-        total_rows: rows.len() as i64,
+        total_rows,
         errors,
     })
 }

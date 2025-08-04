@@ -1,9 +1,20 @@
 use crate::database::Database;
 use std::sync::Mutex;
+use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 use tracing::info;
+use serde::Serialize;
 
 type DatabaseState = Mutex<Option<Database>>;
+
+#[derive(Serialize)]
+pub struct FileInfo {
+    name: String,
+    size: u64,
+    path: String,
+    #[serde(rename = "type")]
+    file_type: String,
+}
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
@@ -69,4 +80,39 @@ pub async fn is_first_launch(db_state: State<'_, DatabaseState>) -> Result<bool,
         }
         None => Ok(true), // If DB isn't initialized, it's definitely first launch
     }
+}
+
+#[tauri::command]
+pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
+    let file_path = Path::new(&path);
+    
+    // Check if file exists
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+    
+    // Get file metadata
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    
+    // Get file name
+    let name = file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    
+    // Get file extension to determine type
+    let file_type = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_uppercase())
+        .unwrap_or_else(|| "Unknown".to_string());
+    
+    Ok(FileInfo {
+        name,
+        size: metadata.len(),
+        path: path.clone(),
+        file_type,
+    })
 }

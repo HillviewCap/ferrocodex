@@ -62,6 +62,11 @@ export interface FirmwareUploadProgress {
   message?: string;
 }
 
+export interface ValidationResult {
+  isValid: boolean;
+  message?: string;
+}
+
 // Validation schemas
 export const FirmwareValidation = {
   vendor: {
@@ -98,48 +103,72 @@ export const FirmwareValidation = {
 };
 
 // Helper functions
-export const validateFirmwareVendor = (vendor: string): string | null => {
+export const validateFirmwareVendor = (vendor: string): ValidationResult => {
   if (vendor.length > FirmwareValidation.vendor.maxLength) {
-    return FirmwareValidation.vendor.message;
+    return {
+      isValid: false,
+      message: FirmwareValidation.vendor.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFirmwareModel = (model: string): string | null => {
+export const validateFirmwareModel = (model: string): ValidationResult => {
   if (model.length > FirmwareValidation.model.maxLength) {
-    return FirmwareValidation.model.message;
+    return {
+      isValid: false,
+      message: FirmwareValidation.model.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFirmwareVersion = (version: string): string | null => {
+export const validateFirmwareVersion = (version: string): ValidationResult => {
   if (!version.trim()) {
-    return 'Firmware version is required';
+    return {
+      isValid: false,
+      message: 'Firmware version is required'
+    };
   }
   if (version.length < FirmwareValidation.version.minLength) {
-    return `Version must be at least ${FirmwareValidation.version.minLength} character`;
+    return {
+      isValid: false,
+      message: `Version must be at least ${FirmwareValidation.version.minLength} character`
+    };
   }
   if (version.length > FirmwareValidation.version.maxLength) {
-    return `Version cannot exceed ${FirmwareValidation.version.maxLength} characters`;
+    return {
+      isValid: false,
+      message: `Version cannot exceed ${FirmwareValidation.version.maxLength} characters`
+    };
   }
   if (!FirmwareValidation.version.pattern.test(version)) {
-    return FirmwareValidation.version.message;
+    return {
+      isValid: false,
+      message: FirmwareValidation.version.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFirmwareNotes = (notes: string): string | null => {
+export const validateFirmwareNotes = (notes: string): ValidationResult => {
   if (notes.length > FirmwareValidation.notes.maxLength) {
-    return FirmwareValidation.notes.message;
+    return {
+      isValid: false,
+      message: FirmwareValidation.notes.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFirmwareFileSize = (size: number): string | null => {
+export const validateFirmwareFileSize = (size: number): ValidationResult => {
   if (size > FirmwareValidation.fileSize.maxSize) {
-    return FirmwareValidation.fileSize.message;
+    return {
+      isValid: false,
+      message: FirmwareValidation.fileSize.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
 export const formatFirmwareFileSize = (bytes: number | null | undefined): string => {
@@ -176,17 +205,9 @@ export const sortFirmwareVersions = (versions: FirmwareVersionInfo[]): FirmwareV
   });
 };
 
-export const validateFirmwareFileExtension = (filename: string): string | null => {
-  const extension = filename.split('.').pop()?.toLowerCase();
-  if (!extension) {
-    return 'File must have an extension';
-  }
-  
-  if (!FirmwareValidation.allowedExtensions.includes(extension)) {
-    return `File type .${extension} is not allowed. Allowed types: ${FirmwareValidation.allowedExtensions.join(', ')}`;
-  }
-  
-  return null;
+export const validateFirmwareFileExtension = (_filename: string): ValidationResult => {
+  // Accept all file types - no extension validation
+  return { isValid: true };
 };
 
 // Firmware Analysis Types
