@@ -329,10 +329,28 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   // Check if can navigate to next step
   canNavigateNext: (): boolean => {
     const { currentWorkflow } = get();
-    if (!currentWorkflow) return false;
+    if (!currentWorkflow) {
+      console.log('canNavigateNext: No current workflow');
+      return false;
+    }
 
+    console.log('canNavigateNext: Current step:', currentWorkflow.current_step);
+    console.log('canNavigateNext: Workflow data:', currentWorkflow.data);
+
+    // First check if step component has provided validation results
+    if (currentWorkflow.data.validation_results !== undefined) {
+      const stepValidation = currentWorkflow.data.validation_results;
+      const nextStep = getNextStep(currentWorkflow.current_step);
+      console.log('canNavigateNext: Using step validation:', stepValidation);
+      console.log('canNavigateNext: Next step available:', nextStep);
+      return stepValidation.is_valid && nextStep !== null;
+    }
+
+    // Fall back to central validation if no step-specific validation
     const validation = get().validateCurrentStep();
     const nextStep = getNextStep(currentWorkflow.current_step);
+    console.log('canNavigateNext: Using central validation:', validation);
+    console.log('canNavigateNext: Next step available:', nextStep);
     
     return validation.is_valid && nextStep !== null;
   },

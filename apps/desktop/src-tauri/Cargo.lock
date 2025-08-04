@@ -1426,6 +1426,7 @@ dependencies = [
  "csv",
  "flate2",
  "jsonschema",
+ "log",
  "once_cell",
  "pbkdf2",
  "rand 0.8.5",

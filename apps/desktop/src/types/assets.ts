@@ -116,6 +116,11 @@ export interface FileImportStatus {
   error?: string;
 }
 
+export interface ValidationResult {
+  isValid: boolean;
+  message?: string;
+}
+
 // Validation schemas
 export const AssetValidation = {
   name: {
@@ -180,16 +185,19 @@ export const validateConfigurationNotes = (notes: string): string | null => {
   return null;
 };
 
-export const validateFileSize = (size: number): string | null => {
+export const validateFileSize = (size: number): ValidationResult => {
   if (size > ConfigurationValidation.fileSize.maxSize) {
-    return ConfigurationValidation.fileSize.message;
+    return {
+      isValid: false,
+      message: ConfigurationValidation.fileSize.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFileExtension = (_filename: string): string | null => {
+export const validateFileExtension = (_filename: string): ValidationResult => {
   // Accept all file types - no extension validation
-  return null;
+  return { isValid: true };
 };
 
 export const formatFileSize = (bytes: number): string => {

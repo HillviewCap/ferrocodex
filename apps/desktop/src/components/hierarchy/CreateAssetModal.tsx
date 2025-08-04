@@ -22,7 +22,7 @@ import { AssetTypeSelector } from './AssetTypeSelector';
 import { AssetHierarchyPicker } from './AssetHierarchyPicker';
 import { validateAssetName, validateAssetDescription } from '../../types/assets';
 import { invoke } from '@tauri-apps/api/core';
-import { useAuthStore } from '../../store/auth';
+import useAuthStore from '../../store/auth';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -59,6 +59,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
     parent_id: initialParentId,
     asset_type: initialAssetType,
   });
+  const [, forceUpdate] = useState({});
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -317,7 +318,9 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
       case 1:
         return true; // Parent is optional
       case 2:
-        return !!formData.name && !validateAssetName(formData.name);
+        // Check the actual form field values, not formData which isn't updated until Next is clicked
+        const name = form.getFieldValue('name');
+        return !!name && !validateAssetName(name);
       default:
         return false;
     }
@@ -353,6 +356,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
           form={form}
           layout="vertical"
           initialValues={formData}
+          onValuesChange={() => forceUpdate({})}
         >
           <div style={{ minHeight: 300, marginBottom: 24 }}>
             {renderStepContent()}

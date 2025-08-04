@@ -461,7 +461,7 @@ pub async fn get_asset_path(
 }
 
 // Re-export tree navigation commands
-pub use crate::assets::tree_navigation::{
+pub use crate::assets::{
     batch_load_tree_nodes,
     search_tree_nodes,
     get_tree_statistics,

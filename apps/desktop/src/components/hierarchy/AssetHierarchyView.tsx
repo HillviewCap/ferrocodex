@@ -13,7 +13,8 @@ import {
   Breadcrumb,
   Divider,
   Empty,
-  Tooltip
+  Tooltip,
+  Modal
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -25,7 +26,10 @@ import {
   DatabaseOutlined,
   CalendarOutlined,
   UserOutlined,
-  SafetyOutlined
+  SafetyOutlined,
+  CloudUploadOutlined,
+  FileTextOutlined,
+  KeyOutlined
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
 import { CreateAssetModal } from './CreateAssetModal';
@@ -35,6 +39,9 @@ import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyE
 import { invoke } from '@tauri-apps/api/core';
 import { VaultInfo } from '../../types/vault';
 import VaultAccessIndicator from '../VaultAccessIndicator';
+import IdentityVault from '../IdentityVault';
+import QuickConfigImportModal from './QuickConfigImportModal';
+import QuickFirmwareUploadModal from './QuickFirmwareUploadModal';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -68,6 +75,10 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
   const [assetPath, setAssetPath] = useState<AssetInfo[]>([]);
   const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);
   const [vaultLoading, setVaultLoading] = useState(false);
+  const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [firmwareModalVisible, setFirmwareModalVisible] = useState(false);
+  const [vaultModalVisible, setVaultModalVisible] = useState(false);
+  const [assetFileStats, setAssetFileStats] = useState<{configCount: number, firmwareCount: number} | null>(null);
 
   // Load hierarchy on mount
   useEffect(() => {
@@ -106,6 +117,28 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         .finally(() => setVaultLoading(false));
     } else {
       setVaultInfo(null);
+    }
+  }, [selectedAsset, token]);
+
+  // Load asset file statistics
+  useEffect(() => {
+    if (selectedAsset && selectedAsset.asset_type === 'Device' && token) {
+      Promise.all([
+        invoke<any[]>('list_configurations_for_asset', { token, assetId: selectedAsset.id }).catch(() => []),
+        invoke<any[]>('list_firmware_for_asset', { token, assetId: selectedAsset.id }).catch(() => [])
+      ])
+        .then(([configs, firmware]) => {
+          setAssetFileStats({
+            configCount: configs.length,
+            firmwareCount: firmware.length
+          });
+        })
+        .catch(err => {
+          console.error('Failed to load asset file stats:', err);
+          setAssetFileStats({ configCount: 0, firmwareCount: 0 });
+        });
+    } else {
+      setAssetFileStats(null);
     }
   }, [selectedAsset, token]);
 
@@ -168,6 +201,50 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
     }
   };
 
+  const handleAddConfig = () => {
+    if (selectedAsset && selectedAsset.asset_type === 'Device') {
+      setConfigModalVisible(true);
+    }
+  };
+
+  const handleUploadFirmware = () => {
+    if (selectedAsset && selectedAsset.asset_type === 'Device') {
+      setFirmwareModalVisible(true);
+    }
+  };
+
+  const handleConfigImportSuccess = () => {
+    setConfigModalVisible(false);
+    message.success('Configuration imported successfully!');
+    // Refresh file stats
+    if (selectedAsset && token) {
+      invoke<any[]>('list_configurations_for_asset', { token, assetId: selectedAsset.id })
+        .then(configs => {
+          setAssetFileStats(prev => prev ? { ...prev, configCount: configs.length } : null);
+        })
+        .catch(console.error);
+    }
+  };
+
+  const handleFirmwareUploadSuccess = () => {
+    setFirmwareModalVisible(false);
+    message.success('Firmware uploaded successfully!');
+    // Refresh file stats
+    if (selectedAsset && token) {
+      invoke<any[]>('list_firmware_for_asset', { token, assetId: selectedAsset.id })
+        .then(firmware => {
+          setAssetFileStats(prev => prev ? { ...prev, firmwareCount: firmware.length } : null);
+        })
+        .catch(console.error);
+    }
+  };
+
+  const handleManageVault = () => {
+    if (selectedAsset && selectedAsset.asset_type === 'Device') {
+      setVaultModalVisible(true);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -211,13 +288,34 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         extra={
           <Space>
             {isDevice && (
-              <Tooltip title="View Configuration History">
-                <Button 
-                  icon={<HistoryOutlined />} 
-                  onClick={handleViewHistory}
-                  type="text"
-                />
-              </Tooltip>
+              <>
+                <Tooltip title="Add Configuration">
+                  <Button 
+                    icon={<DatabaseOutlined />} 
+                    onClick={handleAddConfig}
+                    type="primary"
+                    size="small"
+                  >
+                    Add Config
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Upload Firmware">
+                  <Button 
+                    icon={<CloudUploadOutlined />} 
+                    onClick={handleUploadFirmware}
+                    size="small"
+                  >
+                    Add Firmware
+                  </Button>
+                </Tooltip>
+                <Tooltip title="View Configuration History">
+                  <Button 
+                    icon={<HistoryOutlined />} 
+                    onClick={handleViewHistory}
+                    type="text"
+                  />
+                </Tooltip>
+              </>
             )}
             <Tooltip title="Refresh">
               <Button 
@@ -284,6 +382,62 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
                 vaultId={vaultInfo?.vault_id || 0}
                 compact={true}
               />
+            </div>
+          )}
+
+          {/* Asset File Statistics */}
+          {isDevice && assetFileStats && (
+            <div>
+              <Text strong>Files: </Text>
+              <Space>
+                <div>
+                  <DatabaseOutlined style={{ color: '#1890ff', marginRight: 4 }} />
+                  <Text type="secondary">{assetFileStats.configCount} Config{assetFileStats.configCount !== 1 ? 's' : ''}</Text>
+                </div>
+                <div>
+                  <CloudUploadOutlined style={{ color: '#52c41a', marginRight: 4 }} />
+                  <Text type="secondary">{assetFileStats.firmwareCount} Firmware</Text>
+                </div>
+              </Space>
+            </div>
+          )}
+
+          {/* Quick Actions */}
+          {isDevice && (
+            <div>
+              <Text strong>Quick Actions: </Text>
+              <Space wrap style={{ marginTop: 8 }}>
+                <Button 
+                  size="small" 
+                  icon={<DatabaseOutlined />} 
+                  onClick={handleAddConfig}
+                  type="primary"
+                >
+                  Add Configuration
+                </Button>
+                <Button 
+                  size="small" 
+                  icon={<CloudUploadOutlined />} 
+                  onClick={handleUploadFirmware}
+                >
+                  Upload Firmware
+                </Button>
+                <Button 
+                  size="small" 
+                  icon={<KeyOutlined />} 
+                  onClick={handleManageVault}
+                >
+                  Identity Vault
+                </Button>
+                <Button 
+                  size="small" 
+                  icon={<HistoryOutlined />} 
+                  onClick={handleViewHistory}
+                  type="default"
+                >
+                  View History
+                </Button>
+              </Space>
             </div>
           )}
 
@@ -419,6 +573,62 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         initialParentId={createModalParentId}
         initialAssetType={createModalAssetType}
       />
+
+      {/* Quick Config Import Modal */}
+      {selectedAsset && (
+        <QuickConfigImportModal
+          visible={configModalVisible}
+          onCancel={() => setConfigModalVisible(false)}
+          onSuccess={handleConfigImportSuccess}
+          assetId={selectedAsset.id}
+          assetName={selectedAsset.name}
+        />
+      )}
+
+      {/* Quick Firmware Upload Modal */}
+      {selectedAsset && (
+        <QuickFirmwareUploadModal
+          visible={firmwareModalVisible}
+          onCancel={() => setFirmwareModalVisible(false)}
+          onSuccess={handleFirmwareUploadSuccess}
+          assetId={selectedAsset.id}
+          assetName={selectedAsset.name}
+        />
+      )}
+
+      {/* Identity Vault Modal */}
+      {selectedAsset && selectedAsset.asset_type === 'Device' && (
+        <Modal
+          title={
+            <Space>
+              <KeyOutlined />
+              <span>Identity Vault - {selectedAsset.name}</span>
+            </Space>
+          }
+          open={vaultModalVisible}
+          onCancel={() => setVaultModalVisible(false)}
+          footer={null}
+          width={1000}
+          destroyOnClose
+        >
+          <IdentityVault 
+            asset={{
+              id: selectedAsset.id,
+              name: selectedAsset.name,
+              description: selectedAsset.description,
+              asset_type: selectedAsset.asset_type,
+              parent_id: selectedAsset.parent_id,
+              sort_order: selectedAsset.sort_order,
+              created_by: selectedAsset.created_by,
+              created_by_username: '', // This would need to be fetched
+              created_at: selectedAsset.created_at,
+              version_count: 0, // This would need to be fetched
+              latest_version: null,
+              latest_version_notes: null,
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 };

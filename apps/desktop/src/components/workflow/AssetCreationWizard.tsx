@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Steps, Card, Button, Space, message, Spin, Modal } from 'antd';
 import { ExclamationCircleOutlined, SaveOutlined } from '@ant-design/icons';
 import { useWorkflowStore } from '../../store/workflow';
-import { WorkflowStepName, WORKFLOW_STEPS, getStepIndex } from '../../types/workflow';
+import { WorkflowStepName, WORKFLOW_STEPS, getStepIndex, ValidationError, WorkflowData } from '../../types/workflow';
 import { AssetTypeSelectionStep } from './steps/AssetTypeSelectionStep';
 import { HierarchySelectionStep } from './steps/HierarchySelectionStep';
 import { MetadataConfigurationStep } from './steps/MetadataConfigurationStep';
@@ -147,14 +147,43 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
     }
   };
 
+  const handleDataChange = async (data: Partial<WorkflowData>) => {
+    if (!currentWorkflow) return;
+    
+    try {
+      await updateStep(currentWorkflow.current_step, data);
+    } catch (error) {
+      console.error('Failed to update step data:', error);
+    }
+  };
+
+  const handleValidation = (isValid: boolean, errors?: ValidationError[]) => {
+    // Store validation results in the workflow data for canNavigateNext to use
+    if (currentWorkflow) {
+      const validationResults = {
+        is_valid: isValid,
+        errors: errors || [],
+        warnings: []
+      };
+      handleDataChange({ validation_results: validationResults });
+    }
+  };
+
   const renderStepContent = () => {
     if (!currentWorkflow) {
       return <div>Loading workflow...</div>;
     }
 
+    // Debug logging
+    console.log('Current step key:', currentStepKey);
+    console.log('Current workflow data:', currentWorkflow.data);
+    console.log('Can navigate next:', canNavigateNext());
+
     const baseProps = {
       workflowId: currentWorkflow.id,
       data: currentWorkflow.data,
+      onDataChange: handleDataChange,
+      onValidation: handleValidation,
       onNext: handleNext,
       onPrevious: handlePrevious
     };
@@ -171,7 +200,7 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
       case 'review_confirmation':
         return <ReviewConfirmationStep {...baseProps} onComplete={handleComplete} />;
       default:
-        return <div>Unknown step</div>;
+        return <div>Unknown step: {currentStepKey}</div>;
     }
   };
 

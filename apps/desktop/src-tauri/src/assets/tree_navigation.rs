@@ -1,7 +1,7 @@
 // Enhanced tree navigation commands for virtualized tree performance
 
 use crate::auth::SessionManager;
-use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, AssetHierarchy};
+use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, AssetHierarchy, AssetType};
 use crate::database::Database;
 use crate::validation::InputSanitizer;
 use rusqlite::{params, Connection};
@@ -123,7 +123,7 @@ pub async fn batch_load_tree_nodes(
                 // Load node data
                 if let Ok(Some(node)) = load_node_hierarchy(&conn, *node_id, batch.max_depth.unwrap_or(1)) {
                     // Get metadata
-                    if let Ok(meta) = get_node_metadata(&conn, *node_id) {
+                    if let Ok(meta) = get_node_metadata_internal(&conn, *node_id) {
                         metadata.insert(*node_id, meta);
                     }
                     nodes.insert(*node_id, node);
@@ -364,7 +364,7 @@ pub async fn get_node_metadata(
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
-            get_node_metadata(&conn, node_id)
+            get_node_metadata_internal(&conn, node_id)
         }
         None => Err("Database not initialized".to_string()),
     }
@@ -383,7 +383,7 @@ fn load_node_hierarchy(conn: &Connection, node_id: i64, max_depth: i32) -> Resul
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
-            asset_type: row.get::<_, String>(3)?.into(),
+            asset_type: AssetType::from_str(&row.get::<_, String>(3)?).map_err(|_| rusqlite::Error::InvalidColumnType(3, "asset_type".to_string(), rusqlite::types::Type::Text))?,
             parent_id: row.get(4)?,
             sort_order: row.get(5)?,
             children: Vec::new(), // Will be populated below
@@ -416,7 +416,7 @@ fn load_children_hierarchy(conn: &Connection, parent_id: i64, max_depth: i32) ->
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
-            asset_type: row.get::<_, String>(3)?.into(),
+            asset_type: AssetType::from_str(&row.get::<_, String>(3)?).map_err(|_| rusqlite::Error::InvalidColumnType(3, "asset_type".to_string(), rusqlite::types::Type::Text))?,
             parent_id: row.get(4)?,
             sort_order: row.get(5)?,
             children: Vec::new(), // Will be populated recursively
@@ -441,7 +441,7 @@ fn load_children_hierarchy(conn: &Connection, parent_id: i64, max_depth: i32) ->
     Ok(children)
 }
 
-fn get_node_metadata(conn: &Connection, node_id: i64) -> Result<AssetMetadata, String> {
+fn get_node_metadata_internal(conn: &Connection, node_id: i64) -> Result<AssetMetadata, String> {
     // Get basic asset info
     let mut stmt = conn
         .prepare("SELECT asset_type, updated_at FROM assets WHERE id = ?")
@@ -631,7 +631,7 @@ fn search_assets(
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
-            asset_type: row.get::<_, String>(3)?.into(),
+            asset_type: AssetType::from_str(&row.get::<_, String>(3)?).map_err(|_| rusqlite::Error::InvalidColumnType(3, "asset_type".to_string(), rusqlite::types::Type::Text))?,
             parent_id: row.get(4)?,
             sort_order: row.get(5)?,
             children: Vec::new(), // Don't load children for search results

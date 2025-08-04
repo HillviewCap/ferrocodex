@@ -15,7 +15,7 @@ import {
 import type { TreeProps, TreeDataNode } from 'antd/es/tree';
 import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
 import { invoke } from '@tauri-apps/api/core';
-import { useAuthStore } from '../../store/auth';
+import useAuthStore from '../../store/auth';
 
 const { Text } = Typography;
 

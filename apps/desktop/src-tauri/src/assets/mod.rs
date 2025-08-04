@@ -4,6 +4,15 @@ use serde::{Deserialize, Serialize};
 
 pub mod tree_navigation;
 
+// Re-export tree navigation commands
+pub use tree_navigation::{
+    batch_load_tree_nodes,
+    search_tree_nodes,
+    get_tree_statistics,
+    preload_tree_nodes,
+    get_node_metadata,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub id: i64,
@@ -117,6 +126,9 @@ pub struct MoveAssetRequest {
     pub new_parent_id: Option<i64>,
     pub new_sort_order: Option<i64>,
 }
+
+// Type alias for service compatibility
+pub type AssetService = SqliteAssetRepository<'static>;
 
 pub trait AssetRepository {
     fn create_asset(&self, request: CreateAssetRequest) -> Result<Asset>;
