@@ -48,6 +48,11 @@ pub enum AuditEventType {
     VaultPermissionExpired,
     // Password rotation event for Story 4.6
     VaultSecretRotated,
+    // Metadata schema events for Story 5.2A
+    MetadataSchemaCreated,
+    MetadataSchemaUpdated,
+    MetadataSchemaDeleted,
+    FieldTemplateImported,
 }
 
 impl fmt::Display for AuditEventType {
@@ -94,6 +99,11 @@ impl fmt::Display for AuditEventType {
             AuditEventType::VaultPermissionDenied => write!(f, "VAULT_014"),
             AuditEventType::VaultPermissionExpired => write!(f, "VAULT_015"),
             AuditEventType::VaultSecretRotated => write!(f, "VAULT_016"),
+            // Metadata schema events
+            AuditEventType::MetadataSchemaCreated => write!(f, "META_001"),
+            AuditEventType::MetadataSchemaUpdated => write!(f, "META_002"),
+            AuditEventType::MetadataSchemaDeleted => write!(f, "META_003"),
+            AuditEventType::FieldTemplateImported => write!(f, "META_004"),
         }
     }
 }
@@ -114,6 +124,48 @@ pub struct AuditEvent {
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
     pub timestamp: String,
+}
+
+// Thread-safe service wrapper
+pub struct AuditService {
+    db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>,
+}
+
+impl AuditService {
+    pub fn new(db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>) -> Self {
+        Self { db_manager }
+    }
+
+    /// Log workflow event
+    pub async fn log_workflow_event(
+        &self,
+        user_id: i64,
+        workflow_id: &str,
+        event_type: &str,
+        details: Option<&str>,
+    ) -> Result<()> {
+        let event_request = AuditEventRequest {
+            event_type: AuditEventType::DatabaseOperation, // Using generic type for workflow events
+            user_id: Some(user_id),
+            username: None,
+            admin_user_id: None,
+            admin_username: None,
+            target_user_id: None,
+            target_username: None,
+            description: format!("Workflow {}: {}", event_type, details.unwrap_or("")),
+            metadata: Some(format!(r#"{{"workflow_id": "{}", "event_type": "{}"}}"#, workflow_id, event_type)),
+            ip_address: None,
+            user_agent: None,
+        };
+
+        let db_manager = self.db_manager.lock().map_err(|e| {
+            anyhow::anyhow!("Failed to acquire database lock: {}", e)
+        })?;
+        let conn = db_manager.get_connection();
+        let repo = SqliteAuditRepository::new(conn);
+        repo.log_event(&event_request)?;
+        Ok(())
+    }
 }
 
 pub trait AuditRepository {
@@ -147,6 +199,32 @@ pub struct SqliteAuditRepository<'a> {
 impl<'a> SqliteAuditRepository<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
+    }
+
+    /// Log a workflow-related audit event
+    pub async fn log_workflow_event(
+        &self,
+        user_id: i64,
+        workflow_id: &str,
+        event_type: &str,
+        details: Option<&str>,
+    ) -> Result<()> {
+        let event_request = AuditEventRequest {
+            event_type: AuditEventType::DatabaseOperation, // Using generic type for workflow events
+            user_id: Some(user_id),
+            username: None,
+            admin_user_id: None,
+            admin_username: None,
+            target_user_id: None,
+            target_username: None,
+            description: format!("Workflow {}: {}", event_type, details.unwrap_or("")),
+            metadata: Some(format!(r#"{{"workflow_id": "{}", "event_type": "{}"}}"#, workflow_id, event_type)),
+            ip_address: None,
+            user_agent: None,
+        };
+
+        self.log_event(&event_request)?;
+        Ok(())
     }
 
     fn row_to_audit_event(row: &Row) -> rusqlite::Result<AuditEvent> {
@@ -571,6 +649,88 @@ pub fn create_vault_permission_denied_event(
         metadata: Some(format!(r#"{{"vault_id": {}, "permission_type": "{}"}}"#, vault_id, permission_type)),
         ip_address: None,
         user_agent: None,
+    }
+}
+
+// Additional helper functions for security validation audit logging
+use crate::database::Database;
+
+/// Log a security event to the audit trail
+pub async fn log_security_event(
+    db: &Database,
+    user_id: i64,
+    event_type: &str,
+    details: &str,
+    result: &str,
+) -> Result<()> {
+    let conn = db.get_connection();
+    let audit_repo = SqliteAuditRepository::new(conn);
+    
+    let event_request = AuditEventRequest {
+        event_type: AuditEventType::SecurityViolation, // Generic security event type
+        user_id: Some(user_id),
+        username: None, // Could be populated if needed
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: None,
+        target_username: None,
+        description: format!("{}: {} ({})", event_type, details, result),
+        metadata: Some(format!(r#"{{"event_type": "{}", "result": "{}"}}"#, event_type, result)),
+        ip_address: None,
+        user_agent: None,
+    };
+
+    audit_repo.log_event(&event_request)?;
+    Ok(())
+}
+
+/// Count security events by type pattern
+pub async fn count_security_events(db: &Database, event_pattern: &str) -> Result<u64> {
+    let conn = db.get_connection();
+    
+    let mut stmt = conn.prepare(
+        "SELECT COUNT(*) FROM audit_events WHERE description LIKE ?1"
+    )?;
+    
+    let count: i64 = stmt.query_row([format!("%{}%", event_pattern)], |row| {
+        row.get(0)
+    })?;
+    
+    Ok(count as u64)
+}
+
+/// Count security events by result
+pub async fn count_security_events_by_result(db: &Database, event_pattern: &str, result: &str) -> Result<u64> {
+    let conn = db.get_connection();
+    
+    let mut stmt = conn.prepare(
+        "SELECT COUNT(*) FROM audit_events WHERE description LIKE ?1 AND description LIKE ?2"
+    )?;
+    
+    let count: i64 = stmt.query_row([format!("%{}%", event_pattern), format!("%({})%", result)], |row| {
+        row.get(0)
+    })?;
+    
+    Ok(count as u64)
+}
+
+/// Get timestamp of last security event
+pub async fn get_last_security_event_timestamp(db: &Database, event_pattern: &str) -> Result<Option<String>> {
+    let conn = db.get_connection();
+    
+    let mut stmt = conn.prepare(
+        "SELECT timestamp FROM audit_events WHERE description LIKE ?1 ORDER BY timestamp DESC LIMIT 1"
+    )?;
+    
+    let result = stmt.query_row([format!("%{}%", event_pattern)], |row| {
+        let timestamp: String = row.get(0)?;
+        Ok(timestamp)
+    });
+    
+    match result {
+        Ok(timestamp) => Ok(Some(timestamp)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
     }
 }
 

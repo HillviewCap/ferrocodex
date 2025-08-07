@@ -1,7 +1,7 @@
 // Configuration management commands
 
 use crate::auth::SessionManager;
-use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest};
+use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest, AssetType};
 use crate::configurations::{ConfigurationRepository, SqliteConfigurationRepository, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, FileMetadata, CreateConfigurationRequest};
 use crate::branches::{BranchRepository, SqliteBranchRepository};
 use crate::users::UserRole;
@@ -104,6 +104,8 @@ pub async fn import_configuration(
             let asset_request = CreateAssetRequest {
                 name: asset_name.clone(),
                 description: format!("Configuration asset - imported from {}", file_name),
+                asset_type: AssetType::Device,
+                parent_id: None,
                 created_by: session.user_id,
             };
 
@@ -142,6 +144,125 @@ pub async fn import_configuration(
                     error!("Failed to store configuration: {}", e);
                     // Clean up asset if configuration storage failed
                     let _ = asset_repo.delete_asset(asset.id);
+                    Err(format!("Failed to store configuration: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn import_configuration_for_asset(
+    token: String,
+    asset_id: i64,
+    file_path: String,
+    version_notes: String,
+    classification: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+    rate_limiter: State<'_, RateLimiterState>,
+) -> Result<(), String> {
+    // Check rate limiting
+    let rate_limiter_guard = rate_limiter.lock()
+        .map_err(|_| "Failed to acquire rate limiter lock".to_string())?;
+    if let Err(e) = rate_limiter_guard.check_rate_limit(&format!("import_config_{}", token)) {
+        return Err(e);
+    }
+    drop(rate_limiter_guard);
+
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    // Validate inputs
+    let version_notes = InputSanitizer::sanitize_string(&version_notes);
+    let classification = InputSanitizer::sanitize_string(&classification);
+
+    if version_notes.len() > 1000 {
+        return Err("Version notes cannot exceed 1000 characters".to_string());
+    }
+
+    // Check for malicious input
+    if InputSanitizer::is_potentially_malicious(&version_notes) || InputSanitizer::is_potentially_malicious(&classification) {
+        error!("Potentially malicious input detected in import_configuration_for_asset");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+
+    // Validate file path
+    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
+    }
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+            let config_repo = SqliteConfigurationRepository::new(db.get_connection());
+            
+            let start_time = std::time::Instant::now();
+            
+            // Verify the asset exists
+            let _asset = match asset_repo.get_asset_by_id(asset_id) {
+                Ok(Some(asset)) => asset,
+                Ok(None) => return Err("Asset not found".to_string()),
+                Err(e) => {
+                    error!("Failed to retrieve asset: {}", e);
+                    return Err("Failed to retrieve asset".to_string());
+                }
+            };
+            
+            // Read file content
+            let file_content = match fs::read(&file_path) {
+                Ok(content) => content,
+                Err(e) => {
+                    error!("Failed to read file: {}", e);
+                    return Err(format!("Failed to read file: {}", e));
+                }
+            };
+            
+            let file_name = std::path::Path::new(&file_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            // Store configuration
+            let config_request = CreateConfigurationRequest {
+                asset_id,
+                file_name,
+                file_content,
+                author: session.user_id,
+                notes: version_notes,
+            };
+            
+            match config_repo.store_configuration(config_request) {
+                Ok(_) => {
+                    let duration = start_time.elapsed();
+                    
+                    // Log performance metrics
+                    if duration.as_secs() >= 2 {
+                        warn!("Import operation took {} seconds, exceeding 2-second requirement", duration.as_secs_f64());
+                    } else {
+                        info!("Import completed in {:.2} seconds", duration.as_secs_f64());
+                    }
+                    
+                    info!("Configuration imported by {} for asset ID: {}", session.username, asset_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to store configuration: {}", e);
                     Err(format!("Failed to store configuration: {}", e))
                 }
             }

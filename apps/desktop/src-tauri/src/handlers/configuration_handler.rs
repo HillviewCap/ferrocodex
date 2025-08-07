@@ -1,6 +1,6 @@
 // Configuration business logic handlers
 
-use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest};
+use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, CreateAssetRequest, AssetType};
 use crate::configurations::{ConfigurationRepository, SqliteConfigurationRepository, ConfigurationVersionInfo, ConfigurationStatus, StatusChangeRecord, FileMetadata, CreateConfigurationRequest};
 use crate::branches::{BranchRepository, SqliteBranchRepository};
 use crate::users::UserRole;
@@ -44,6 +44,8 @@ impl ConfigurationHandler {
         let asset_request = CreateAssetRequest {
             name: asset_name.to_string(),
             description: format!("Configuration asset - imported from {}", file_name),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: user_id,
         };
 

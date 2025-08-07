@@ -2,15 +2,23 @@ export interface Asset {
   id: number;
   name: string;
   description: string;
+  asset_type: AssetType;
+  parent_id: number | null;
+  sort_order: number;
   created_by: number;
   created_at: string;
   updated_at: string;
 }
 
+export type AssetType = 'Folder' | 'Device';
+
 export interface AssetInfo {
   id: number;
   name: string;
   description: string;
+  asset_type: AssetType;
+  parent_id: number | null;
+  sort_order: number;
   created_by: number;
   created_by_username: string;
   created_at: string;
@@ -72,6 +80,27 @@ export interface FileMetadata {
 export interface CreateAssetRequest {
   name: string;
   description: string;
+  asset_type: AssetType;
+  parent_id?: number | null;
+}
+
+export interface AssetHierarchy {
+  id: number;
+  name: string;
+  description: string;
+  asset_type: AssetType;
+  parent_id: number | null;
+  sort_order: number;
+  children: AssetHierarchy[];
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MoveAssetRequest {
+  asset_id: number;
+  new_parent_id?: number | null;
+  new_sort_order?: number;
 }
 
 export interface ImportConfigurationRequest {
@@ -85,6 +114,11 @@ export interface FileImportStatus {
   progress: number;
   status: string;
   error?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  message?: string;
 }
 
 // Validation schemas
@@ -151,16 +185,19 @@ export const validateConfigurationNotes = (notes: string): string | null => {
   return null;
 };
 
-export const validateFileSize = (size: number): string | null => {
+export const validateFileSize = (size: number): ValidationResult => {
   if (size > ConfigurationValidation.fileSize.maxSize) {
-    return ConfigurationValidation.fileSize.message;
+    return {
+      isValid: false,
+      message: ConfigurationValidation.fileSize.message
+    };
   }
-  return null;
+  return { isValid: true };
 };
 
-export const validateFileExtension = (_filename: string): string | null => {
+export const validateFileExtension = (_filename: string): ValidationResult => {
   // Accept all file types - no extension validation
-  return null;
+  return { isValid: true };
 };
 
 export const formatFileSize = (bytes: number): string => {

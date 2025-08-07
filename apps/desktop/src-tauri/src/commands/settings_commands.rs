@@ -150,12 +150,12 @@ pub async fn apply_settings_preset(
 }
 
 #[tauri::command]
-pub async fn get_operation_retry_configs() -> Result<std::collections::HashMap<String, crate::error_handling::RetryStrategy>, String> {
+pub async fn get_operation_retry_configs() -> Result<std::collections::HashMap<String, crate::user_settings::RetryStrategy>, String> {
     Ok(settings_utils::get_default_operation_configs())
 }
 
 #[tauri::command]
-pub async fn get_circuit_breaker_configs() -> Result<std::collections::HashMap<String, crate::error_handling::CircuitBreakerConfig>, String> {
+pub async fn get_circuit_breaker_configs() -> Result<std::collections::HashMap<String, crate::user_settings::CircuitBreakerConfig>, String> {
     Ok(settings_utils::get_default_circuit_breaker_configs())
 }
 

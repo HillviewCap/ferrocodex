@@ -1,0 +1,1472 @@
+    Checking ferrocodex v0.4.3 (F:\code\ferrocodex\apps\desktop\src-tauri)
+warning: unused imports: `AssetInfo`, `AssetRepository`, and `SqliteAssetRepository`
+ --> src\assets\tree_navigation.rs:4:21
+  |
+4 | use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, AssetHierarchy, AssetType};
+  |                     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `uuid::Uuid`
+ --> src\firmware_analysis\queue.rs:8:5
+  |
+8 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> src\recovery\mod.rs:6:5
+  |
+6 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused imports: `Arc` and `Mutex`
+ --> src\vault\access_control.rs:3:17
+  |
+3 | use std::sync::{Arc, Mutex};
+  |                 ^^^  ^^^^^
+
+warning: unused imports: `AccessResult`, `AccessType`, `SqliteVaultRepository`, `VaultAccessControlService`, and `VaultRepository`
+ --> src\vault\secure_repository.rs:7:5
+  |
+7 |     VaultRepository, SqliteVaultRepository, IdentityVault, VaultInfo, VaultSecret, AddSecretRequest, 
+  |     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+8 |     VaultAccessControlService, PermissionType, AccessType, AccessResult, VaultVersion,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^                  ^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> src\vault\rotation.rs:7:5
+  |
+7 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+ --> src\error_handling\retry.rs:5:5
+  |
+5 | use std::pin::Pin;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+ --> src\error_handling\circuit_breaker.rs:4:5
+  |
+4 | use std::pin::Pin;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `Duration`
+ --> src\error_handling\circuit_breaker.rs:6:17
+  |
+6 | use std::time::{Duration, Instant};
+  |                 ^^^^^^^^
+
+warning: unused import: `tokio::time::sleep`
+ --> src\error_handling\circuit_breaker.rs:7:5
+  |
+7 | use tokio::time::sleep;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CircuitBreaker` and `RetryResult`
+ --> src\error_handling\recovery_coordinator.rs:5:5
+  |
+5 |     RetryResult,
+  |     ^^^^^^^^^^^
+6 |     CircuitBreaker, 
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+  --> src\error_handling\recovery_coordinator.rs:16:5
+   |
+16 | use std::pin::Pin;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `tokio::time::sleep`
+  --> src\error_handling\recovery_coordinator.rs:19:5
+   |
+19 | use tokio::time::sleep;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::time::Duration`
+ --> src\error_handling\user_notifications.rs:6:5
+  |
+6 | use std::time::Duration;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SystemDegradationLevel`
+ --> src\error_handling\degradation_preferences.rs:2:91
+  |
+2 | use crate::error_handling::graceful_degradation::{FeatureAvailability, FeatureImportance, SystemDegradationLevel};
+  |                                                                                           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `EnhancedError`, `ErrorDomain`, `ErrorSeverity`, and `RecoveryStrategy`
+ --> src\error_handling\ui_status.rs:1:29
+  |
+1 | use crate::error_handling::{EnhancedError, ErrorDomain, ErrorSeverity, RecoveryStrategy};
+  |                             ^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NotificationPriority` and `SystemDegradationNotification`
+ --> src\error_handling\ui_status.rs:4:74
+  |
+4 | ...ions::{DegradationNotification, SystemDegradationNotification, NotificationType, NotificationPriority};
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `recovery_coordinator::*`
+  --> src\error_handling\mod.rs:28:9
+   |
+28 | pub use recovery_coordinator::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `service_provider::*`
+  --> src\error_handling\mod.rs:29:9
+   |
+29 | pub use service_provider::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `offline_providers::*`
+  --> src\error_handling\mod.rs:30:9
+   |
+30 | pub use offline_providers::*;
+   |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `graceful_degradation::*`
+  --> src\error_handling\mod.rs:31:9
+   |
+31 | pub use graceful_degradation::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `user_notifications::*`
+  --> src\error_handling\mod.rs:32:9
+   |
+32 | pub use user_notifications::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `enhanced_cache::*`
+  --> src\error_handling\mod.rs:33:9
+   |
+33 | pub use enhanced_cache::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `degradation_preferences::*`
+  --> src\error_handling\mod.rs:34:9
+   |
+34 | pub use degradation_preferences::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ui_status::*`
+  --> src\error_handling\mod.rs:35:9
+   |
+35 | pub use ui_status::*;
+   |         ^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\metadata\performance.rs:4:5
+  |
+4 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\metadata\api\mod.rs:4:5
+  |
+4 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+ --> src\metadata\api\crud.rs:2:13
+  |
+2 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused imports: `AppliedFix`, `FieldUpdate`, `FixResults`, `MetadataRelationship`, `SchemaDependency`, `SimilarAsset`, `TimePeriod`, `UpdateOperation`, and `UsageAnalytics`
+  --> src\metadata\api\crud.rs:13:5
+   |
+13 |     FixResults, AppliedFix, MetadataRelationship, SimilarAsset, SchemaDependency,
+   |     ^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+14 |     TimePeriod, UsageAnalytics, FieldUpdate, UpdateOperation, ValidationResult, ValidationError,
+   |     ^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `AssetMetadataSchema` and `MetadataRepository`
+ --> src\metadata\api\query.rs:4:38
+  |
+4 | use crate::metadata::{AssetMetadata, AssetMetadataSchema, SqliteMetadataRepository, MetadataRepository};
+  |                                      ^^^^^^^^^^^^^^^^^^^                            ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SortDirection`
+ --> src\metadata\api\query.rs:6:25
+  |
+6 | use super::{Pagination, SortDirection};
+  |                         ^^^^^^^^^^^^^
+
+warning: unused import: `ApiResponse`
+ --> src\metadata\api\bulk.rs:8:57
+  |
+8 | use super::{MetadataValidationRequest, PartialMetadata, ApiResponse, ValidationResult, ValidationError};
+  |                                                         ^^^^^^^^^^^
+
+warning: unused import: `ValidationResult`
+ --> src\metadata\api\export.rs:4:59
+  |
+4 | use crate::metadata::{AssetMetadata, AssetMetadataSchema, ValidationResult, ValidationError, SqliteMetadataRepository, MetadataRepository};
+  |                                                           ^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::Pagination`
+ --> src\metadata\api\export.rs:6:5
+  |
+6 | use super::Pagination;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::io::Write`
+ --> src\metadata\api\export.rs:9:5
+  |
+9 | use std::io::Write;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `performance::*`
+  --> src\metadata\mod.rs:16:9
+   |
+16 | pub use performance::*;
+   |         ^^^^^^^^^^^^^^
+
+warning: unused import: `api::*`
+  --> src\metadata\mod.rs:17:9
+   |
+17 | pub use api::*;
+   |         ^^^^^^
+
+warning: unused import: `regex::Regex`
+ --> src\security\mod.rs:2:5
+  |
+2 | use regex::Regex;
+  |     ^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashSet`
+ --> src\security\mod.rs:4:5
+  |
+4 | use std::collections::HashSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `debug` and `warn`
+ --> src\security\asset_name_validator.rs:4:22
+  |
+4 | use tracing::{error, warn, info, debug};
+  |                      ^^^^        ^^^^^
+
+warning: unused import: `Connection`
+ --> src\workflow\repository.rs:5:24
+  |
+5 | use rusqlite::{params, Connection, Row};
+  |                        ^^^^^^^^^^
+
+warning: unused import: `WorkflowType`
+  --> src\workflow\service.rs:16:20
+   |
+16 |     WorkflowDraft, WorkflowType, WorkflowStatus, WorkflowStepName, WorkflowData,
+   |                    ^^^^^^^^^^^^
+
+warning: unused import: `WorkflowError`
+  --> src\workflow\validation.rs:12:5
+   |
+12 |     WorkflowError, WorkflowResult, WorkflowStepName, WorkflowData,
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\associations\mod.rs:4:5
+  |
+4 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\bulk\operations.rs:4:5
+  |
+4 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `DateTime`
+ --> src\bulk\operations.rs:6:14
+  |
+6 | use chrono::{DateTime, Utc};
+  |              ^^^^^^^^
+
+warning: unused imports: `AuditRepository`, `SqliteAuditRepository`, and `create_user_created_event`
+ --> src\commands\auth_commands.rs:3:20
+  |
+3 | use crate::audit::{AuditRepository, SqliteAuditRepository, create_user_created_event};
+  |                    ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InputSanitizer`, `PasswordValidator`, and `UsernameValidator`
+ --> src\commands\auth_commands.rs:4:25
+  |
+4 | use crate::validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
+  |                         ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `batch_load_tree_nodes`, `get_node_metadata`, `get_tree_statistics`, `preload_tree_nodes`, and `search_tree_nodes`
+   --> src\commands\asset_commands.rs:465:5
+    |
+465 |     batch_load_tree_nodes,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+466 |     search_tree_nodes,
+    |     ^^^^^^^^^^^^^^^^^
+467 |     get_tree_statistics,
+    |     ^^^^^^^^^^^^^^^^^^^
+468 |     preload_tree_nodes,
+    |     ^^^^^^^^^^^^^^^^^^
+469 |     get_node_metadata,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `VaultRepository`
+  --> src\commands\firmware_commands.rs:13:20
+   |
+13 | use crate::vault::{VaultRepository, SqliteVaultRepository};
+   |                    ^^^^^^^^^^^^^^^
+
+warning: unused import: `verify_password`
+ --> src\commands\vault_commands.rs:4:35
+  |
+4 | use crate::auth::{SessionManager, verify_password};
+  |                                   ^^^^^^^^^^^^^^^
+
+warning: unused import: `UserInfo`
+ --> src\commands\vault_commands.rs:5:68
+  |
+5 | use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
+  |                                                                    ^^^^^^^^
+
+warning: unused imports: `AuditEventRequest` and `AuditEventType`
+ --> src\commands\vault_commands.rs:6:60
+  |
+6 | use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_vault_access_granted_event, create_v...
+  |                                                            ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `rusqlite::Connection`
+  --> src\commands\vault_commands.rs:24:5
+   |
+24 | use rusqlite::Connection;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Arc`
+  --> src\commands\vault_commands.rs:25:17
+   |
+25 | use std::sync::{Arc, Mutex};
+   |                 ^^^
+
+warning: unused import: `AppHandle`
+  --> src\commands\vault_commands.rs:26:13
+   |
+26 | use tauri::{AppHandle, State};
+   |             ^^^^^^^^^
+
+warning: unused import: `warn`
+  --> src\commands\vault_commands.rs:27:28
+   |
+27 | use tracing::{error, info, warn};
+   |                            ^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src\commands\vault_commands.rs:28:13
+   |
+28 | use serde::{Serialize, Deserialize};
+   |             ^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `RecoveryExporter`
+ --> src\commands\recovery_commands.rs:5:23
+  |
+5 | use crate::recovery::{RecoveryExporter, RecoveryImporter, RecoveryManifest, RecoveryImportRequest};
+  |                       ^^^^^^^^^^^^^^^^
+
+warning: unused import: `AuditRepository`
+ --> src\commands\recovery_commands.rs:9:20
+  |
+9 | use crate::audit::{AuditRepository, SqliteAuditRepository};
+  |                    ^^^^^^^^^^^^^^^
+
+warning: unused import: `info`
+  --> src\commands\recovery_commands.rs:13:22
+   |
+13 | use tracing::{error, info};
+   |                      ^^^^
+
+warning: unused import: `error`
+ --> src\commands\settings_commands.rs:9:15
+  |
+9 | use tracing::{error, info};
+  |               ^^^^^
+
+warning: unused imports: `ConflictResolutionData`, `FixResults`, `MetadataRelationship`, `SchemaDependency`, `SimilarAsset`, `SyncJobConfig`, `SyncProgress`, `TimePeriod`, `TransformationConfig`, `TransformationTemplate`, `UsageAnalytics`, and `WebhookStatus`
+  --> src\commands\metadata_commands.rs:10:9
+   |
+10 |         FixResults, MetadataRelationship, SimilarAsset, SchemaDependency, TimePeriod,
+   |         ^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^
+11 |         UsageAnalytics, MetadataQuery, FieldStatsConfig, FieldStatistics, SearchConfig,
+   |         ^^^^^^^^^^^^^^
+...
+16 |         ApiInfo, ExternalMappingConfig, WebhookConfig, WebhookStatus, ExternalSyncConfig,
+   |                                                        ^^^^^^^^^^^^^
+17 |         SyncResults, SyncJobConfig, SyncProgress, ConflictResolutionData, TransformationConfig,
+   |                      ^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^
+18 |         TransformationTemplate, MetadataCrudApi, MetadataQueryApi, MetadataBulkApi,
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+ --> src\commands\workflow_commands.rs:6:13
+  |
+6 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\commands\workflow_commands.rs:7:5
+  |
+7 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `WorkflowService` and `WorkflowStateManager`
+  --> src\commands\workflow_commands.rs:10:5
+   |
+10 |     WorkflowService, WorkflowStateManager, WorkflowType, WorkflowStepName, WorkflowData,
+   |     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::auth::SessionManager`
+  --> src\commands\bulk_commands.rs:14:5
+   |
+14 | use crate::auth::SessionManager;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `workflow_commands::*`
+  --> src\commands\mod.rs:31:9
+   |
+31 | pub use workflow_commands::*;
+   |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `association_commands::*`
+  --> src\commands\mod.rs:32:9
+   |
+32 | pub use association_commands::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `User`
+ --> src\handlers\auth_handler.rs:6:87
+  |
+6 | use crate::users::{CreateUserRequest, UserRepository, SqliteUserRepository, UserRole, User};
+  |                                                                                       ^^^^
+
+warning: unused imports: `SqliteUserRepository`, `UserInfo`, `UserRepository`, and `UserRole`
+ --> src\handlers\user_handler.rs:4:20
+  |
+4 | use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
+  |                    ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^  ^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\user_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Asset`
+ --> src\handlers\asset_handler.rs:3:92
+  |
+3 | use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, Asset, DashboardStats, AssetType};
+  |                                                                                            ^^^^^
+
+warning: unused import: `rusqlite::Connection`
+ --> src\handlers\asset_handler.rs:6:5
+  |
+6 | use rusqlite::Connection;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BranchRepository` and `SqliteBranchRepository`
+ --> src\handlers\branch_handler.rs:4:23
+  |
+4 | use crate::branches::{BranchRepository, SqliteBranchRepository};
+  |                       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\branch_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `FirmwareRepository` and `SqliteFirmwareRepository`
+ --> src\handlers\firmware_handler.rs:4:23
+  |
+4 | use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository};
+  |                       ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\firmware_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `UserRepository`
+ --> src\handlers\vault_handler.rs:5:20
+  |
+5 | use crate::users::{UserRepository, SqliteUserRepository, UserRole};
+  |                    ^^^^^^^^^^^^^^
+
+warning: unused imports: `AuditEventRequest`, `AuditEventType`, and `AuditRepository`
+ --> src\handlers\vault_handler.rs:6:20
+  |
+6 | use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType};
+  |                    ^^^^^^^^^^^^^^^                         ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `BatchRotationService`, `CategoryWithChildren`, `CreateCategoryRequest`, `CreatePermissionRequest`, `CreateRotationBatchRequest`, `DeleteVaultSecretRequest`, `GeneratePasswordRequest`, `GrantVaultAccessRequest`, `PasswordHistory`, `PasswordRotationHistory`, `PasswordRotationRequest`, `PasswordRotationService`, `PermissionRequest`, `PermissionType`, `RevokeVaultAccessRequest`, `RotationBatch`, `RotationSchedule`, `RotationScheduler`, `UpdateRotationScheduleRequest`, `UpdateStandaloneCredentialRequest`, `UpdateVaultSecretRequest`, `VaultAccessInfo`, `VaultAccessLog`, and `VaultPermission`
+  --> src\handlers\vault_handler.rs:10:20
+   |
+10 |     IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, UpdateVaultSecretRequest,
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+11 |     DeleteVaultSecretRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^                    ^^^^^^^^^^^^^^^
+12 |     CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest,
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+13 |     CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren,
+   |     ^^^^^^^^^^^^^^^^^^^^^                            ^^^^^^^^^^^^^^^^^^^^
+14 |     PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
+   |     ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^
+15 |     VaultAccessLog, CreatePermissionRequest, PermissionRequest,
+   |     ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+16 |     rotation::{
+17 |         PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+18 |         RotationBatch, BatchRotationService, PasswordRotationHistory, CreateRotationBatchRequest,
+   |         ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+19 |         UpdateRotationScheduleRequest
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `rusqlite::Connection`
+  --> src\handlers\vault_handler.rs:24:5
+   |
+24 | use rusqlite::Connection;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Arc` and `Mutex`
+  --> src\handlers\vault_handler.rs:25:17
+   |
+25 | use std::sync::{Arc, Mutex};
+   |                 ^^^  ^^^^^
+
+warning: unused import: `warn`
+  --> src\handlers\vault_handler.rs:26:28
+   |
+26 | use tracing::{error, info, warn};
+   |                            ^^^^
+
+warning: unused imports: `RecoveryExporter` and `RecoveryImporter`
+ --> src\handlers\recovery_handler.rs:4:23
+  |
+4 | use crate::recovery::{RecoveryExporter, RecoveryImporter};
+  |                       ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\recovery_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `RetryPreferences`, `SqliteUserSettingsRepository`, `UserSettingsRepository`, `UserSettings`, and `settings_utils`
+ --> src\handlers\settings_handler.rs:4:28
+  |
+4 | use crate::user_settings::{UserSettings, RetryPreferences, UserSettingsRepository, SqliteUserSettingsRepository, settings_utils};
+  |                            ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::database::Database`
+ --> src\handlers\settings_handler.rs:5:5
+  |
+5 | use crate::database::Database;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `auth_handler::*`
+  --> src\handlers\mod.rs:13:9
+   |
+13 | pub use auth_handler::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `user_handler::*`
+  --> src\handlers\mod.rs:14:9
+   |
+14 | pub use user_handler::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `asset_handler::*`
+  --> src\handlers\mod.rs:15:9
+   |
+15 | pub use asset_handler::*;
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `configuration_handler::*`
+  --> src\handlers\mod.rs:16:9
+   |
+16 | pub use configuration_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `branch_handler::*`
+  --> src\handlers\mod.rs:17:9
+   |
+17 | pub use branch_handler::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `firmware_handler::*`
+  --> src\handlers\mod.rs:18:9
+   |
+18 | pub use firmware_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `vault_handler::*`
+  --> src\handlers\mod.rs:19:9
+   |
+19 | pub use vault_handler::*;
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `recovery_handler::*`
+  --> src\handlers\mod.rs:20:9
+   |
+20 | pub use recovery_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `settings_handler::*`
+  --> src\handlers\mod.rs:21:9
+   |
+21 | pub use settings_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `system_handler::*`
+  --> src\handlers\mod.rs:22:9
+   |
+22 | pub use system_handler::*;
+   |         ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `workflow_handler::*`
+  --> src\handlers\mod.rs:23:9
+   |
+23 | pub use workflow_handler::*;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `tauri::State`
+  --> src\lib.rs:37:5
+   |
+37 | use tauri::State;
+   |     ^^^^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src\lib.rs:39:13
+   |
+39 | use serde::{Serialize, Deserialize};
+   |             ^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused variable: `start_time`
+   --> src\error_handling\circuit_breaker.rs:382:13
+    |
+382 |         let start_time = Instant::now();
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_start_time`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `manual_actions`
+   --> src\error_handling\recovery_coordinator.rs:141:29
+    |
+141 |                         let manual_actions = self.generate_manual_recovery_actions(&error);
+    |                             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manual_actions`
+
+warning: unused variable: `operation_name`
+   --> src\error_handling\recovery_coordinator.rs:173:9
+    |
+173 |         operation_name: &str,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_operation_name`
+
+warning: unused variable: `manual_actions`
+   --> src\error_handling\recovery_coordinator.rs:241:25
+    |
+241 |                     let manual_actions = self.generate_manual_recovery_actions(&final_error);
+    |                         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manual_actions`
+
+warning: unused variable: `e`
+   --> src\workflow\repository.rs:140:54
+    |
+140 | ...   self.row_to_workflow_state(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_state".to_string(), rusqlite::types::Ty...
+    |                                                ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\workflow\repository.rs:163:54
+    |
+163 | ...   self.row_to_workflow_state(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_state".to_string(), rusqlite::types::Ty...
+    |                                                ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\workflow\repository.rs:233:56
+    |
+233 | ...   self.row_to_workflow_session(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_session".to_string(), rusqlite::types...
+    |                                                  ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\workflow\repository.rs:282:54
+    |
+282 | ...   self.row_to_workflow_draft(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_draft".to_string(), rusqlite::types::Ty...
+    |                                                ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `state`
+   --> src\workflow\state.rs:193:21
+    |
+193 |         if let Some(state) = workflows.get(workflow_id) {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `errors`
+   --> src\workflow\validation.rs:422:9
+    |
+422 |         errors: &mut Vec<ValidationError>,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_errors`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1283:9
+     |
+1283 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1286:13
+     |
+1286 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1318:13
+     |
+1318 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1359:9
+     |
+1359 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1362:13
+     |
+1362 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1698:9
+     |
+1698 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1701:13
+     |
+1701 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1732:13
+     |
+1732 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1775:13
+     |
+1775 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1811:9
+     |
+1811 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1814:13
+     |
+1814 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `session`
+    --> src\commands\vault_commands.rs:1842:9
+     |
+1842 |     let session = match session_manager_guard.validate_session(&token) {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1845:13
+     |
+1845 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+    --> src\commands\vault_commands.rs:1879:13
+     |
+1879 |         Err(e) => return Err("Session validation error".to_string()),
+     |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `schema_name`
+   --> src\commands\metadata_commands.rs:360:9
+    |
+360 |     let schema_name = repo.get_metadata_schema_by_id(schema_id)
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_schema_name`
+
+warning: unused variable: `validator`
+   --> src\commands\security_commands.rs:285:9
+    |
+285 |     let validator = SecurityValidator::new();
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_validator`
+
+warning: unused variable: `db_state`
+   --> src\commands\security_commands.rs:335:5
+    |
+335 |     db_state: State<'_, DatabaseState>,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_db_state`
+
+warning: unused variable: `db_state`
+   --> src\commands\security_commands.rs:381:5
+    |
+381 |     db_state: State<'_, DatabaseState>,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_db_state`
+
+warning: unused variable: `filters`
+   --> src\commands\security_commands.rs:555:5
+    |
+555 |     filters: Option<AuditFilter>,
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filters`
+
+error[E0382]: borrow of moved value: `filtered_events`
+   --> src\commands\security_commands.rs:623:52
+    |
+589 |     let filtered_events: Vec<_> = events.into_iter().filter(|event| {
+    |         --------------- move occurs because `filtered_events` has type `Vec<AuditEvent>`, which does not implement the `Copy` trait
+...
+598 |             for event in filtered_events {
+    |                          --------------- `filtered_events` moved due to this implicit call to `.into_iter()`
+...
+623 |     info!("Exported {} audit events in {} format", filtered_events.len(), format);
+    |                                                    ^^^^^^^^^^^^^^^ value borrowed here after move
+    |
+note: `into_iter` takes ownership of the receiver `self`, which moves `filtered_events`
+   --> /rustc/6b00bc3880198600130e1cf62b8f8a93494488cc\library\core\src\iter\traits\collect.rs:313:18
+help: consider iterating over a slice of the `Vec<AuditEvent>`'s content to avoid moving into the `for` loop
+    |
+598 |             for event in &filtered_events {
+    |                          +
+
+warning: unused variable: `app`
+  --> src\commands\bulk_commands.rs:24:5
+   |
+24 |     app: AppHandle,
+   |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+  --> src\commands\bulk_commands.rs:66:5
+   |
+66 |     app: AppHandle,
+   |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+  --> src\commands\bulk_commands.rs:95:5
+   |
+95 |     app: AppHandle,
+   |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:125:5
+    |
+125 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:167:5
+    |
+167 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:216:5
+    |
+216 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:259:5
+    |
+259 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:330:5
+    |
+330 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:384:5
+    |
+384 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:417:5
+    |
+417 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:450:5
+    |
+450 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:483:5
+    |
+483 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:512:5
+    |
+512 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:545:5
+    |
+545 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:575:5
+    |
+575 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:617:5
+    |
+617 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `db_state`
+   --> src\commands\bulk_commands.rs:618:5
+    |
+618 |     db_state: State<'_, DatabaseState>,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_db_state`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:933:5
+    |
+933 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+   --> src\commands\bulk_commands.rs:980:5
+    |
+980 |     app: AppHandle,
+    |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1025:5
+     |
+1025 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1076:5
+     |
+1076 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1119:5
+     |
+1119 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1153:5
+     |
+1153 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1188:5
+     |
+1188 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1222:5
+     |
+1222 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1344:5
+     |
+1344 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `db`
+    --> src\commands\bulk_commands.rs:1359:9
+     |
+1359 |     let db = db_guard
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1376:5
+     |
+1376 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `format`
+    --> src\commands\bulk_commands.rs:1380:5
+     |
+1380 |     format: String,
+     |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_format`
+
+warning: unused variable: `db`
+    --> src\commands\bulk_commands.rs:1392:9
+     |
+1392 |     let db = db_guard
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1409:5
+     |
+1409 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `classification`
+    --> src\commands\bulk_commands.rs:1413:5
+     |
+1413 |     classification: String,
+     |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_classification`
+
+warning: unused variable: `db`
+    --> src\commands\bulk_commands.rs:1425:9
+     |
+1425 |     let db = db_guard
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `app`
+    --> src\commands\bulk_commands.rs:1442:5
+     |
+1442 |     app: AppHandle,
+     |     ^^^ help: if this is intentional, prefix it with an underscore: `_app`
+
+warning: unused variable: `db`
+    --> src\commands\bulk_commands.rs:1457:9
+     |
+1457 |     let db = db_guard
+     |         ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `state`
+   --> src\handlers\workflow_handler.rs:133:21
+    |
+133 |         if let Some(state) = self.state_manager.get_workflow_state(&request.workflow_id).await? {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `request`
+   --> src\handlers\workflow_handler.rs:200:9
+    |
+200 |         request: ValidateWorkflowStepRequest,
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `asset_name`
+   --> src\handlers\workflow_handler.rs:233:9
+    |
+233 |         asset_name: &str,
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_name`
+
+warning: unused variable: `classification`
+   --> src\handlers\workflow_handler.rs:234:9
+    |
+234 |         classification: &str,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_classification`
+
+warning: variable does not need to be mutable
+   --> src\handlers\workflow_handler.rs:250:13
+    |
+250 |         let mut warnings = Vec::new();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src\assets\mod.rs:467:25
+    |
+467 |             if let Some(mut children) = hierarchy_map.remove(&parent_id) {
+    |                         ----^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: unused variable: `asset`
+   --> src\assets\mod.rs:504:13
+    |
+504 |         let asset = self.get_asset_by_id(request.asset_id)?
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_asset`
+
+warning: unused variable: `error`
+   --> src\error_handling\manual_recovery.rs:432:35
+    |
+432 |     fn generate_ui_actions(&self, error: &EnhancedError) -> Vec<ManualRecoveryAction> {
+    |                                   ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+
+warning: unused variable: `services_tried`
+   --> src\error_handling\service_provider.rs:518:62
+    |
+518 |     fn update_success_stats(&self, execution_time: Duration, services_tried: &[String]) {
+    |                                                              ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_services_tried`
+
+warning: unused variable: `services_tried`
+   --> src\error_handling\service_provider.rs:535:62
+    |
+535 |     fn update_failure_stats(&self, execution_time: Duration, services_tried: &[String]) {
+    |                                                              ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_services_tried`
+
+warning: variable does not need to be mutable
+   --> src\error_handling\offline_providers.rs:199:26
+    |
+199 |         let (data_bytes, mut metadata) = {
+    |                          ----^^^^^^^^
+    |                          |
+    |                          help: remove this `mut`
+
+warning: unused variable: `data_type`
+   --> src\error_handling\enhanced_cache.rs:427:17
+    |
+427 |             Ok((data_type, source, data_bytes, cached_at, ttl_seconds, compressed, access_count)) => {
+    |                 ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_data_type`
+
+warning: unused variable: `access_count`
+   --> src\error_handling\enhanced_cache.rs:427:84
+    |
+427 |             Ok((data_type, source, data_bytes, cached_at, ttl_seconds, compressed, access_count)) => {
+    |                                                                                    ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_access_count`
+
+warning: unused variable: `stats`
+   --> src\error_handling\enhanced_cache.rs:760:17
+    |
+760 |         let mut stats = self.stats.lock().unwrap();
+    |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_stats`
+
+warning: unused variable: `duration`
+   --> src\error_handling\enhanced_cache.rs:759:34
+    |
+759 |     fn update_store_stats(&self, duration: std::time::Duration) {
+    |                                  ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_duration`
+
+warning: variable does not need to be mutable
+   --> src\error_handling\enhanced_cache.rs:760:13
+    |
+760 |         let mut stats = self.stats.lock().unwrap();
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\user_settings\mod.rs:520:13
+    |
+520 |         let mut migrated = false;
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: value assigned to `search_results` is never read
+   --> src\metadata\search.rs:474:17
+    |
+474 |         let mut search_results = Vec::new();
+    |                 ^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: unused variable: `existing`
+   --> src\metadata\api\crud.rs:380:21
+    |
+380 |         if let Some(existing) = self.repo.get_asset_metadata(target_id)
+    |                     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_existing`
+
+warning: unused variable: `asset_id`
+   --> src\metadata\api\crud.rs:616:42
+    |
+616 |     fn get_asset_metadata_history(&self, asset_id: i64) -> Result<Vec<AssetMetadataHistory>, String> {
+    |                                          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `asset_id`
+   --> src\metadata\api\crud.rs:622:35
+    |
+622 |     fn find_related_assets(&self, asset_id: i64) -> Result<Vec<RelatedAsset>, String> {
+    |                                   ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `asset_id`
+   --> src\metadata\api\crud.rs:628:40
+    |
+628 |     fn archive_metadata_history(&self, asset_id: i64) -> Result<(), String> {
+    |                                        ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `start_time`
+   --> src\metadata\api\query.rs:279:13
+    |
+279 |         let start_time = Instant::now();
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_start_time`
+
+warning: unused variable: `filter_id`
+   --> src\metadata\api\query.rs:446:13
+    |
+446 |         let filter_id = self.conn.execute(query, rusqlite::params![
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_filter_id`
+
+warning: unused variable: `e`
+   --> src\metadata\api\query.rs:476:27
+    |
+476 |                 .map_err(|e| rusqlite::Error::InvalidColumnType(0, "query_json".to_string(), rusqlite::types::Type::Text))?;
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\metadata\api\query.rs:541:27
+    |
+541 |                 .map_err(|e| rusqlite::Error::InvalidColumnType(0, "query_json".to_string(), rusqlite::types::Type::Text))
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `config`
+   --> src\metadata\api\query.rs:663:43
+    |
+663 |     fn build_aggregation_query_sql(&self, config: &AggregationConfig) -> Result<(String, Vec<String>), String> {
+    |                                           ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `config`
+   --> src\metadata\api\query.rs:670:60
+    |
+670 |     fn calculate_field_statistics(&self, field_path: &str, config: &FieldStatsConfig) -> Result<FieldStatistics, String> {
+    |                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `query`
+   --> src\metadata\api\query.rs:693:38
+    |
+693 |     fn filter_assets_by_query(&self, query: &MetadataQuery, asset_ids: &[i64]) -> Result<Vec<Asset>, String> {
+    |                                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+warning: unused variable: `schema`
+   --> src\metadata\api\bulk.rs:315:17
+    |
+315 |             let schema = match self.repo.get_metadata_schema_by_id(validation_request.schema_id) {
+    |                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_schema`
+
+warning: unused variable: `values_json`
+   --> src\metadata\api\bulk.rs:344:17
+    |
+344 |             let values_json = serde_json::to_string(&validation_request.metadata_values)
+    |                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_values_json`
+
+warning: variable does not need to be mutable
+   --> src\metadata\api\bulk.rs:382:13
+    |
+382 |         let mut warnings = Vec::new();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\metadata\api\bulk.rs:402:17
+    |
+402 |             let mut transaction = self.conn.unchecked_transaction()
+    |                 ----^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\metadata\api\bulk.rs:461:13
+    |
+461 |         let mut transaction = self.conn.unchecked_transaction()
+    |             ----^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `schema`
+   --> src\metadata\api\bulk.rs:639:13
+    |
+639 |         let schema = self.repo.get_metadata_schema_by_id(schema_id)
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_schema`
+
+warning: unused variable: `values_json`
+   --> src\metadata\api\bulk.rs:643:13
+    |
+643 |         let values_json = serde_json::to_string(metadata_values)
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_values_json`
+
+warning: unused variable: `transaction`
+   --> src\metadata\api\bulk.rs:719:43
+    |
+719 |     fn archive_metadata_to_history(&self, transaction: &Transaction, asset_id: i64) -> Result<(), String> {
+    |                                           ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transaction`
+
+warning: unused variable: `asset_id`
+   --> src\metadata\api\bulk.rs:719:70
+    |
+719 |     fn archive_metadata_to_history(&self, transaction: &Transaction, asset_id: i64) -> Result<(), String> {
+    |                                                                      ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `transaction`
+   --> src\metadata\api\bulk.rs:727:9
+    |
+727 |         transaction: &Transaction, 
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transaction`
+
+warning: unused variable: `asset_id`
+   --> src\metadata\api\bulk.rs:728:9
+    |
+728 |         asset_id: i64, 
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `schema`
+   --> src\metadata\api\bulk.rs:729:9
+    |
+729 |         schema: &AssetMetadataSchema, 
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_schema`
+
+warning: unused variable: `config`
+   --> src\metadata\api\bulk.rs:730:9
+    |
+730 |         config: &SchemaApplicationConfig
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `config`
+   --> src\metadata\api\bulk.rs:736:53
+    |
+736 |     fn process_import_batch(&self, batch: &[Value], config: &BatchImportConfig, batch_index: u32) -> Result<BatchResult, String> {
+    |                                                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `batch_index`
+   --> src\metadata\api\bulk.rs:736:81
+    |
+736 |     fn process_import_batch(&self, batch: &[Value], config: &BatchImportConfig, batch_index: u32) -> Result<BatchResult, String> {
+    |                                                                                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_batch_index`
+
+warning: unused variable: `csv_data`
+   --> src\metadata\api\export.rs:257:17
+    |
+257 |         let mut csv_data: Vec<Vec<String>> = Vec::new();
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_csv_data`
+
+warning: variable does not need to be mutable
+   --> src\metadata\api\export.rs:257:13
+    |
+257 |         let mut csv_data: Vec<Vec<String>> = Vec::new();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\metadata\api\export.rs:441:13
+    |
+441 |         let mut warnings = Vec::new();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `config`
+   --> src\metadata\api\export.rs:540:37
+    |
+540 |     fn get_filtered_metadata(&self, config: &ExportConfig) -> Result<Vec<AssetMetadata>, String> {
+    |                                     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `config`
+   --> src\metadata\api\export.rs:764:47
+    |
+764 |     fn parse_csv_import(&self, content: &str, config: &ImportConfig) -> Result<Vec<Value>, String> {
+    |                                               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `content`
+   --> src\metadata\api\export.rs:798:32
+    |
+798 |     fn parse_xml_import(&self, content: &str) -> Result<Vec<Value>, String> {
+    |                                ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_content`
+
+warning: unused variable: `config`
+   --> src\metadata\api\integration.rs:580:49
+    |
+580 |     pub fn sync_external_metadata_source(&self, config: ExternalSyncConfig) -> Result<SyncResults, String> {
+    |                                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `config`
+   --> src\metadata\api\integration.rs:640:17
+    |
+640 |             let config: WebhookConfig = serde_json::from_str(&config_json)
+    |                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `e`
+   --> src\metadata\api\integration.rs:641:27
+    |
+641 |                 .map_err(|e| rusqlite::Error::InvalidColumnType(0, "config_json".to_string(), rusqlite::types::Type::Text))?;
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `webhook_id`
+   --> src\metadata\api\integration.rs:667:13
+    |
+667 |         let webhook_id = webhook_id as i64;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_webhook_id`
+
+warning: unused variable: `test_payload`
+   --> src\metadata\api\integration.rs:663:58
+    |
+663 |     pub fn test_metadata_webhook(&self, webhook_id: u32, test_payload: String) -> Result<WebhookDelivery, String> {
+    |                                                          ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_test_payload`
+
+warning: unused variable: `data`
+   --> src\metadata\api\integration.rs:788:61
+    |
+788 |     pub fn validate_metadata_against_external_schema(&self, data: String, external_schema: String) -> Result<ValidationResult, String> {
+    |                                                             ^^^^ help: if this is intentional, prefix it with an underscore: `_data`
+
+warning: unused variable: `external_schema`
+   --> src\metadata\api\integration.rs:788:75
+    |
+788 |     pub fn validate_metadata_against_external_schema(&self, data: String, external_schema: String) -> Result<ValidationResult, String> {
+    |                                                                           ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_external_schema`
+
+warning: unused variable: `e`
+   --> src\metadata\api\integration.rs:827:27
+    |
+827 |                 .map_err(|e| rusqlite::Error::InvalidColumnType(0, "template_json".to_string(), rusqlite::types::Type::Text))
+    |                           ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `sanitized_filename`
+   --> src\security\mod.rs:196:13
+    |
+196 |         let sanitized_filename = self.file_security_validator.sanitize_filename(filename)?;
+    |             ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sanitized_filename`
+
+warning: unused variable: `asset_id`
+   --> src\associations\mod.rs:549:41
+    |
+549 |     fn validate_file_association(&self, asset_id: i64, file_id: i64, file_type: &AssociationType) -> Result<Vec<AssociationValidation>> {
+    |                                         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_id`
+
+warning: unused variable: `file_id`
+   --> src\associations\mod.rs:549:56
+    |
+549 |     fn validate_file_association(&self, asset_id: i64, file_id: i64, file_type: &AssociationType) -> Result<Vec<AssociationValidation>> {
+    |                                                        ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_file_id`
+
+warning: unused variable: `file_type`
+   --> src\associations\mod.rs:549:70
+    |
+549 |     fn validate_file_association(&self, asset_id: i64, file_id: i64, file_type: &AssociationType) -> Result<Vec<AssociationValidation>> {
+    |                                                                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_file_type`
+
+warning: unused variable: `processed`
+   --> src\bulk\operations.rs:444:76
+    |
+444 |     fn update_operation_progress(&self, operation_id: &str, progress: f64, processed: i32, failed: i32) -> Result<()> {
+    |                                                                            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_processed`
+
+warning: unused variable: `failed`
+   --> src\bulk\operations.rs:444:92
+    |
+444 |     fn update_operation_progress(&self, operation_id: &str, progress: f64, processed: i32, failed: i32) -> Result<()> {
+    |                                                                                            ^^^^^^ help: if this is intentional, prefix it with an underscore: `_failed`
+
+warning: unused variable: `sanitized_password`
+   --> src\handlers\vault_handler.rs:282:13
+    |
+282 |         let sanitized_password = Self::validate_and_sanitize_input(&request.new_password, "password")?;
+    |             ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sanitized_password`
+
+For more information about this error, try `rustc --explain E0382`.
+warning: `ferrocodex` (lib) generated 230 warnings
+error: could not compile `ferrocodex` (lib) due to 1 previous error; 230 warnings emitted

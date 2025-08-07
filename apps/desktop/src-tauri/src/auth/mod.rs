@@ -27,6 +27,10 @@ pub struct LoginResponse {
     pub user: UserInfo,
 }
 
+// Type alias for service compatibility
+pub type AuthService = SessionManager;
+pub type AuthState = SessionManager;
+
 #[derive(Debug)]
 pub struct SessionManager {
     sessions: Mutex<HashMap<String, SessionToken>>,
@@ -113,6 +117,100 @@ impl SessionManager {
         }
 
         Ok(())
+    }
+
+    /// Get current user ID from any active session (for backward compatibility)
+    /// Note: This method assumes there's only one active session at a time
+    pub fn get_current_user_id(&self) -> Option<i64> {
+        let sessions = self.sessions.lock().ok()?;
+        
+        // Return the first valid session's user_id
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_secs();
+            
+        for session in sessions.values() {
+            if session.expires_at > now {
+                return Some(session.user_id);
+            }
+        }
+        None
+    }
+
+    /// Get current user info from any active session
+    pub fn get_current_user(&self) -> Option<UserInfo> {
+        let sessions = self.sessions.lock().ok()?;
+        
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_secs();
+            
+        for session in sessions.values() {
+            if session.expires_at > now {
+                return Some(UserInfo {
+                    id: session.user_id,
+                    username: session.username.clone(),
+                    role: session.role.clone(),
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    is_active: true,
+                });
+            }
+        }
+        None
+    }
+
+    /// Check if there's any active session
+    pub fn has_active_session(&self) -> bool {
+        let sessions = self.sessions.lock().unwrap();
+        
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+            
+        sessions.values().any(|session| session.expires_at > now)
+    }
+
+    /// Check if current user is admin
+    pub fn is_admin(&self) -> bool {
+        if let Some(user) = self.get_current_user() {
+            matches!(user.role, UserRole::Administrator)
+        } else {
+            false
+        }
+    }
+
+    /// Check if user has specific permission
+    pub fn check_user_permission(&self, user_id: i64, permission: &str) -> Result<bool> {
+        let sessions = self.sessions.lock().unwrap();
+        
+        // Find session for this user_id
+        if let Some(session) = sessions.values().find(|s| s.user_id == user_id) {
+            // Check if session is still valid
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+                
+            if session.expires_at <= now {
+                return Ok(false); // Session expired
+            }
+            
+            // Basic permission check based on role
+            match permission {
+                "admin" => Ok(matches!(session.role, UserRole::Administrator)),
+                "create_asset" | "modify_asset" | "delete_asset" => {
+                    // Both admin and engineer can manage assets
+                    Ok(matches!(session.role, UserRole::Administrator | UserRole::Engineer))
+                }
+                "read" | "view" => Ok(true), // All authenticated users can read
+                _ => Ok(matches!(session.role, UserRole::Administrator)), // Default: admin only
+            }
+        } else {
+            Ok(false) // No session found for user
+        }
     }
 }
 
