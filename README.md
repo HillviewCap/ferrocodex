@@ -6,9 +6,9 @@
 
 🏗️ **Secure OT Configuration Management Platform**
 
-[![GitHub release](https://img.shields.io/github/release/ferrocodex/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
+[![GitHub release](https://img.shields.io/github/release/HillviewCap/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Build Status](https://github.com/ferrocodex/ferrocodex/workflows/Release/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions)
+[![Build Status](https://github.com/HillviewCap/ferrocodex/workflows/Release/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions)
 [![Documentation Status](https://readthedocs.org/projects/ferrocodex/badge/?version=latest)](https://ferrocodex.readthedocs.io/en/latest/?badge=latest)
 
 A cross-platform desktop application for secure offline-first configuration management in operational technology (OT) environments.
@@ -30,6 +30,17 @@ Ferrocodex is a secure configuration management platform designed specifically f
 - 🌳 **Version Control**: Built-in branching and versioning for configurations
 - 👥 **Multi-User Support**: Administrator and Engineer role separation
 
+### ✨ New in v0.5.0 - Asset Hierarchy Management
+
+- 🏗️ **Complete Asset Hierarchy System**: Tree-based navigation with drag-and-drop, virtualized rendering for large datasets
+- 🔍 **Advanced Search & Filtering**: SQLite FTS5 full-text search with sub-200ms performance
+- 📦 **Bulk Operations**: Import/export, bulk rename, and batch metadata updates
+- ⌨️ **Keyboard Navigation**: Full keyboard shortcuts for power users
+- 🔄 **Workflow Management**: Multi-step workflows with draft management and progress tracking
+- 🛡️ **Enhanced Security**: Asset name validation, file integrity checks, and compliance indicators
+- 📊 **Metadata Management**: Dynamic schemas, field templates, and conditional logic
+- 📈 **Performance Optimized**: Virtualized tree rendering, optimized search indexes, and efficient caching
+
 ## 📋 Prerequisites
 
 - **Node.js**: 18+ 
@@ -45,7 +56,7 @@ Ferrocodex is a secure configuration management platform designed specifically f
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/ferrocodex/ferrocodex.git
+   git clone https://github.com/HillviewCap/ferrocodex.git
    cd ferrocodex
    ```
 
@@ -62,7 +73,7 @@ Ferrocodex is a secure configuration management platform designed specifically f
 
 ### Pre-built Binaries
 
-Download the latest release for your platform from the [releases page](https://github.com/ferrocodex/ferrocodex/releases).
+Download the latest release for your platform from the [releases page](https://github.com/HillviewCap/ferrocodex/releases).
 
 ## 💻 Development
 
@@ -112,20 +123,31 @@ ferrocodex/
 │   └── desktop/              # Main Tauri application
 │       ├── src/              # React frontend
 │       │   ├── components/   # UI components
+│       │   │   ├── hierarchy/     # Asset tree views and navigation
+│       │   │   ├── forms/         # Dynamic metadata forms
+│       │   │   ├── security/      # Security validation components
+│       │   │   ├── workflow/      # Multi-step workflow components
+│       │   │   ├── bulk/          # Bulk operations UI
+│       │   │   └── metadata/      # Metadata management
 │       │   ├── store/        # Zustand state management
 │       │   ├── types/        # TypeScript types
 │       │   └── utils/        # Utility functions
 │       ├── src-tauri/        # Rust backend
 │       │   └── src/
 │       │       ├── assets/        # Equipment management
+│       │       ├── associations/  # File associations
 │       │       ├── audit/         # Audit logging
 │       │       ├── auth/          # Authentication
 │       │       ├── branches/      # Configuration branching
+│       │       ├── bulk/          # Bulk operations backend
 │       │       ├── configurations/# Config file management
-│       │       ├── database/      # SQLite layer
+│       │       ├── database/      # SQLite layer with FTS5
 │       │       ├── encryption/    # AES-256 encryption
+│       │       ├── metadata/      # Dynamic metadata & search
+│       │       ├── security/      # Security validation
 │       │       ├── users/         # User management
-│       │       └── validation/    # Input validation
+│       │       ├── validation/    # Input validation
+│       │       └── workflow/      # Workflow management
 │       └── package.json      
 ├── packages/
 │   └── shared-types/         # Shared TypeScript types
@@ -191,8 +213,8 @@ Built with:
 ## 📞 Support
 
 - 📖 [Documentation](https://ferrocodex.readthedocs.io/en/latest/)
-- 🐛 [Issue Tracker](https://github.com/ferrocodex/ferrocodex/issues)
-- 💬 [Discussions](https://github.com/ferrocodex/ferrocodex/discussions)
+- 🐛 [Issue Tracker](https://github.com/HillviewCap/ferrocodex/issues)
+- 💬 [Discussions](https://github.com/HillviewCap/ferrocodex/discussions)
 
 ---
 
