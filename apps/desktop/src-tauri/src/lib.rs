@@ -15,14 +15,14 @@ mod firmware;
 mod firmware_analysis;
 mod recovery;
 mod vault;
-// Epic 5 modules - temporarily disabled to fix core compilation
-// mod error_handling;
+// Epic 5 modules
+mod error_handling;
 mod user_settings;
-// mod metadata;
-// mod security;
-// mod workflow;
-// mod associations;
-// mod bulk;
+mod metadata;
+mod security;
+mod workflow;
+mod associations;
+mod bulk;
 
 // Modular command handlers
 mod commands;
@@ -202,20 +202,20 @@ pub fn run() {
             commands::get_circuit_breaker_configs,
             commands::validate_retry_preferences,
             
-            // Epic 5 - Metadata management commands (temporarily disabled)
-            // commands::get_system_field_templates,
-            // commands::get_field_templates_by_category,
-            // commands::get_supported_field_types,
-            // commands::create_metadata_schema,
-            // commands::get_metadata_schemas,
-            // commands::get_metadata_schema_by_id,
-            // commands::update_metadata_schema,
-            // commands::delete_metadata_schema,
-            // commands::validate_metadata_schema,
-            // commands::get_template_usage_stats,
-            // commands::import_field_template,
-            // commands::get_schemas_for_asset_type,
-            // commands::validate_metadata_values,
+            // Epic 5 - Metadata management commands
+            commands::get_system_field_templates,
+            commands::get_field_templates_by_category,
+            commands::get_supported_field_types,
+            commands::create_metadata_schema,
+            commands::get_metadata_schemas,
+            commands::get_metadata_schema_by_id,
+            commands::update_metadata_schema,
+            commands::delete_metadata_schema,
+            commands::validate_metadata_schema,
+            commands::get_template_usage_stats,
+            commands::import_field_template,
+            commands::get_schemas_for_asset_type,
+            commands::validate_metadata_values,
             
             // Epic 5 - Metadata search commands (temporarily disabled)
             // commands::search_assets_by_metadata,
@@ -228,13 +228,13 @@ pub fn run() {
             // commands::search_assets_in_hierarchy,
             // commands::get_filterable_metadata_fields,
             
-            // Epic 5 - Enhanced metadata API commands (temporarily disabled)
+            // Epic 5 - Enhanced metadata API commands
             // commands::list_metadata_schemas,
             // commands::duplicate_metadata_schema,
             // commands::archive_metadata_schema,
             // commands::restore_metadata_schema,
-            // commands::get_asset_metadata_full,
-            // commands::update_asset_metadata_partial,
+            commands::metadata_commands::get_asset_metadata_full,
+            commands::metadata_commands::update_asset_metadata_partial,
             // commands::copy_metadata_between_assets,
             // commands::validate_metadata_batch,
             // commands::test_metadata_schema,
@@ -265,17 +265,21 @@ pub fn run() {
             // commands::get_metadata_sync_status,
             // commands::sync_external_metadata_source,
             
-            // Epic 5 - Security validation commands (temporarily disabled)
-            // commands::validate_asset_name,
-            // commands::sanitize_asset_name,
-            // commands::check_name_compliance,
-            // commands::suggest_compliant_names,
-            // commands::validate_file_upload,
-            // commands::calculate_file_hash,
-            // commands::sanitize_filename,
-            // commands::verify_file_integrity,
-            // commands::get_validation_statistics,
-            // commands::perform_security_health_check,
+            // Epic 5 - Security validation commands
+            commands::validate_asset_name,
+            commands::sanitize_asset_name,
+            commands::check_name_compliance,
+            commands::suggest_compliant_names,
+            commands::validate_file_upload,
+            commands::calculate_file_hash,
+            commands::sanitize_filename,
+            commands::verify_file_integrity,
+            commands::get_validation_statistics,
+            commands::perform_security_health_check,
+            commands::get_audit_events,
+            commands::export_audit_log,
+            commands::get_security_metrics,
+            commands::export_security_report,
             
             // Epic 5 - Workflow management commands (temporarily disabled)
             // commands::start_asset_creation_workflow,
@@ -313,37 +317,37 @@ pub fn run() {
             // commands::get_import_session,
             // commands::get_associations_by_validation_status,
             
-            // Epic 5 - Bulk import commands (temporarily disabled)
-            // commands::create_bulk_import_session,
-            // commands::get_bulk_import_sessions,
-            // commands::get_bulk_import_session_details,
-            // commands::delete_bulk_import_session,
-            // commands::upload_bulk_import_file,
-            // commands::validate_bulk_import_data,
-            // commands::start_bulk_import_processing,
-            // commands::get_bulk_import_progress,
-            // commands::pause_bulk_import,
-            // commands::resume_bulk_import,
-            // commands::cancel_bulk_import,
-            // commands::get_bulk_operation_stats,
-            // commands::create_import_template,
-            // commands::get_import_templates,
-            // commands::delete_import_template,
-            // commands::generate_import_template_csv,
+            // Epic 5 - Bulk import commands
+            commands::create_bulk_import_session,
+            commands::get_bulk_import_sessions,
+            commands::get_bulk_import_session_details,
+            commands::delete_bulk_import_session,
+            commands::upload_bulk_import_file,
+            commands::validate_bulk_import_data,
+            commands::start_bulk_import_processing,
+            commands::get_bulk_import_progress,
+            commands::pause_bulk_import,
+            commands::resume_bulk_import,
+            commands::cancel_bulk_import,
+            commands::get_bulk_operation_stats,
+            commands::create_import_template,
+            commands::get_import_templates,
+            commands::delete_import_template,
+            commands::generate_import_template_csv,
             
-            // Epic 5 - Bulk operations commands (temporarily disabled)
-            // commands::start_bulk_move,
-            // commands::start_bulk_delete,
-            // commands::start_bulk_export,
-            // commands::start_bulk_classify,
-            // commands::get_bulk_operation_progress,
-            // commands::cancel_bulk_operation,
-            // commands::get_bulk_operation_history,
-            // commands::validate_bulk_move,
-            // commands::validate_bulk_delete,
-            // commands::validate_bulk_export,
-            // commands::validate_bulk_classify,
-            // commands::undo_bulk_operation
+            // Epic 5 - Bulk operations commands
+            commands::start_bulk_move,
+            commands::start_bulk_delete,
+            commands::start_bulk_export,
+            commands::start_bulk_classify,
+            commands::get_bulk_operation_progress,
+            commands::cancel_bulk_operation,
+            commands::get_bulk_operation_history,
+            commands::validate_bulk_move,
+            commands::validate_bulk_delete,
+            commands::validate_bulk_export,
+            commands::validate_bulk_classify,
+            commands::undo_bulk_operation
         ])
         .setup(|_app| {
             info!("Ferrocodex application starting up...");

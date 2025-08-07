@@ -14,7 +14,8 @@ import {
   Divider,
   Empty,
   Tooltip,
-  Modal
+  Modal,
+  Tabs
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -32,7 +33,7 @@ import {
   KeyOutlined
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
-import { CreateAssetModal } from './CreateAssetModal';
+import { SimpleAssetCreation } from '../security/SimpleAssetCreation';
 import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyError, useSelectedAsset } from '../../store/hierarchy';
@@ -42,6 +43,7 @@ import VaultAccessIndicator from '../VaultAccessIndicator';
 import IdentityVault from '../IdentityVault';
 import QuickConfigImportModal from './QuickConfigImportModal';
 import QuickFirmwareUploadModal from './QuickFirmwareUploadModal';
+import MetadataDisplay from '../metadata/MetadataDisplay';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -327,8 +329,12 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
           </Space>
         }
         style={{ height: '100%' }}
+        bodyStyle={{ padding: 0 }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Tabs defaultActiveKey="details" style={{ height: '100%' }}>
+          <Tabs.TabPane tab="Details" key="details">
+            <div style={{ padding: '16px' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
           {/* Breadcrumb */}
           {assetPath.length > 0 && (
             <div>
@@ -487,7 +493,25 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
               </div>
             </>
           )}
-        </Space>
+              </Space>
+            </div>
+          </Tabs.TabPane>
+          
+          {isDevice && (
+            <Tabs.TabPane tab="Metadata" key="metadata">
+              <div style={{ height: '100%', overflow: 'auto' }}>
+                <MetadataDisplay
+                  assetId={selectedAsset.id}
+                  schemaId={1} // TODO: Get schema ID from asset type
+                  onRefresh={() => {
+                    // Optionally refresh other data
+                    console.log('Metadata refreshed');
+                  }}
+                />
+              </div>
+            </Tabs.TabPane>
+          )}
+        </Tabs>
       </Card>
     );
   };
@@ -565,13 +589,14 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         </Content>
       </Layout>
 
-      <CreateAssetModal
+      <SimpleAssetCreation
         open={createModalVisible}
         onCancel={() => setCreateModalVisible(false)}
         onSuccess={handleCreateSuccess}
         hierarchyData={hierarchyData}
         initialParentId={createModalParentId}
         initialAssetType={createModalAssetType}
+        requiresSecurityValidation={true}
       />
 
       {/* Quick Config Import Modal */}

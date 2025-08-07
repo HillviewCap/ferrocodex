@@ -9,7 +9,12 @@ import {
   TeamOutlined,
   DatabaseOutlined,
   ImportOutlined,
-  QuestionCircleOutlined
+  QuestionCircleOutlined,
+  FileTextOutlined,
+  SearchOutlined,
+  AppstoreOutlined,
+  SafetyCertificateOutlined,
+  AuditOutlined
 } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
 import { invoke } from '@tauri-apps/api/core';
@@ -19,7 +24,11 @@ import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
 import StandaloneCredentials from './StandaloneCredentials';
 import RetryPreferences from './RetryPreferences';
+import MetadataManagement from './metadata/MetadataManagement';
 import { canAccessUserManagement } from '../utils/roleUtils';
+import SecurityMonitoringDashboard from './security/SecurityMonitoringDashboard';
+import SecurityAuditLog from './security/SecurityAuditLog';
+import BulkManagement from './bulk/BulkManagement';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -109,6 +118,61 @@ const Dashboard: React.FC = () => {
         label: 'Vault',
       },
     ];
+
+    // Add Bulk Operations menu item
+    items.push({
+      key: 'bulk-operations',
+      icon: <ImportOutlined />,
+      label: 'Bulk Operations',
+    });
+
+    // Add Metadata menu for administrators only
+    // TEMPORARILY HIDDEN: Metadata manager hidden until field testing or final decision
+    // if (canAccessUserManagement(user)) {
+    //   items.push({
+    //     key: 'metadata',
+    //     icon: <FileTextOutlined />,
+    //     label: 'Metadata',
+    //     children: [
+    //       {
+    //         key: 'schema-designer',
+    //         icon: <AppstoreOutlined />,
+    //         label: 'Schema Designer',
+    //       },
+    //       {
+    //         key: 'field-templates',
+    //         icon: <FileTextOutlined />,
+    //         label: 'Field Templates',
+    //       },
+    //       {
+    //         key: 'metadata-search',
+    //         icon: <SearchOutlined />,
+    //         label: 'Metadata Search',
+    //       },
+    //     ],
+    //   });
+    // }
+
+    // Add Security menu for administrators only
+    if (canAccessUserManagement(user)) {
+      items.push({
+        key: 'security',
+        icon: <SafetyCertificateOutlined />,
+        label: 'Security',
+        children: [
+          {
+            key: 'security-dashboard',
+            icon: <SafetyCertificateOutlined />,
+            label: 'Security Dashboard',
+          },
+          {
+            key: 'audit-log',
+            icon: <AuditOutlined />,
+            label: 'Audit Log',
+          },
+        ],
+      });
+    }
 
     // Add User Management for administrators only
     if (canAccessUserManagement(user)) {
@@ -212,7 +276,7 @@ const Dashboard: React.FC = () => {
           <Content
             style={{
               background: '#fff',
-              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials' || selectedMenuItem === 'settings') ? '0' : '24px',
+              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials' || selectedMenuItem === 'settings' || selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates' || selectedMenuItem === 'metadata-search' || selectedMenuItem === 'security-dashboard' || selectedMenuItem === 'audit-log' || selectedMenuItem === 'bulk-operations') ? '0' : '24px',
               margin: 0,
               minHeight: 280,
               borderRadius: '8px',
@@ -227,6 +291,14 @@ const Dashboard: React.FC = () => {
               <StandaloneCredentials />
             ) : selectedMenuItem === 'settings' ? (
               <RetryPreferences />
+            ) : (selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates' || selectedMenuItem === 'metadata-search') ? (
+              <MetadataManagement />
+            ) : selectedMenuItem === 'security-dashboard' && canAccessUserManagement(user) ? (
+              <SecurityMonitoringDashboard />
+            ) : selectedMenuItem === 'audit-log' && canAccessUserManagement(user) ? (
+              <SecurityAuditLog />
+            ) : selectedMenuItem === 'bulk-operations' ? (
+              <BulkManagement />
             ) : selectedMenuItem === 'profile' ? (
               <div style={{ textAlign: 'center', padding: '48px' }}>
                 <Title level={3}>User Profile</Title>

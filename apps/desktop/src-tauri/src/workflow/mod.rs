@@ -58,6 +58,18 @@ impl From<crate::database::DatabaseError> for WorkflowError {
     }
 }
 
+impl From<rusqlite::Error> for WorkflowError {
+    fn from(err: rusqlite::Error) -> Self {
+        WorkflowError::Database(err.to_string())
+    }
+}
+
+impl From<chrono::ParseError> for WorkflowError {
+    fn from(err: chrono::ParseError) -> Self {
+        WorkflowError::Serialization(err.to_string())
+    }
+}
+
 /// Workflow execution result
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
 
@@ -86,7 +98,7 @@ pub enum WorkflowStatus {
 }
 
 /// Step names for asset creation workflow
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum WorkflowStepName {
     AssetTypeSelection,
     HierarchySelection,
@@ -165,14 +177,6 @@ impl Default for AutoSaveConfig {
     }
 }
 
-/// Workflow session information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowSession {
-    pub workflow_id: String,
-    pub session_token: String,
-    pub expires_at: chrono::DateTime<chrono::Utc>,
-    pub auto_save: AutoSaveConfig,
-}
 
 /// Constants for workflow configuration
 pub mod constants {

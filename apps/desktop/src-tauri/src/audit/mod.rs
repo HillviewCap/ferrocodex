@@ -126,8 +126,47 @@ pub struct AuditEvent {
     pub timestamp: String,
 }
 
-// Type alias for service compatibility
-pub type AuditService = SqliteAuditRepository<'static>;
+// Thread-safe service wrapper
+pub struct AuditService {
+    db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>,
+}
+
+impl AuditService {
+    pub fn new(db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>) -> Self {
+        Self { db_manager }
+    }
+
+    /// Log workflow event
+    pub async fn log_workflow_event(
+        &self,
+        user_id: i64,
+        workflow_id: &str,
+        event_type: &str,
+        details: Option<&str>,
+    ) -> Result<()> {
+        let event_request = AuditEventRequest {
+            event_type: AuditEventType::DatabaseOperation, // Using generic type for workflow events
+            user_id: Some(user_id),
+            username: None,
+            admin_user_id: None,
+            admin_username: None,
+            target_user_id: None,
+            target_username: None,
+            description: format!("Workflow {}: {}", event_type, details.unwrap_or("")),
+            metadata: Some(format!(r#"{{"workflow_id": "{}", "event_type": "{}"}}"#, workflow_id, event_type)),
+            ip_address: None,
+            user_agent: None,
+        };
+
+        let db_manager = self.db_manager.lock().map_err(|e| {
+            anyhow::anyhow!("Failed to acquire database lock: {}", e)
+        })?;
+        let conn = db_manager.get_connection();
+        let repo = SqliteAuditRepository::new(conn);
+        repo.log_event(&event_request)?;
+        Ok(())
+    }
+}
 
 pub trait AuditRepository {
     fn initialize_schema(&self) -> Result<()>;
@@ -160,6 +199,32 @@ pub struct SqliteAuditRepository<'a> {
 impl<'a> SqliteAuditRepository<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
+    }
+
+    /// Log a workflow-related audit event
+    pub async fn log_workflow_event(
+        &self,
+        user_id: i64,
+        workflow_id: &str,
+        event_type: &str,
+        details: Option<&str>,
+    ) -> Result<()> {
+        let event_request = AuditEventRequest {
+            event_type: AuditEventType::DatabaseOperation, // Using generic type for workflow events
+            user_id: Some(user_id),
+            username: None,
+            admin_user_id: None,
+            admin_username: None,
+            target_user_id: None,
+            target_username: None,
+            description: format!("Workflow {}: {}", event_type, details.unwrap_or("")),
+            metadata: Some(format!(r#"{{"workflow_id": "{}", "event_type": "{}"}}"#, workflow_id, event_type)),
+            ip_address: None,
+            user_agent: None,
+        };
+
+        self.log_event(&event_request)?;
+        Ok(())
     }
 
     fn row_to_audit_event(row: &Row) -> rusqlite::Result<AuditEvent> {

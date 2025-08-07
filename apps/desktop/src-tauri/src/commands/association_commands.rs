@@ -28,7 +28,7 @@ pub async fn create_file_association(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Create association
     let repo = SqliteAssociationRepository::new(&conn);
@@ -52,7 +52,7 @@ pub async fn get_asset_file_associations(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Get associations
     let repo = SqliteAssociationRepository::new(&conn);
@@ -76,7 +76,7 @@ pub async fn remove_file_association(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Remove association
     let repo = SqliteAssociationRepository::new(&conn);
@@ -101,7 +101,7 @@ pub async fn reorder_file_associations(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Reorder associations
     let repo = SqliteAssociationRepository::new(&conn);
@@ -126,7 +126,7 @@ pub async fn search_associations(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Parse file type
     let association_type = if let Some(ft) = file_type {
@@ -157,7 +157,7 @@ pub async fn get_association_health_status(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Get health status
     let repo = SqliteAssociationRepository::new(&conn);
@@ -180,7 +180,7 @@ pub async fn get_broken_associations(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Get broken associations
     let repo = SqliteAssociationRepository::new(&conn);
@@ -204,7 +204,7 @@ pub async fn repair_association(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Repair association
     let repo = SqliteAssociationRepository::new(&conn);
@@ -230,7 +230,7 @@ pub async fn validate_file_association(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Parse file type
     let association_type = AssociationType::from_str(&file_type)
@@ -261,7 +261,7 @@ pub async fn create_import_session(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Create import session
     let repo = SqliteAssociationRepository::new(&conn);
@@ -287,7 +287,7 @@ pub async fn update_import_session_status(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Parse status
     let import_status = ImportStatus::from_str(&status)
@@ -315,7 +315,7 @@ pub async fn get_import_session(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Get import session
     let repo = SqliteAssociationRepository::new(&conn);
@@ -339,7 +339,7 @@ pub async fn get_associations_by_validation_status(
     // Get database connection
     let db_guard = db_state.lock().map_err(|_| "Failed to acquire database lock")?;
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
-    let conn = db.get_connection().map_err(|e| format!("Database connection failed: {}", e))?;
+    let conn = db.get_connection();
 
     // Parse validation status
     let validation_result = ValidationResult::from_str(&status)

@@ -50,7 +50,7 @@ pub async fn create_bulk_import_session(
     };
 
     // Create the session
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let session = bulk_repo.create_session(request, current_user.id)
         .map_err(|e| {
             error!("Failed to create bulk import session: {}", e);
@@ -80,7 +80,7 @@ pub async fn get_bulk_import_sessions(
         .ok_or("Database not initialized")?;
 
     // Get sessions for current user
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let sessions = bulk_repo.get_sessions_by_user(current_user.id)
         .map_err(|e| {
             error!("Failed to get bulk import sessions: {}", e);
@@ -110,7 +110,7 @@ pub async fn get_bulk_import_session_details(
         .ok_or("Database not initialized")?;
 
     // Get session details
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let details = bulk_repo.get_session_details(session_id)
         .map_err(|e| {
             error!("Failed to get session details: {}", e);
@@ -142,7 +142,7 @@ pub async fn delete_bulk_import_session(
         .ok_or("Database not initialized")?;
 
     // Check session ownership (users can only delete their own sessions)
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     if let Some(session) = bulk_repo.get_session_by_id(session_id).map_err(|e| e.to_string())? {
         if session.created_by != current_user.id {
             return Err("Permission denied: You can only delete your own sessions".to_string());
@@ -197,7 +197,7 @@ pub async fn upload_bulk_import_file(
         .ok_or("Database not initialized")?;
 
     // Convert CSV rows to bulk import items
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let items = convert_csv_to_items(&csv_result)?;
     
     // Add items to session
@@ -233,7 +233,7 @@ pub async fn validate_bulk_import_data(
         .ok_or("Database not initialized")?;
 
     // Get session items
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let items = bulk_repo.get_session_items(session_id)
         .map_err(|e| {
             error!("Failed to get session items: {}", e);
@@ -241,7 +241,7 @@ pub async fn validate_bulk_import_data(
         })?;
 
     // Validate each item
-    let asset_repo = SqliteAssetRepository::new(&db.conn);
+    let asset_repo = SqliteAssetRepository::new(db.get_connection());
     let validation_results = validate_import_items(&items, &asset_repo)?;
 
     // Update session status to validated
@@ -277,7 +277,7 @@ pub async fn start_bulk_import_processing(
         .ok_or("Database not initialized")?;
 
     // Update session status to processing
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     bulk_repo.update_session_status(session_id, BulkImportStatus::Processing)
         .map_err(|e| format!("Failed to update session status: {}", e))?;
 
@@ -285,7 +285,7 @@ pub async fn start_bulk_import_processing(
     let items = bulk_repo.get_session_items(session_id)
         .map_err(|e| format!("Failed to get items: {}", e))?;
 
-    let asset_repo = SqliteAssetRepository::new(&db.conn);
+    let asset_repo = SqliteAssetRepository::new(db.get_connection());
     let mut processed = 0;
     let mut failed = 0;
 
@@ -345,7 +345,7 @@ pub async fn get_bulk_import_progress(
         .ok_or("Database not initialized")?;
 
     // Get session
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let session = bulk_repo.get_session_by_id(session_id)
         .map_err(|e| format!("Failed to get session: {}", e))?
         .ok_or("Session not found")?;
@@ -401,7 +401,7 @@ pub async fn pause_bulk_import(
         .ok_or("Database not initialized")?;
 
     // Update session status to paused
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     bulk_repo.update_session_status(session_id, BulkImportStatus::Paused)
         .map_err(|e| {
             error!("Failed to pause session: {}", e);
@@ -434,7 +434,7 @@ pub async fn resume_bulk_import(
         .ok_or("Database not initialized")?;
 
     // Update session status to processing
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     bulk_repo.update_session_status(session_id, BulkImportStatus::Processing)
         .map_err(|e| {
             error!("Failed to resume session: {}", e);
@@ -467,7 +467,7 @@ pub async fn cancel_bulk_import(
         .ok_or("Database not initialized")?;
 
     // Update session status to cancelled
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     bulk_repo.update_session_status(session_id, BulkImportStatus::Cancelled)
         .map_err(|e| {
             error!("Failed to cancel session: {}", e);
@@ -497,7 +497,7 @@ pub async fn get_bulk_operation_stats(
         .ok_or("Database not initialized")?;
 
     // Get statistics
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let stats = bulk_repo.get_bulk_operation_stats()
         .map_err(|e| {
             error!("Failed to get bulk operation stats: {}", e);
@@ -529,7 +529,7 @@ pub async fn create_import_template(
         .ok_or("Database not initialized")?;
 
     // Create the template
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let template = bulk_repo.create_template(template_config, current_user.id)
         .map_err(|e| {
             error!("Failed to create import template: {}", e);
@@ -560,7 +560,7 @@ pub async fn get_import_templates(
         .ok_or("Database not initialized")?;
 
     // Get templates by type
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     let templates = bulk_repo.get_templates_by_type(&template_type)
         .map_err(|e| {
             error!("Failed to get import templates: {}", e);
@@ -592,7 +592,7 @@ pub async fn delete_import_template(
         .ok_or("Database not initialized")?;
 
     // Check template ownership (users can only delete their own templates)
-    let bulk_repo = SqliteBulkImportRepository::new(&db.conn);
+    let bulk_repo = SqliteBulkImportRepository::new(db.get_connection());
     if let Some(template) = bulk_repo.get_template_by_id(template_id).map_err(|e| e.to_string())? {
         if template.created_by != current_user.id {
             return Err("Permission denied: You can only delete your own templates".to_string());
@@ -726,7 +726,7 @@ fn validate_csv_structure(csv_result: &CSVParseResult) -> Result<ValidationSumma
 
         // Check required fields
         for required in &required_headers {
-            if let Some(value) = row.get(required) {
+            if let Some(value) = row.get(&required.to_string()) {
                 if value.trim().is_empty() {
                     errors.push(ValidationError {
                         row: row_index as i64 + 1,
@@ -962,10 +962,10 @@ pub async fn start_bulk_move(
     };
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
-    let operation_id = service.create_bulk_move_operation(request, current_user.id)
+    let operation_id = service.create_bulk_move_operation(request, current_user.id as i32)
         .map_err(|e| {
             error!("Failed to create bulk move operation: {}", e);
             format!("Failed to create bulk move operation: {}", e)
@@ -1007,10 +1007,10 @@ pub async fn start_bulk_delete(
     };
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
-    let operation_id = service.create_bulk_delete_operation(request, current_user.id)
+    let operation_id = service.create_bulk_delete_operation(request, current_user.id as i32)
         .map_err(|e| {
             error!("Failed to create bulk delete operation: {}", e);
             format!("Failed to create bulk delete operation: {}", e)
@@ -1058,10 +1058,10 @@ pub async fn start_bulk_export(
     };
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
-    let operation_id = service.create_bulk_export_operation(request, current_user.id)
+    let operation_id = service.create_bulk_export_operation(request, current_user.id as i32)
         .map_err(|e| {
             error!("Failed to create bulk export operation: {}", e);
             format!("Failed to create bulk export operation: {}", e)
@@ -1101,10 +1101,10 @@ pub async fn start_bulk_classify(
     };
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
-    let operation_id = service.create_bulk_classify_operation(request, current_user.id)
+    let operation_id = service.create_bulk_classify_operation(request, current_user.id as i32)
         .map_err(|e| {
             error!("Failed to create bulk classify operation: {}", e);
             format!("Failed to create bulk classify operation: {}", e)
@@ -1136,7 +1136,7 @@ pub async fn get_bulk_operation_progress(
         .ok_or("Database not initialized")?;
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
     let progress = service.get_operation_progress(&operation_id)
@@ -1170,7 +1170,7 @@ pub async fn cancel_bulk_operation(
         .ok_or("Database not initialized")?;
 
     // Create bulk operations service
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
     let service = BulkOperationService::new(&bulk_ops_repo);
 
     service.cancel_operation(&operation_id)
@@ -1206,7 +1206,7 @@ pub async fn get_bulk_operation_history(
         .ok_or("Database not initialized")?;
 
     // Create bulk operations repository
-    let bulk_ops_repo = SqliteBulkOperationsRepository::new(&db.conn);
+    let bulk_ops_repo = SqliteBulkOperationsRepository::new(db.get_connection());
 
     let history = bulk_ops_repo.get_operation_history(user_id, limit)
         .map_err(|e| {
@@ -1240,7 +1240,7 @@ pub async fn validate_bulk_move(
         .ok_or("Database not initialized")?;
 
     // Validate bulk move operation
-    let asset_repo = crate::assets::SqliteAssetRepository::new(&db.conn);
+    let asset_repo = crate::assets::SqliteAssetRepository::new(db.get_connection());
     let mut validation_result = ValidationResult {
         is_valid: true,
         warnings: vec![],
@@ -1258,6 +1258,7 @@ pub async fn validate_bulk_move(
                     asset_name: format!("Asset {}", asset_id),
                     error_type: "not_found".to_string(),
                     message: "Asset not found or inaccessible".to_string(),
+                    blocking: true,
                     suggested_action: Some("Remove from selection".to_string()),
                 });
                 validation_result.is_valid = false;
@@ -1268,6 +1269,7 @@ pub async fn validate_bulk_move(
                     asset_name: format!("Asset {}", asset_id),
                     error_type: "access_error".to_string(),
                     message: "Cannot access asset".to_string(),
+                    blocking: true,
                     suggested_action: Some("Check permissions".to_string()),
                 });
                 validation_result.is_valid = false;
@@ -1286,6 +1288,7 @@ pub async fn validate_bulk_move(
                         asset_name: parent.name,
                         error_type: "invalid_parent".to_string(),
                         message: "Parent must be a folder".to_string(),
+                        blocking: true,
                         suggested_action: Some("Select a folder as parent".to_string()),
                     });
                     validation_result.is_valid = false;
@@ -1297,6 +1300,7 @@ pub async fn validate_bulk_move(
                     asset_name: format!("Asset {}", parent_id),
                     error_type: "parent_not_found".to_string(),
                     message: "Parent folder not found".to_string(),
+                    blocking: true,
                     suggested_action: Some("Select a valid parent folder".to_string()),
                 });
                 validation_result.is_valid = false;
@@ -1307,6 +1311,7 @@ pub async fn validate_bulk_move(
                     asset_name: format!("Asset {}", parent_id),
                     error_type: "parent_access_error".to_string(),
                     message: "Cannot access parent folder".to_string(),
+                    blocking: true,
                     suggested_action: Some("Check parent folder permissions".to_string()),
                 });
                 validation_result.is_valid = false;
@@ -1323,6 +1328,7 @@ pub async fn validate_bulk_move(
                     asset_name: format!("Asset {}", asset_id),
                     error_type: "circular_reference".to_string(),
                     message: "Cannot move asset into itself".to_string(),
+                    blocking: true,
                     suggested_action: Some("Remove from selection or choose different parent".to_string()),
                 });
                 validation_result.is_valid = false;

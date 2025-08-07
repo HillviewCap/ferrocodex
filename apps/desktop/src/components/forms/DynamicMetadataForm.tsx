@@ -1,9 +1,28 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Form, Button, Card, message, Spin, Row, Col, Divider } from 'antd';
-import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
-import FormFieldComponent, { FormField } from './FormFieldComponent';
+import { 
+  Form, 
+  Button, 
+  Card, 
+  message, 
+  Spin, 
+  Row, 
+  Col, 
+  Divider,
+  Input,
+  InputNumber,
+  DatePicker,
+  Select,
+  Checkbox,
+  Tooltip
+} from 'antd';
+import { SaveOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { ConditionalLogicProvider, useConditionalLogic, ConditionalRule } from './ConditionalLogicEngine';
 import { invoke } from '@tauri-apps/api/core';
+import useAuthStore from '../../store/auth';
+import dayjs from 'dayjs';
+
+const { TextArea } = Input;
+const { Option } = Select;
 
 interface DynamicMetadataFormProps {
   schemaId: number;
@@ -29,6 +48,25 @@ interface JSONSchemaProperty {
   default?: any;
 }
 
+interface FormField {
+  name: string;
+  type: 'text' | 'number' | 'date' | 'dropdown' | 'checkbox' | 'textarea';
+  label: string;
+  description?: string;
+  required?: boolean;
+  placeholder?: string;
+  validation?: {
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    pattern?: string;
+    enum?: string[];
+  };
+  options?: Array<{ label: string; value: string | number }>;
+  defaultValue?: any;
+}
+
 interface JSONSchema {
   type: 'object';
   title?: string;
@@ -48,7 +86,7 @@ interface AssetMetadataSchema {
 }
 
 // Inner form component that uses conditional logic
-const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
+const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(({
   schemaId,
   assetId,
   initialValues = {},
@@ -58,6 +96,7 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
   showTitle = true
 }) => {
   const conditionalLogic = useConditionalLogic();
+  const { token } = useAuthStore();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,57 +106,69 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
   const [isDirty, setIsDirty] = useState(false);
 
   // Load metadata schema and convert to form fields
-  const loadSchema = useCallback(async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
+  useEffect(() => {
+    if (schemaId && token) {
+      // Directly call the loading logic here to avoid dependency issues
+      (async () => {
+        try {
+          setLoading(true);
+          
+          const schemaData = await invoke<AssetMetadataSchema | null>('get_metadata_schema_by_id', {
+            token,
+            schemaId
+          });
 
-      const schemaData = await invoke<AssetMetadataSchema | null>('get_metadata_schema_by_id', {
-        token,
-        schemaId
-      });
+          if (!schemaData) {
+            throw new Error('Schema not found');
+          }
 
-      if (!schemaData) {
-        throw new Error('Schema not found');
-      }
+          setSchema(schemaData);
+          
+          // Parse JSON Schema and convert to form fields
+          const jsonSchema: JSONSchema = JSON.parse(schemaData.schema_json);
+          const fields = convertSchemaToFields(jsonSchema);
+          setFormFields(fields);
 
-      setSchema(schemaData);
+          // Set up conditional logic rules if present
+          if (jsonSchema.conditionalLogic) {
+            conditionalLogic.clearRules();
+            conditionalLogic.addRules(jsonSchema.conditionalLogic);
+          }
+
+          setIsDirty(false);
+        } catch (error) {
+          console.error('Failed to load metadata schema:', error);
+          message.error('Failed to load form schema');
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [schemaId, token, conditionalLogic]); // Only depend on schemaId, token, and conditionalLogic
+
+  // Separate effect to handle initial values and form field setting
+  useEffect(() => {
+    if (formFields.length > 0 && !loading) {
+      const formValues: Record<string, any> = {};
       
-      // Parse JSON Schema and convert to form fields
-      const jsonSchema: JSONSchema = JSON.parse(schemaData.schema_json);
-      const fields = convertSchemaToFields(jsonSchema);
-      setFormFields(fields);
-
-      // Set up conditional logic rules if present
-      if (jsonSchema.conditionalLogic) {
-        conditionalLogic.clearRules();
-        conditionalLogic.addRules(jsonSchema.conditionalLogic);
-      }
-
-      // Set initial form values
-      const formValues = { ...initialValues };
-      fields.forEach(field => {
-        if (formValues[field.name] === undefined && field.defaultValue !== undefined) {
+      // Process initial values and convert dates
+      formFields.forEach(field => {
+        const value = initialValues[field.name];
+        
+        if (field.type === 'date' && value) {
+          // Convert date strings to dayjs objects for DatePicker
+          const dateValue = dayjs.isDayjs(value) ? value : dayjs(value);
+          formValues[field.name] = dateValue.isValid() ? dateValue : null;
+        } else if (value !== undefined) {
+          formValues[field.name] = value;
+        } else if (field.defaultValue !== undefined) {
           formValues[field.name] = field.defaultValue;
         }
       });
       
       form.setFieldsValue(formValues);
-      setIsDirty(false);
-    } catch (error) {
-      console.error('Failed to load metadata schema:', error);
-      message.error('Failed to load form schema');
-    } finally {
-      setLoading(false);
     }
-  }, [schemaId, initialValues, form]);
-
-  useEffect(() => {
-    loadSchema();
-  }, [loadSchema]);
+  }, [formFields, initialValues, loading, form])
 
   // Convert JSON Schema to FormField array
   const convertSchemaToFields = (jsonSchema: JSONSchema): FormField[] => {
@@ -168,7 +219,7 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
     
     switch (property.type) {
       case 'string':
-        if (property.format === 'date') return 'date';
+        if (property.format === 'date' || property.format === 'date-time') return 'date';
         if (property.maxLength && property.maxLength > 255) return 'textarea';
         return 'text';
       case 'number':
@@ -190,36 +241,13 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
       .trim();
   };
 
-  // Handle form value changes
-  const handleFieldChange = useCallback(async (changedFields: any, allFields: any) => {
-    setIsDirty(true);
-    
-    // Get current form values
-    const formValues = form.getFieldsValue();
-    
-    // Evaluate conditional logic rules
-    conditionalLogic.evaluateRules(formValues);
-    
-    // Clear field-specific errors when user starts typing
-    const newErrors = { ...fieldErrors };
-    changedFields.forEach((field: any) => {
-      if (newErrors[field.name]) {
-        delete newErrors[field.name];
-      }
-    });
-    setFieldErrors(newErrors);
-
-    // Real-time validation
-    await validateForm(formValues);
-  }, [fieldErrors, form, conditionalLogic]);
 
   // Validate form against JSON Schema
-  const validateForm = async (formValues?: Record<string, any>) => {
+  const validateForm = async (formValues?: Record<string, any>, specificField?: string) => {
     if (!schema) return true;
 
     try {
       const values = formValues || form.getFieldsValue();
-      const token = localStorage.getItem('auth_token');
       
       if (!token) return false;
 
@@ -229,7 +257,17 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
         valuesJson: JSON.stringify(values)
       });
 
-      setFieldErrors({});
+      // Clear errors if validation passes
+      if (specificField) {
+        // Only clear the specific field error
+        setFieldErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[specificField];
+          return newErrors;
+        });
+      } else {
+        setFieldErrors({});
+      }
       return true;
     } catch (error: any) {
       // Parse validation errors and set field-specific errors
@@ -242,11 +280,20 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
             errors[fieldPath] = message;
           }
         });
-      } else {
+      } else if (!specificField) {
+        // Only show general error if not validating a specific field
         message.error('Form validation failed');
       }
       
-      setFieldErrors(errors);
+      // If validating a specific field, only update that field's error
+      if (specificField) {
+        setFieldErrors(prev => ({
+          ...prev,
+          ...(errors[specificField] ? { [specificField]: errors[specificField] } : {})
+        }));
+      } else {
+        setFieldErrors(errors);
+      }
       return false;
     }
   };
@@ -257,15 +304,30 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
 
     setSubmitting(true);
     try {
+      // Process values, converting dates to strings
+      const processedValues: Record<string, any> = {};
+      Object.entries(values).forEach(([key, value]) => {
+        if (dayjs.isDayjs(value)) {
+          processedValues[key] = value.format('YYYY-MM-DD');
+        } else {
+          processedValues[key] = value;
+        }
+      });
+      
+      // Evaluate conditional logic before validation
+      conditionalLogic.evaluateRules(processedValues);
+      
       // Validate before submitting
-      const isValid = await validateForm(values);
+      const isValid = await validateForm(processedValues);
       if (!isValid) {
         message.error('Please fix form errors before submitting');
+        setSubmitting(false);
         return;
       }
 
-      await onSubmit(values);
+      await onSubmit(processedValues);
       setIsDirty(false);
+      setFieldErrors({});
       message.success('Metadata saved successfully');
     } catch (error) {
       console.error('Failed to submit form:', error);
@@ -280,6 +342,83 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
     form.resetFields();
     setFieldErrors({});
     setIsDirty(false);
+  };
+  
+  // Handle form value changes
+  const handleValuesChange = useCallback(() => {
+    setIsDirty(true);
+  }, []);
+
+  // Render field based on type
+  const renderField = (field: FormField) => {
+    const commonProps = {
+      placeholder: field.placeholder,
+      disabled: readonly
+    };
+
+    switch (field.type) {
+      case 'text':
+        return (
+          <Input
+            {...commonProps}
+            maxLength={field.validation?.maxLength}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <TextArea
+            {...commonProps}
+            maxLength={field.validation?.maxLength}
+            rows={4}
+            showCount
+          />
+        );
+
+      case 'number':
+        return (
+          <InputNumber
+            {...commonProps}
+            min={field.validation?.min}
+            max={field.validation?.max}
+            style={{ width: '100%' }}
+          />
+        );
+
+      case 'date':
+        return (
+          <DatePicker
+            {...commonProps}
+            style={{ width: '100%' }}
+            format="YYYY-MM-DD"
+          />
+        );
+
+      case 'dropdown':
+        return (
+          <Select
+            {...commonProps}
+            style={{ width: '100%' }}
+            allowClear
+          >
+            {field.options?.map((option) => (
+              <Option key={option.value} value={option.value}>
+                {option.label}
+              </Option>
+            ))}
+          </Select>
+        );
+
+      case 'checkbox':
+        return (
+          <Checkbox disabled={readonly}>
+            {field.label}
+          </Checkbox>
+        );
+
+      default:
+        return <Input disabled placeholder="Unsupported field type" />;
+    }
   };
 
   if (loading) {
@@ -298,7 +437,7 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
       <Card>
         <div style={{ textAlign: 'center', padding: '50px 0' }}>
           <div>Schema not found</div>
-          <Button onClick={loadSchema} style={{ marginTop: 16 }}>
+          <Button onClick={() => window.location.reload()} style={{ marginTop: 16 }}>
             Retry
           </Button>
         </div>
@@ -318,34 +457,48 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
-        onFieldsChange={handleFieldChange}
+        onValuesChange={handleValuesChange}
         disabled={readonly}
       >
         <Row gutter={[16, 16]}>
-          {formFields.map((field, index) => {
-            // Check conditional logic for field visibility and state
-            const isVisible = conditionalLogic.isFieldVisible(field.name);
-            const isDisabled = readonly || conditionalLogic.isFieldDisabled(field.name);
-            const isRequired = field.required || conditionalLogic.isFieldRequired(field.name);
-            
-            if (!isVisible) return null;
-            
-            const handleFieldValueChange = (value: any) => {
-              form.setFieldValue(field.name, value);
-              const formValues = form.getFieldsValue();
-              conditionalLogic.evaluateRules(formValues);
-              setIsDirty(true);
-            };
+          {formFields.map((field) => {
+            const isCheckbox = field.type === 'checkbox';
+            const labelWithTooltip = field.description ? (
+              <span>
+                {field.label}
+                {field.required && <span style={{ color: 'red', marginLeft: 4 }}>*</span>}
+                <Tooltip title={field.description}>
+                  <InfoCircleOutlined style={{ marginLeft: 8, color: '#1890ff' }} />
+                </Tooltip>
+              </span>
+            ) : (
+              <span>
+                {field.label}
+                {field.required && <span style={{ color: 'red', marginLeft: 4 }}>*</span>}
+              </span>
+            );
 
             return (
               <Col key={field.name} xs={24} sm={12} md={field.type === 'textarea' ? 24 : 12}>
-                <FormFieldComponent
-                  field={{ ...field, required: isRequired }}
-                  value={form.getFieldValue(field.name)}
-                  onChange={handleFieldValueChange}
-                  error={fieldErrors[field.name]}
-                  disabled={isDisabled}
-                />
+                <Form.Item
+                  name={field.name}
+                  label={!isCheckbox ? labelWithTooltip : undefined}
+                  valuePropName={isCheckbox ? 'checked' : 'value'}
+                  rules={[
+                    {
+                      required: field.required,
+                      message: `${field.label} is required`
+                    },
+                    ...(field.validation?.pattern ? [{
+                      pattern: new RegExp(field.validation.pattern),
+                      message: `${field.label} format is invalid`
+                    }] : [])
+                  ]}
+                  help={fieldErrors[field.name]}
+                  validateStatus={fieldErrors[field.name] ? 'error' : undefined}
+                >
+                  {renderField(field)}
+                </Form.Item>
               </Col>
             );
           })}
@@ -376,7 +529,7 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = ({
       </Form>
     </Card>
   );
-};
+});
 
 // Main component with conditional logic provider
 const DynamicMetadataForm: React.FC<DynamicMetadataFormProps> = (props) => {

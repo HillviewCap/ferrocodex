@@ -663,26 +663,26 @@ impl<'a> BulkImportRepository for SqliteBulkImportRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT 
                 COUNT(*) as total_sessions,
-                SUM(CASE WHEN status IN ('Created', 'Validating', 'Processing', 'Paused') THEN 1 ELSE 0 END) as active_sessions,
-                SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_sessions,
-                SUM(CASE WHEN status = 'Failed' THEN 1 ELSE 0 END) as failed_sessions,
-                SUM(processed_items) as total_items_processed,
-                AVG(CASE WHEN completed_at IS NOT NULL THEN 
+                COALESCE(SUM(CASE WHEN status IN ('Created', 'Validating', 'Processing', 'Paused') THEN 1 ELSE 0 END), 0) as active_sessions,
+                COALESCE(SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END), 0) as completed_sessions,
+                COALESCE(SUM(CASE WHEN status = 'Failed' THEN 1 ELSE 0 END), 0) as failed_sessions,
+                COALESCE(SUM(processed_items), 0) as total_items_processed,
+                COALESCE(AVG(CASE WHEN completed_at IS NOT NULL THEN 
                     (julianday(completed_at) - julianday(created_at)) * 24 * 60 * 60 
-                    ELSE NULL END) as average_processing_time,
-                AVG(CASE WHEN total_items > 0 THEN 
+                    ELSE NULL END), 0.0) as average_processing_time,
+                COALESCE(AVG(CASE WHEN total_items > 0 THEN 
                     CAST((processed_items - failed_items) AS REAL) / total_items * 100 
-                    ELSE 100 END) as success_rate
+                    ELSE 100 END), 100.0) as success_rate
              FROM bulk_import_sessions"
         )?;
 
         let result = stmt.query_row([], |row| {
             Ok(BulkOperationStats {
-                total_sessions: row.get("total_sessions")?,
-                active_sessions: row.get("active_sessions")?,
-                completed_sessions: row.get("completed_sessions")?,
-                failed_sessions: row.get("failed_sessions")?,
-                total_items_processed: row.get("total_items_processed")?,
+                total_sessions: row.get("total_sessions").unwrap_or(0),
+                active_sessions: row.get("active_sessions").unwrap_or(0),
+                completed_sessions: row.get("completed_sessions").unwrap_or(0),
+                failed_sessions: row.get("failed_sessions").unwrap_or(0),
+                total_items_processed: row.get("total_items_processed").unwrap_or(0),
                 average_processing_time: row.get("average_processing_time").unwrap_or(0.0),
                 success_rate: row.get("success_rate").unwrap_or(100.0),
             })

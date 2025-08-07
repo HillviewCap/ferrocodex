@@ -49,8 +49,9 @@ impl AssetNameValidator {
     }
 
     /// Validate asset name against security pattern and requirements
+    /// Auto-normalizes input for better user experience
     pub fn validate_name(&self, name: &str) -> Result<SecurityValidationResult, SecurityError> {
-        debug!("Starting asset name validation for: '{}'", name);
+        info!("Starting asset name validation for: '{}'", name);
 
         // Input sanitization and normalization
         let normalized_name = self.normalize_input(name)?;
@@ -63,28 +64,32 @@ impl AssetNameValidator {
             ));
         }
 
-        // Length validation
-        if normalized_name.len() < 3 {
+        // Auto-normalize to uppercase and clean characters for user-friendly experience
+        let cleaned_name = self.auto_normalize_for_compliance(&normalized_name);
+        info!("Normalized '{}' -> cleaned '{}'", normalized_name, cleaned_name);
+
+        // Length validation on cleaned name
+        if cleaned_name.len() < 3 {
             return Ok(SecurityValidationResult::error(
                 "NAME_TOO_SHORT", 
                 "Asset name must be at least 3 characters long"
             ).with_suggestions(vec![
-                format!("{}_001", normalized_name.to_uppercase()),
-                format!("{}_{}", normalized_name.to_uppercase(), "ASSET"),
+                format!("{}_001", cleaned_name),
+                format!("{}_{}", cleaned_name, "ASSET"),
             ]));
         }
 
-        if normalized_name.len() > 50 {
+        if cleaned_name.len() > 50 {
             return Ok(SecurityValidationResult::error(
                 "NAME_TOO_LONG",
                 "Asset name cannot exceed 50 characters"
             ).with_suggestions(vec![
-                normalized_name[..47].to_uppercase() + "...",
-                self.generate_abbreviated_name(&normalized_name),
+                cleaned_name[..47].to_string() + "...",
+                self.generate_abbreviated_name(&cleaned_name),
             ]));
         }
 
-        // Check for dangerous patterns
+        // Check for dangerous patterns on original normalized input
         for pattern in &self.dangerous_patterns {
             if pattern.is_match(&normalized_name) {
                 error!("Dangerous pattern detected in asset name: {}", normalized_name);
@@ -95,23 +100,25 @@ impl AssetNameValidator {
             }
         }
 
-        // Convert to uppercase for pattern matching
-        let uppercase_name = normalized_name.to_uppercase();
-
-        // Validate against cybersecurity pattern
-        if !self.name_pattern.is_match(&uppercase_name) {
+        // Validate cleaned name against cybersecurity pattern
+        if !self.name_pattern.is_match(&cleaned_name) {
             let suggestions = self.generate_compliant_suggestions(&normalized_name);
             return Ok(SecurityValidationResult::error(
                 "INVALID_PATTERN",
-                "Asset name must start with a letter or number and contain only uppercase letters, numbers, underscores, and hyphens"
+                &format!("Asset name '{}' doesn't match required pattern. Must start with a letter or number and contain only letters, numbers, underscores, and hyphens", cleaned_name)
             ).with_suggestions(suggestions));
         }
 
-        // Additional security checks
-        let security_flags = self.check_security_concerns(&uppercase_name);
-
-        info!("Asset name validation successful: {}", uppercase_name);
-        Ok(SecurityValidationResult::success().with_security_flags(security_flags))
+        // Add security flags if needed
+        let mut result = SecurityValidationResult::success();
+        let security_flags = self.check_security_concerns(&cleaned_name);
+        if !security_flags.is_empty() {
+            result = result.with_security_flags(security_flags);
+        }
+        
+        // Success
+        info!("Asset name validation successful: {} (normalized from: {})", cleaned_name, name);
+        Ok(result)
     }
 
     /// Sanitize and normalize input name
@@ -136,6 +143,15 @@ impl AssetNameValidator {
         }
 
         Ok(sanitized)
+    }
+
+    /// Auto-normalize input for compliance (user-friendly)
+    fn auto_normalize_for_compliance(&self, input: &str) -> String {
+        input
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect::<String>()
+            .to_uppercase()
     }
 
     /// Generate compliant name suggestions
@@ -329,16 +345,20 @@ mod tests {
             "MOTOR_001",
             "PLC123",
             "DEVICE-01",
+            "PLC-LINE1-1",  // Test the specific case that was failing
             "A1B2C3",
             "CONTROL_SYSTEM_MAIN",
             "HMI_PANEL_01",
             "SENSOR_TEMP_001",
             "9999_TEST",
             "ABC",
+            "BUILDING",     // Test case from user
+            "BUILDING1",    // Test case from user
         ];
 
         for name in valid_names {
             let result = validator.validate_name(name).unwrap();
+            println!("Testing '{}': valid={}, error={:?}", name, result.is_valid, result.error_message);
             assert!(result.is_valid, "Name '{}' should be valid", name);
         }
     }
@@ -421,6 +441,36 @@ mod tests {
         
         let sanitized = validator.sanitize_name("motor_001").unwrap();
         assert_eq!(sanitized, "MOTOR_001");
+    }
+    
+    #[test]
+    fn test_building_name_validation() {
+        let validator = AssetNameValidator::new();
+        
+        // Test BUILDING specifically
+        let result = validator.validate_name("BUILDING").unwrap();
+        assert!(result.is_valid, "BUILDING should be valid");
+        assert!(result.error_code.is_none());
+        assert!(result.error_message.is_none());
+        
+        // Test BUILDING1 specifically  
+        let result = validator.validate_name("BUILDING1").unwrap();
+        assert!(result.is_valid, "BUILDING1 should be valid");
+        assert!(result.error_code.is_none());
+        assert!(result.error_message.is_none());
+        
+        // Test lowercase variations
+        let result = validator.validate_name("building").unwrap();
+        assert!(result.is_valid, "building should be valid (auto-uppercased)");
+        
+        let result = validator.validate_name("Building1").unwrap();
+        assert!(result.is_valid, "Building1 should be valid (auto-uppercased)");
+        
+        // Test PLC-32123 specifically
+        let result = validator.validate_name("PLC-32123").unwrap();
+        assert!(result.is_valid, "PLC-32123 should be valid");
+        assert!(result.error_code.is_none());
+        assert!(result.error_message.is_none());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 // Multi-select bulk operations types (different from bulk import functionality)
 
-export type BulkOperationType = 'move' | 'delete' | 'export' | 'classify';
+export type BulkOperationType = 'move' | 'delete' | 'export' | 'classify' | 'rename';
 
 export type BulkOperationStatus = 'pending' | 'validating' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -88,6 +88,21 @@ export interface BulkClassifyRequest {
   asset_ids: number[];
   new_classification: string;
   apply_to_children: boolean;
+}
+
+// Bulk Rename Operation
+export interface BulkRenameOptions {
+  pattern: string;
+  use_pattern: boolean;
+  preserve_extension: boolean;
+  start_number: number;
+  prefix?: string;
+  suffix?: string;
+}
+
+export interface BulkRenameRequest {
+  asset_ids: number[];
+  options: BulkRenameOptions;
 }
 
 // Operation Progress and Monitoring
@@ -259,6 +274,22 @@ export const validateBulkExportRequest = (request: BulkExportRequest): string | 
   return null;
 };
 
+export const validateBulkRenameRequest = (request: BulkRenameRequest): string | null => {
+  if (!request.asset_ids || request.asset_ids.length === 0) {
+    return 'No assets selected for rename operation';
+  }
+  
+  if (request.asset_ids.length > 1000) {
+    return 'Cannot rename more than 1000 assets in a single operation';
+  }
+  
+  if (request.options.use_pattern && (!request.options.pattern || request.options.pattern.trim() === '')) {
+    return 'Pattern is required when using pattern-based renaming';
+  }
+  
+  return null;
+};
+
 // Utility Functions
 export const formatBulkOperationDuration = (milliseconds: number): string => {
   const seconds = Math.floor(milliseconds / 1000);
@@ -292,6 +323,7 @@ export const getBulkOperationIcon = (operationType: BulkOperationType): string =
     case 'delete': return 'delete';
     case 'export': return 'export';
     case 'classify': return 'tag';
+    case 'rename': return 'edit';
     default: return 'operation';
   }
 };

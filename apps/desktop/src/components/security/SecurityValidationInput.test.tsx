@@ -278,7 +278,7 @@ describe('SecurityValidationInput', () => {
   test('shows warning when approaching character limit', () => {
     render(
       <SecurityValidationInput 
-        value="a".repeat(95)
+        value={"a".repeat(95)}
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         maxLength={100}
@@ -292,7 +292,7 @@ describe('SecurityValidationInput', () => {
   test('shows error when over character limit', () => {
     render(
       <SecurityValidationInput 
-        value="a".repeat(105)
+        value={"a".repeat(105)}
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         maxLength={100}

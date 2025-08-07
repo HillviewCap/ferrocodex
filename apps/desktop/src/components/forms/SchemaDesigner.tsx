@@ -30,6 +30,7 @@ import {
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import DynamicMetadataForm from './DynamicMetadataForm';
 import { invoke } from '@tauri-apps/api/core';
+import useAuthStore from '../../store/auth';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -95,7 +96,7 @@ const SchemaDesigner: React.FC<SchemaDesignerProps> = ({
   const loadExistingSchema = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
+      const { token } = useAuthStore.getState();
       if (!token) return;
 
       const schema = await invoke<any>('get_metadata_schema_by_id', {
@@ -310,7 +311,7 @@ const SchemaDesigner: React.FC<SchemaDesignerProps> = ({
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
+      const { token } = useAuthStore.getState();
       if (!token) return;
 
       const schemaJson = generateJsonSchema();

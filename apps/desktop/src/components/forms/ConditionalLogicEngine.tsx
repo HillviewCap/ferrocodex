@@ -173,7 +173,7 @@ export const ConditionalLogicProvider: React.FC<ConditionalLogicProviderProps> =
       hiddenFields: new Set(),
       disabledFields: new Set(),
       requiredFields: new Set(),
-      fieldValues: formValues
+      fieldValues: {} // Don't store formValues directly to avoid circular references
     };
 
     // Sort rules by priority (higher priority first)

@@ -252,7 +252,6 @@ impl WorkflowService {
 
         // Create asset using asset service
         let asset_id = self.asset_service.create_asset_from_workflow(user_id, asset_data)
-            .await
             .map_err(|e| WorkflowError::ExternalService(e.to_string()))?;
 
         // Mark workflow as completed
@@ -349,7 +348,6 @@ impl WorkflowService {
         if let Some(parent_id) = parent_id {
             let has_parent_permission = self.asset_service
                 .check_asset_permission(user_id, parent_id, "create_child")
-                .await
                 .map_err(|e| WorkflowError::ExternalService(e.to_string()))?;
 
             if !has_parent_permission {
@@ -394,7 +392,6 @@ impl WorkflowService {
     async fn validate_user_permissions(&self, user_id: i64, permission: &str) -> WorkflowResult<()> {
         let has_permission = self.auth_service
             .check_user_permission(user_id, permission)
-            .await
             .map_err(|e| WorkflowError::ExternalService(e.to_string()))?;
 
         if !has_permission {

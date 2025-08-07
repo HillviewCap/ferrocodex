@@ -22,7 +22,7 @@ pub async fn start_asset_creation_workflow(
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<StartWorkflowResponse, String> {
     // Get authenticated user
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     // Parse workflow type
@@ -54,7 +54,7 @@ pub async fn get_workflow_state(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<WorkflowState, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.get_workflow_state(user_id, &workflow_id).await
@@ -70,7 +70,7 @@ pub async fn update_workflow_step(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<UpdateWorkflowStepResponse, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     // Parse step name
@@ -98,7 +98,7 @@ pub async fn advance_workflow_step(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<WorkflowState, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     let target_step = parse_workflow_step_name(&target_step)?;
@@ -114,7 +114,7 @@ pub async fn resume_workflow(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<WorkflowState, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.resume_workflow(user_id, &workflow_id).await
@@ -128,7 +128,7 @@ pub async fn complete_workflow(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<CompleteWorkflowResponse, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     let request = CompleteWorkflowRequest { workflow_id };
@@ -144,7 +144,7 @@ pub async fn cancel_workflow(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<(), String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.cancel_workflow(user_id, &workflow_id).await
@@ -159,7 +159,7 @@ pub async fn save_workflow_draft(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<(), String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     let draft_data: WorkflowData = serde_json::from_value(draft_data)
@@ -175,7 +175,7 @@ pub async fn get_workflow_drafts(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<Vec<WorkflowDraft>, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.get_workflow_drafts(user_id).await
@@ -189,7 +189,7 @@ pub async fn delete_workflow_draft(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<(), String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.delete_workflow_draft(user_id, &workflow_id).await
@@ -205,7 +205,7 @@ pub async fn validate_workflow_step(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<ValidationResults, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     let step_name = parse_workflow_step_name(&step_name)?;
@@ -228,7 +228,7 @@ pub async fn get_active_workflows(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<Vec<WorkflowState>, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.get_active_workflows_for_user(user_id).await
@@ -243,14 +243,12 @@ pub async fn validate_asset_creation_permissions(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<bool, String> {
-    let current_user_id = auth_state.get_current_user_id()
+    let current_user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     // Only allow checking own permissions or if admin
     if current_user_id != user_id {
-        let is_admin = auth_state.is_admin()
-            .ok_or("Cannot check permissions for other users")?;
-        if !is_admin {
+        if !auth_state.inner().is_admin() {
             return Err("Permission denied".to_string());
         }
     }
@@ -266,7 +264,7 @@ pub async fn validate_security_classification(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<ValidationResults, String> {
-    let _user_id = auth_state.get_current_user_id()
+    let _user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     // Parse asset data
@@ -289,7 +287,7 @@ pub async fn check_naming_compliance(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<ValidationResults, String> {
-    let _user_id = auth_state.get_current_user_id()
+    let _user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.validate_naming_compliance(&asset_name).await
@@ -305,7 +303,7 @@ pub async fn audit_workflow_operation(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<(), String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.audit_workflow_operation(user_id, &workflow_id, &operation, details.as_deref()).await
@@ -320,7 +318,7 @@ pub async fn get_workflow_step_data(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<WorkflowData, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     let step_name = parse_workflow_step_name(&step_name)?;
@@ -335,7 +333,7 @@ pub async fn get_resumable_workflows(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<Vec<WorkflowState>, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.get_resumable_workflows(user_id).await
@@ -348,7 +346,7 @@ pub async fn has_resumable_workflows(
     auth_state: State<'_, AuthState>,
     workflow_handler: State<'_, WorkflowHandler>,
 ) -> Result<bool, String> {
-    let user_id = auth_state.get_current_user_id()
+    let user_id = auth_state.inner().get_current_user_id()
         .ok_or("User not authenticated")?;
 
     workflow_handler.has_resumable_workflows(user_id).await

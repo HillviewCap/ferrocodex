@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Space, Card, Alert, Row, Col, Divider } from 'antd';
-import { ShieldOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LockOutlined } from '@ant-design/icons';
+import { SecurityScanOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LockOutlined } from '@ant-design/icons';
 import { BaseStepProps, SecurityValidationData } from '../../../types/workflow';
 import { SecurityClassificationSelector } from '../../security/SecurityClassificationSelector';
 import { SecurityValidationInput } from '../../security/SecurityValidationInput';
@@ -186,7 +186,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
           <Card style={{ height: '100%' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-                <ShieldOutlined style={{ color: '#1890ff', fontSize: '20px', marginRight: '8px' }} />
+                <SecurityScanOutlined style={{ color: '#1890ff', fontSize: '20px', marginRight: '8px' }} />
                 <Title level={5} style={{ margin: 0 }}>Security Classification</Title>
               </div>
               

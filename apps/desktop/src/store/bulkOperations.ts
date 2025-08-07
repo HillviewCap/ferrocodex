@@ -9,6 +9,7 @@ import {
   BulkDeleteRequest,
   BulkExportRequest,
   BulkClassifyRequest,
+  BulkRenameRequest,
   ValidationResult,
   UndoResult,
   SelectionState,
@@ -19,6 +20,7 @@ import {
   BulkOperationType,
   BulkOperationStatus
 } from '../types/bulkOperations';
+import { HistoryManager } from '../utils/historyManager';
 
 interface BulkOperationsState extends SelectionManager {
   // Selection State
@@ -60,6 +62,7 @@ interface BulkOperationsState extends SelectionManager {
   startBulkDelete: (request: BulkDeleteRequest) => Promise<string>;
   startBulkExport: (request: BulkExportRequest) => Promise<string>;
   startBulkClassify: (request: BulkClassifyRequest) => Promise<string>;
+  startBulkRename: (request: BulkRenameRequest) => Promise<string>;
   
   // Operation Monitoring
   getOperationProgress: (operationId: string) => Promise<BulkOperationProgress>;
@@ -70,6 +73,7 @@ interface BulkOperationsState extends SelectionManager {
   validateBulkDelete: (assetIds: number[]) => Promise<ValidationResult>;
   validateBulkExport: (assetIds: number[], format: string) => Promise<ValidationResult>;
   validateBulkClassify: (assetIds: number[], classification: string) => Promise<ValidationResult>;
+  validateBulkRename: (assetIds: number[], options: any) => Promise<ValidationResult>;
   
   // History and Undo
   loadOperationHistory: (userId?: number, limit?: number) => Promise<void>;
@@ -93,7 +97,10 @@ interface BulkOperationsState extends SelectionManager {
 
 const useBulkOperationsStore = create<BulkOperationsState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      const historyManager = HistoryManager.getInstance();
+      
+      return {
       // Initial State
       selection: {
         selected_asset_ids: new Set(),
@@ -350,6 +357,14 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
             options: request.options,
           });
           
+          // Add to history
+          historyManager.addOperation({
+            type: 'move',
+            description: HistoryManager.createOperationDescription('move', request.asset_ids.length),
+            assetIds: request.asset_ids,
+            newData: { newParentId: request.new_parent_id }
+          });
+          
           // Start monitoring progress
           get().getOperationProgress(operationId);
           
@@ -367,6 +382,14 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
           const operationId = await invoke<string>('start_bulk_delete', {
             assetIds: request.asset_ids,
             options: request.options,
+          });
+          
+          // Add to history
+          historyManager.addOperation({
+            type: 'delete',
+            description: HistoryManager.createOperationDescription('delete', request.asset_ids.length),
+            assetIds: request.asset_ids,
+            newData: { deleteOptions: request.options }
           });
           
           // Start monitoring progress
@@ -389,6 +412,14 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
             options: request.options,
           });
           
+          // Add to history
+          historyManager.addOperation({
+            type: 'export',
+            description: HistoryManager.createOperationDescription('export', request.asset_ids.length, request.format),
+            assetIds: request.asset_ids,
+            newData: { format: request.format, options: request.options }
+          });
+          
           // Start monitoring progress
           get().getOperationProgress(operationId);
           
@@ -409,12 +440,47 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
             applyToChildren: request.apply_to_children,
           });
           
+          // Add to history
+          historyManager.addOperation({
+            type: 'classify',
+            description: HistoryManager.createOperationDescription('classify', request.asset_ids.length, request.new_classification),
+            assetIds: request.asset_ids,
+            newData: { classification: request.new_classification }
+          });
+          
           // Start monitoring progress
           get().getOperationProgress(operationId);
           
           return operationId;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to start bulk classify operation';
+          set({ error: errorMessage, isLoading: false });
+          throw error;
+        }
+      },
+
+      startBulkRename: async (request: BulkRenameRequest) => {
+        set({ isLoading: true, error: null });
+        try {
+          const operationId = await invoke<string>('start_bulk_rename', {
+            assetIds: request.asset_ids,
+            options: request.options,
+          });
+          
+          // Add to history
+          historyManager.addOperation({
+            type: 'rename',
+            description: HistoryManager.createOperationDescription('rename', request.asset_ids.length, request.options.pattern),
+            assetIds: request.asset_ids,
+            newData: { renameOptions: request.options }
+          });
+          
+          // Start monitoring progress
+          get().getOperationProgress(operationId);
+          
+          return operationId;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to start bulk rename operation';
           set({ error: errorMessage, isLoading: false });
           throw error;
         }
@@ -518,6 +584,21 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
           return result;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to validate bulk classify';
+          set({ error: errorMessage });
+          throw error;
+        }
+      },
+
+      validateBulkRename: async (assetIds: number[], options: any) => {
+        set({ error: null });
+        try {
+          const result = await invoke<ValidationResult>('validate_bulk_rename', {
+            assetIds,
+            options,
+          });
+          return result;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to validate bulk rename';
           set({ error: errorMessage });
           throw error;
         }
@@ -686,7 +767,8 @@ const useBulkOperationsStore = create<BulkOperationsState>()(
           },
         });
       },
-    }),
+    };
+    },
     {
       name: 'bulk-operations-storage',
       partialize: (state) => ({

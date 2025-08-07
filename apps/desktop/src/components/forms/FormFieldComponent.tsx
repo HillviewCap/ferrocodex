@@ -88,10 +88,23 @@ const FormFieldComponent: React.FC<FormFieldProps> = ({
         );
 
       case 'date':
+        // Handle dayjs object or string value
+        let dateValue = null;
+        if (value) {
+          // Check if value is already a dayjs object
+          if (dayjs.isDayjs(value)) {
+            dateValue = value;
+          } else if (typeof value === 'string' || value instanceof Date) {
+            // Try to parse string or Date object
+            const parsed = dayjs(value);
+            dateValue = parsed.isValid() ? parsed : null;
+          }
+        }
+        
         return (
           <DatePicker
             placeholder={field.placeholder}
-            value={value ? dayjs(value) : null}
+            value={dateValue}
             onChange={(date) => onChange(date ? date.format('YYYY-MM-DD') : null)}
             onBlur={onBlur}
             disabled={disabled}

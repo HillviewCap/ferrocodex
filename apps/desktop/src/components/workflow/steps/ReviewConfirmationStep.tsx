@@ -4,7 +4,7 @@ import {
   CheckCircleOutlined, 
   FolderOutlined, 
   DesktopOutlined, 
-  ShieldOutlined,
+  SecurityScanOutlined,
   SettingOutlined,
   HomeOutlined 
 } from '@ant-design/icons';
@@ -112,7 +112,7 @@ export const ReviewConfirmationStep: React.FC<ReviewConfirmationStepProps> = ({
               
               <Descriptions.Item label="Security Classification">
                 <Space>
-                  <ShieldOutlined style={{ color: getSecurityClassificationColor(data.security_classification) }} />
+                  <SecurityScanOutlined style={{ color: getSecurityClassificationColor(data.security_classification) }} />
                   <Tag color={getSecurityClassificationColor(data.security_classification)}>
                     {data.security_classification || 'Not set'}
                   </Tag>

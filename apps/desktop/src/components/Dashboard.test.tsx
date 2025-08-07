@@ -57,17 +57,26 @@ test('renders navigation menu', () => {
   expect(dashboardElements.length).toBeGreaterThan(0);
   const helpElements = screen.getAllByText('Help');
   expect(helpElements.length).toBeGreaterThan(0);
-  const secureNotesElements = screen.getAllByText('Secure Notes');
-  expect(secureNotesElements.length).toBeGreaterThan(0);
   
-  // For items that appear multiple times (in menu and cards), just check they exist
+  // Check for Assets menu item
   const assetsElements = screen.getAllByText('Assets');
-  const passwordsElements = screen.getAllByText('Passwords');
-  const securityElements = screen.getAllByText('Security');
-  
   expect(assetsElements.length).toBeGreaterThan(0);
-  expect(passwordsElements.length).toBeGreaterThan(0);
+  
+  // Check for Vault menu item
+  const vaultElements = screen.getAllByText('Vault');
+  expect(vaultElements.length).toBeGreaterThan(0);
+  
+  // Check for Metadata menu item (admin only)
+  const metadataElements = screen.getAllByText('Metadata');
+  expect(metadataElements.length).toBeGreaterThan(0);
+  
+  // Check for Security menu item (admin only)
+  const securityElements = screen.getAllByText('Security');
   expect(securityElements.length).toBeGreaterThan(0);
+  
+  // Check for User Management menu item (admin only)
+  const userManagementElements = screen.getAllByText('User Management');
+  expect(userManagementElements.length).toBeGreaterThan(0);
 });
 
 test('renders feature cards', () => {
@@ -75,21 +84,6 @@ test('renders feature cards', () => {
   
   // Check for the descriptive text in cards
   expect(screen.getByText('Manage configuration assets')).toBeInTheDocument();
-  expect(screen.getByText('Manage your passwords')).toBeInTheDocument();
-  expect(screen.getByText('Security settings')).toBeInTheDocument();
-});
-
-test('renders quick stats', () => {
-  render(<Dashboard />);
-  
-  const quickStatsElements = screen.getAllByText('Quick Stats');
-  expect(quickStatsElements.length).toBeGreaterThan(0);
-  const configAssetsElements = screen.getAllByText('Configuration Assets');
-  expect(configAssetsElements.length).toBeGreaterThan(0);
-  const totalVersionsElements = screen.getAllByText('Total Versions');
-  expect(totalVersionsElements.length).toBeGreaterThan(0);
-  const encryptionElements = screen.getAllByText('Encryption');
-  expect(encryptionElements.length).toBeGreaterThan(0);
 });
 
 test('calls logout when logout is clicked', async () => {

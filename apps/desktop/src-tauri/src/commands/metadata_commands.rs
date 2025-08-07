@@ -174,7 +174,7 @@ pub async fn create_metadata_schema(
 
     // Create schema
     let repo = SqliteMetadataRepository::new(conn);
-    let schema = repo.create_metadata_schema(request, session.user_id)
+    let schema = repo.create_metadata_schema(request, Some(session.user_id))
         .map_err(|e| {
             error!("Failed to create metadata schema '{}': {}", name, e);
             format!("Failed to create metadata schema: {}", e)

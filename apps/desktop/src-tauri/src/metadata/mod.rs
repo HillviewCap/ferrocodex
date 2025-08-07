@@ -95,7 +95,7 @@ pub struct AssetMetadataSchema {
     pub description: String,
     pub schema_json: String,
     pub asset_type_filter: Option<String>,
-    pub created_by: i64,
+    pub created_by: Option<i64>,
     pub created_at: String,
     pub is_system_template: bool,
     pub version: i32,
@@ -107,7 +107,7 @@ impl AssetMetadataSchema {
         description: String,
         schema_json: String,
         asset_type_filter: Option<String>,
-        created_by: i64,
+        created_by: Option<i64>,
     ) -> Self {
         Self {
             id: None,

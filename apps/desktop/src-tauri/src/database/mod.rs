@@ -11,9 +11,9 @@ use crate::branches::SqliteBranchRepository;
 use crate::firmware::SqliteFirmwareRepository;
 use crate::firmware_analysis::{SqliteFirmwareAnalysisRepository, FirmwareAnalysisRepository};
 use crate::vault::{SqliteVaultRepository, VaultRepository};
-// Epic 5 imports - temporarily disabled
-// use crate::metadata::{SqliteMetadataRepository, SqliteMetadataSearchRepository};
-// use crate::bulk::{SqliteBulkImportRepository, operations::SqliteBulkOperationsRepository};
+// Epic 5 imports
+use crate::metadata::{SqliteMetadataRepository, SqliteMetadataSearchRepository};
+use crate::bulk::{SqliteBulkImportRepository, operations::SqliteBulkOperationsRepository};
 
 pub struct Database {
     conn: Connection,
@@ -103,22 +103,23 @@ impl Database {
         let vault_repo = SqliteVaultRepository::new(&self.conn);
         vault_repo.initialize_schema()?;
 
-        // Epic 5 - Initialize metadata schema (temporarily disabled)
-        // let metadata_repo = SqliteMetadataRepository::new(&self.conn);
-        // metadata_repo.initialize_schema()?;
-        // metadata_repo.populate_system_templates()?;
+        // Epic 5 - Initialize metadata schema
+        let metadata_repo = SqliteMetadataRepository::new(&self.conn);
+        metadata_repo.initialize_schema()?;
+        metadata_repo.populate_system_templates()?;
+        metadata_repo.create_default_schema()?;
 
-        // Epic 5 - Initialize metadata search schema (temporarily disabled)
-        // let metadata_search_repo = SqliteMetadataSearchRepository::new(&self.conn);
-        // metadata_search_repo.initialize_search_schema()?;
+        // Epic 5 - Initialize metadata search schema
+        let metadata_search_repo = SqliteMetadataSearchRepository::new(&self.conn);
+        metadata_search_repo.initialize_search_schema()?;
 
-        // Epic 5 - Initialize bulk import schema (temporarily disabled)
-        // let bulk_repo = SqliteBulkImportRepository::new(&self.conn);
-        // bulk_repo.initialize_schema()?;
+        // Epic 5 - Initialize bulk import schema
+        let bulk_repo = SqliteBulkImportRepository::new(&self.conn);
+        bulk_repo.initialize_schema()?;
 
-        // Epic 5 - Initialize bulk operations schema (temporarily disabled)
-        // let bulk_ops_repo = SqliteBulkOperationsRepository::new(&self.conn);
-        // bulk_ops_repo.initialize_schema()?;
+        // Epic 5 - Initialize bulk operations schema
+        let bulk_ops_repo = SqliteBulkOperationsRepository::new(&self.conn);
+        bulk_ops_repo.initialize_schema()?;
 
         // Run data migrations
         self.run_data_migrations()?;
@@ -224,6 +225,40 @@ impl Database {
             // Mark migration as complete
             self.set_metadata(rotation_migration_key, "applied")?;
             info!("Password rotation migration completed");
+        }
+        
+        // Epic 5 - Metadata archive columns migration
+        let metadata_archive_migration_key = "metadata_archive_columns_20250206";
+        if let Ok(None) = self.get_metadata(metadata_archive_migration_key) {
+            info!("Applying metadata archive columns migration");
+            
+            // Check if is_archived column already exists
+            let column_check: Result<i32, rusqlite::Error> = self.conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('asset_metadata_schemas') WHERE name = 'is_archived'",
+                [],
+                |row| row.get(0),
+            );
+            
+            if let Ok(0) = column_check {
+                // Add archive columns to asset_metadata_schemas table
+                self.conn.execute_batch(r#"
+                    -- Add archive management columns to asset_metadata_schemas
+                    ALTER TABLE asset_metadata_schemas ADD COLUMN is_archived BOOLEAN DEFAULT 0;
+                    ALTER TABLE asset_metadata_schemas ADD COLUMN archived_at DATETIME;
+                    ALTER TABLE asset_metadata_schemas ADD COLUMN archive_reason TEXT;
+                    
+                    -- Create index for the new is_archived column
+                    CREATE INDEX IF NOT EXISTS idx_metadata_schemas_archived ON asset_metadata_schemas(is_archived);
+                "#)?;
+                
+                info!("Added archive columns and index to asset_metadata_schemas table");
+            } else {
+                info!("Archive columns already exist in asset_metadata_schemas table");
+            }
+            
+            // Mark migration as complete
+            self.set_metadata(metadata_archive_migration_key, "applied")?;
+            info!("Metadata archive columns migration completed");
         }
         
         Ok(())

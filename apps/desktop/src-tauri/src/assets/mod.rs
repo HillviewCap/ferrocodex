@@ -30,6 +30,10 @@ pub struct Asset {
 pub enum AssetType {
     Folder,
     Device,
+    Equipment,
+    System,
+    Area,
+    Line,
 }
 
 impl AssetType {
@@ -37,6 +41,10 @@ impl AssetType {
         match self {
             AssetType::Folder => "folder",
             AssetType::Device => "device",
+            AssetType::Equipment => "equipment",
+            AssetType::System => "system",
+            AssetType::Area => "area",
+            AssetType::Line => "line",
         }
     }
 
@@ -44,6 +52,10 @@ impl AssetType {
         match s {
             "folder" => Ok(AssetType::Folder),
             "device" => Ok(AssetType::Device),
+            "equipment" => Ok(AssetType::Equipment),
+            "system" => Ok(AssetType::System),
+            "area" => Ok(AssetType::Area),
+            "line" => Ok(AssetType::Line),
             _ => Err(anyhow::anyhow!("Invalid asset type: {}", s)),
         }
     }
@@ -127,8 +139,36 @@ pub struct MoveAssetRequest {
     pub new_sort_order: Option<i64>,
 }
 
-// Type alias for service compatibility
-pub type AssetService = SqliteAssetRepository<'static>;
+// Thread-safe service wrapper
+pub struct AssetService {
+    db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>,
+}
+
+impl AssetService {
+    pub fn new(db_manager: std::sync::Arc<std::sync::Mutex<crate::database::DatabaseManager>>) -> Self {
+        Self { db_manager }
+    }
+
+    /// Create asset from workflow data
+    pub fn create_asset_from_workflow(&self, user_id: i64, asset_data: crate::workflow::AssetCreationData) -> Result<i64> {
+        let db_manager = self.db_manager.lock().map_err(|e| {
+            anyhow::anyhow!("Failed to acquire database lock: {}", e)
+        })?;
+        let conn = db_manager.get_connection();
+        let repo = SqliteAssetRepository::new(conn);
+        repo.create_asset_from_workflow(user_id, asset_data)
+    }
+
+    /// Check if user has permission to perform action on asset
+    pub fn check_asset_permission(&self, user_id: i64, asset_id: i64, permission: &str) -> Result<bool> {
+        let db_manager = self.db_manager.lock().map_err(|e| {
+            anyhow::anyhow!("Failed to acquire database lock: {}", e)
+        })?;
+        let conn = db_manager.get_connection();
+        let repo = SqliteAssetRepository::new(conn);
+        repo.check_asset_permission(user_id, asset_id, permission)
+    }
+}
 
 pub trait AssetRepository {
     fn create_asset(&self, request: CreateAssetRequest) -> Result<Asset>;
@@ -553,6 +593,51 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
         
         let next_order: i64 = stmt.query_row([parent_id], |row| row.get(0))?;
         Ok(next_order)
+    }
+}
+
+impl<'a> SqliteAssetRepository<'a> {
+    /// Create asset from workflow data
+    pub fn create_asset_from_workflow(&self, user_id: i64, asset_data: crate::workflow::AssetCreationData) -> Result<i64> {
+        use crate::assets::AssetType;
+        
+        // Convert asset type string to enum
+        let asset_type = match asset_data.asset_type.as_str() {
+            "Equipment" => AssetType::Equipment,
+            "System" => AssetType::System,
+            "Device" => AssetType::Device,
+            "Area" => AssetType::Area,
+            "Line" => AssetType::Line,
+            _ => AssetType::Equipment, // Default fallback
+        };
+
+        let request = CreateAssetRequest {
+            name: asset_data.name,
+            description: asset_data.description.unwrap_or_default(),
+            asset_type,
+            parent_id: asset_data.parent_id,
+            created_by: user_id,
+        };
+
+        let asset = self.create_asset(request)?;
+        Ok(asset.id)
+    }
+
+    /// Check if user has permission to perform action on asset
+    pub fn check_asset_permission(&self, user_id: i64, asset_id: i64, permission: &str) -> Result<bool> {
+        // For now, implement basic permission check
+        // In a full implementation, this would check role-based permissions, asset ownership, etc.
+        
+        // Check if asset exists
+        let asset = self.get_asset_by_id(asset_id)?;
+        if asset.is_none() {
+            return Ok(false);
+        }
+        
+        // Basic permission: user can access assets they created or if they're admin
+        // This is a simplified implementation - extend based on requirements
+        let asset = asset.unwrap();
+        Ok(asset.created_by == user_id || permission == "read")
     }
 }
 

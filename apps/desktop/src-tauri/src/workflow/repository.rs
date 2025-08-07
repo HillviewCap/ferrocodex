@@ -27,9 +27,8 @@ impl WorkflowRepository {
             WorkflowError::Database(format!("Failed to acquire database lock: {}", e))
         })?;
 
-        db_manager.execute_batch(&[
-            // Workflow states table
-            r#"
+        db_manager.get_connection().execute_batch(r#"
+            -- Workflow states table
             CREATE TABLE IF NOT EXISTS workflow_states (
                 id TEXT PRIMARY KEY,
                 workflow_type TEXT NOT NULL,
@@ -41,11 +40,9 @@ impl WorkflowRepository {
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
                 FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-            "#,
+            );
 
-            // Workflow sessions table
-            r#"
+            -- Workflow sessions table
             CREATE TABLE IF NOT EXISTS workflow_sessions (
                 workflow_id TEXT PRIMARY KEY,
                 session_token TEXT NOT NULL UNIQUE,
@@ -55,11 +52,9 @@ impl WorkflowRepository {
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (workflow_id) REFERENCES workflow_states (id),
                 FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-            "#,
+            );
 
-            // Workflow drafts table
-            r#"
+            -- Workflow drafts table
             CREATE TABLE IF NOT EXISTS workflow_drafts (
                 id TEXT PRIMARY KEY,
                 workflow_id TEXT NOT NULL,
@@ -69,11 +64,9 @@ impl WorkflowRepository {
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (workflow_id) REFERENCES workflow_states (id),
                 FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-            "#,
+            );
 
-            // Workflow step configurations table
-            r#"
+            -- Workflow step configurations table
             CREATE TABLE IF NOT EXISTS workflow_step_configs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 workflow_type TEXT NOT NULL,
@@ -87,18 +80,17 @@ impl WorkflowRepository {
                 optional_fields TEXT NOT NULL, -- JSON array
                 created_at TEXT NOT NULL,
                 UNIQUE(workflow_type, step_name)
-            )
-            "#,
+            );
 
-            // Indexes for performance
-            "CREATE INDEX IF NOT EXISTS idx_workflow_states_user_id ON workflow_states (user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states (status)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_states_created_at ON workflow_states (created_at)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_sessions_token ON workflow_sessions (session_token)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_sessions_expires_at ON workflow_sessions (expires_at)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_drafts_workflow_id ON workflow_drafts (workflow_id)",
-            "CREATE INDEX IF NOT EXISTS idx_workflow_drafts_user_id ON workflow_drafts (user_id)",
-        ]).map_err(|e| WorkflowError::Database(e.to_string()))?;
+            -- Indexes for performance
+            CREATE INDEX IF NOT EXISTS idx_workflow_states_user_id ON workflow_states (user_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states (status);
+            CREATE INDEX IF NOT EXISTS idx_workflow_states_created_at ON workflow_states (created_at);
+            CREATE INDEX IF NOT EXISTS idx_workflow_sessions_token ON workflow_sessions (session_token);
+            CREATE INDEX IF NOT EXISTS idx_workflow_sessions_expires_at ON workflow_sessions (expires_at);
+            CREATE INDEX IF NOT EXISTS idx_workflow_drafts_workflow_id ON workflow_drafts (workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_drafts_user_id ON workflow_drafts (user_id);
+        "#).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         Ok(())
     }
@@ -111,7 +103,7 @@ impl WorkflowRepository {
 
         let data_json = serde_json::to_string(&state.data)?;
         
-        db_manager.execute(
+        db_manager.get_connection().execute(
             r#"
             INSERT OR REPLACE INTO workflow_states 
             (id, workflow_type, current_step, user_id, status, data, created_at, updated_at, completed_at)
@@ -139,17 +131,17 @@ impl WorkflowRepository {
             WorkflowError::Database(format!("Failed to acquire database lock: {}", e))
         })?;
 
-        let mut stmt = db_manager.prepare(
+        let mut stmt = db_manager.get_connection().prepare(
             "SELECT id, workflow_type, current_step, user_id, status, data, created_at, updated_at, completed_at 
              FROM workflow_states WHERE id = ?1"
         ).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let result = stmt.query_row(params![workflow_id], |row| {
-            Ok(self.row_to_workflow_state(row)?)
+            self.row_to_workflow_state(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_state".to_string(), rusqlite::types::Type::Text))
         });
 
         match result {
-            Ok(state) => Ok(Some(state?)),
+            Ok(state) => Ok(Some(state)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(WorkflowError::Database(e.to_string())),
         }
@@ -161,19 +153,19 @@ impl WorkflowRepository {
             WorkflowError::Database(format!("Failed to acquire database lock: {}", e))
         })?;
 
-        let mut stmt = db_manager.prepare(
+        let mut stmt = db_manager.get_connection().prepare(
             "SELECT id, workflow_type, current_step, user_id, status, data, created_at, updated_at, completed_at 
              FROM workflow_states WHERE user_id = ?1 AND status IN ('Active', 'Paused') 
              ORDER BY updated_at DESC"
         ).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let rows = stmt.query_map(params![user_id], |row| {
-            Ok(self.row_to_workflow_state(row)?)
+            self.row_to_workflow_state(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_state".to_string(), rusqlite::types::Type::Text))
         }).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let mut states = Vec::new();
         for row in rows {
-            states.push(row.map_err(|e| WorkflowError::Database(e.to_string()))??);
+            states.push(row.map_err(|e| WorkflowError::Database(e.to_string()))?);
         }
 
         Ok(states)
@@ -186,14 +178,14 @@ impl WorkflowRepository {
         })?;
 
         // Delete related records first
-        db_manager.execute("DELETE FROM workflow_sessions WHERE workflow_id = ?1", params![workflow_id])
+        db_manager.get_connection().execute("DELETE FROM workflow_sessions WHERE workflow_id = ?1", params![workflow_id])
             .map_err(|e| WorkflowError::Database(e.to_string()))?;
         
-        db_manager.execute("DELETE FROM workflow_drafts WHERE workflow_id = ?1", params![workflow_id])
+        db_manager.get_connection().execute("DELETE FROM workflow_drafts WHERE workflow_id = ?1", params![workflow_id])
             .map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         // Delete the workflow state
-        db_manager.execute("DELETE FROM workflow_states WHERE id = ?1", params![workflow_id])
+        db_manager.get_connection().execute("DELETE FROM workflow_states WHERE id = ?1", params![workflow_id])
             .map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         Ok(())
@@ -207,7 +199,7 @@ impl WorkflowRepository {
 
         let auto_save_json = serde_json::to_string(&session.auto_save)?;
 
-        db_manager.execute(
+        db_manager.get_connection().execute(
             r#"
             INSERT OR REPLACE INTO workflow_sessions 
             (workflow_id, session_token, user_id, expires_at, auto_save_config, created_at)
@@ -232,17 +224,17 @@ impl WorkflowRepository {
             WorkflowError::Database(format!("Failed to acquire database lock: {}", e))
         })?;
 
-        let mut stmt = db_manager.prepare(
+        let mut stmt = db_manager.get_connection().prepare(
             "SELECT workflow_id, session_token, user_id, expires_at, auto_save_config, created_at 
              FROM workflow_sessions WHERE session_token = ?1"
         ).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let result = stmt.query_row(params![token], |row| {
-            Ok(self.row_to_workflow_session(row)?)
+            self.row_to_workflow_session(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_session".to_string(), rusqlite::types::Type::Text))
         });
 
         match result {
-            Ok(session) => Ok(Some(session?)),
+            Ok(session) => Ok(Some(session)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(WorkflowError::Database(e.to_string())),
         }
@@ -256,7 +248,7 @@ impl WorkflowRepository {
 
         let draft_data_json = serde_json::to_string(&draft.draft_data)?;
 
-        db_manager.execute(
+        db_manager.get_connection().execute(
             r#"
             INSERT OR REPLACE INTO workflow_drafts 
             (id, workflow_id, user_id, draft_data, created_at, updated_at)
@@ -281,18 +273,18 @@ impl WorkflowRepository {
             WorkflowError::Database(format!("Failed to acquire database lock: {}", e))
         })?;
 
-        let mut stmt = db_manager.prepare(
+        let mut stmt = db_manager.get_connection().prepare(
             "SELECT id, workflow_id, user_id, draft_data, created_at, updated_at 
              FROM workflow_drafts WHERE user_id = ?1 ORDER BY updated_at DESC"
         ).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let rows = stmt.query_map(params![user_id], |row| {
-            Ok(self.row_to_workflow_draft(row)?)
+            self.row_to_workflow_draft(row).map_err(|e| rusqlite::Error::InvalidColumnType(0, "workflow_draft".to_string(), rusqlite::types::Type::Text))
         }).map_err(|e| WorkflowError::Database(e.to_string()))?;
 
         let mut drafts = Vec::new();
         for row in rows {
-            drafts.push(row.map_err(|e| WorkflowError::Database(e.to_string()))??);
+            drafts.push(row.map_err(|e| WorkflowError::Database(e.to_string()))?);
         }
 
         Ok(drafts)
@@ -305,7 +297,7 @@ impl WorkflowRepository {
         })?;
 
         let now = chrono::Utc::now().to_rfc3339();
-        let rows_affected = db_manager.execute(
+        let rows_affected = db_manager.get_connection().execute(
             "DELETE FROM workflow_sessions WHERE expires_at < ?1",
             params![now]
         ).map_err(|e| WorkflowError::Database(e.to_string()))?;

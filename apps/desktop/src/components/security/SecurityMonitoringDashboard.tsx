@@ -16,7 +16,7 @@ import {
   Spin
 } from 'antd';
 import {
-  ShieldCheckOutlined,
+  SecurityScanOutlined,
   SafetyCertificateOutlined,
   ExclamationCircleOutlined,
   TrophyOutlined,
@@ -152,7 +152,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
               title="Security Status"
               value={overallStatus}
               valueStyle={{ color: getHealthColor(), fontSize: '16px' }}
-              prefix={<ShieldCheckOutlined />}
+              prefix={<SecurityScanOutlined />}
             />
           </Col>
           <Col span={8}>
@@ -244,7 +244,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
                 title="Overall Security Status"
                 value={overallStatus.toUpperCase()}
                 valueStyle={{ color: getHealthColor() }}
-                prefix={<ShieldCheckOutlined />}
+                prefix={<SecurityScanOutlined />}
               />
               <Progress
                 percent={healthReport?.validationSuccessRate || 0}

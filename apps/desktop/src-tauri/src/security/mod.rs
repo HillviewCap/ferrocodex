@@ -21,6 +21,7 @@ pub use windows_reserved::*;
 
 /// Security validation result containing success status and optional error details
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SecurityValidationResult {
     pub is_valid: bool,
     pub error_code: Option<String>,
@@ -126,6 +127,7 @@ impl std::error::Error for SecurityError {}
 
 /// File integrity verification result
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileIntegrityResult {
     pub sha256_hash: String,
     pub file_size: u64,

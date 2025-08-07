@@ -14,7 +14,7 @@ import useAuthStore from '../../store/auth';
 const { Text } = Typography;
 
 interface SecurityValidationInputProps {
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   onValidationChange: (result: SecurityValidationResult) => void;
   placeholder?: string;
@@ -34,7 +34,7 @@ interface ValidationState {
 }
 
 const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
-  value,
+  value = '',
   onChange,
   onValidationChange,
   placeholder = 'Enter asset name',
@@ -57,9 +57,14 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
 
   // Debounced validation function
   const validateInput = useCallback(async (inputValue: string) => {
-    if (!inputValue.trim() || inputValue === lastValidatedValue.current) {
+    if (!inputValue.trim()) {
       return;
     }
+    
+    // Force revalidation by not checking lastValidatedValue for now
+    // if (inputValue === lastValidatedValue.current) {
+    //   return;
+    // }
 
     lastValidatedValue.current = inputValue;
     
@@ -75,26 +80,39 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
         name: inputValue
       });
 
+      console.log('Validation result from backend:', result);
+      console.log('Result type:', typeof result, 'isValid type:', typeof result.isValid);
+      console.log('Result keys:', Object.keys(result));
+      
+      // Check for both camelCase and snake_case
+      const isValid = result.isValid !== undefined ? result.isValid : (result as any).is_valid;
+      
+      if (isValid === undefined) {
+        console.error('Neither isValid nor is_valid found in result:', result);
+      }
+
       const validationResult: SecurityValidationResult = {
-        isValid: result.isValid,
-        errorCode: result.errorCode,
-        errorMessage: result.errorMessage,
-        suggestedCorrections: result.suggestedCorrections || [],
-        securityFlags: result.securityFlags || [],
+        isValid: isValid || false,
+        errorCode: result.errorCode || (result as any).error_code,
+        errorMessage: result.errorMessage || (result as any).error_message,
+        suggestedCorrections: result.suggestedCorrections || (result as any).suggested_corrections || [],
+        securityFlags: result.securityFlags || (result as any).security_flags || [],
         validationTimestamp: new Date().toISOString()
       };
 
+      console.log('Setting validation state - isValid:', isValid, 'validationResult:', validationResult);
+      
       setValidationState({
-        status: result.isValid ? 'success' : 'error',
+        status: isValid ? 'success' : 'error',
         result: validationResult,
-        suggestions: result.suggestedCorrections || [],
+        suggestions: validationResult.suggestedCorrections,
         isLoading: false
       });
 
       onValidationChange(validationResult);
 
       // Auto-fetch suggestions if validation failed and suggestions are enabled
-      if (!result.isValid && showSuggestions && result.suggestedCorrections?.length === 0) {
+      if (!isValid && showSuggestions && validationResult.suggestedCorrections.length === 0) {
         try {
           const suggestions = await invoke<string[]>('suggest_compliant_names', {
             token,
@@ -111,6 +129,7 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
       }
 
     } catch (error) {
+      console.error('Validation error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Validation failed';
       
       const errorResult: SecurityValidationResult = {
@@ -132,6 +151,15 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
       onValidationChange(errorResult);
     }
   }, [token, onValidationChange, showSuggestions]);
+
+  // Normalize input for preview (same logic as backend)
+  const normalizeForPreview = (input: string): string => {
+    return input
+      .split('')
+      .filter(char => /[a-zA-Z0-9_-]/.test(char))
+      .join('')
+      .toUpperCase();
+  };
 
   // Handle input change with debounced validation
   const handleInputChange = (newValue: string) => {
@@ -204,7 +232,8 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
 
   // Character count display
   const getCharacterCount = () => {
-    const remaining = maxLength - value.length;
+    const currentLength = value?.length || 0;
+    const remaining = maxLength - currentLength;
     const isOverLimit = remaining < 0;
     
     return (
@@ -215,7 +244,7 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
           float: 'right'
         }}
       >
-        {value.length}/{maxLength}
+        {currentLength}/{maxLength}
       </Text>
     );
   };
@@ -236,13 +265,13 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
       <div style={{ position: 'relative' }}>
         {showSuggestions ? (
           <AutoComplete
-            value={value}
+            value={value || ''}
             onChange={handleInputChange}
             onSelect={handleSuggestionSelect}
             options={suggestionOptions}
             disabled={disabled}
             style={{ width: '100%' }}
-            dropdownMatchSelectWidth={true}
+            popupMatchSelectWidth={true}
           >
             <Input
               placeholder={placeholder}
@@ -253,14 +282,13 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
                   {getValidationIcon()}
                 </Space>
               }
-              maxLength={maxLength}
               autoFocus={autoFocus}
               size={size}
             />
           </AutoComplete>
         ) : (
           <Input
-            value={value}
+            value={value || ''}
             onChange={(e) => handleInputChange(e.target.value)}
             placeholder={placeholder}
             status={getInputStatus()}
@@ -271,15 +299,25 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
               </Space>
             }
             disabled={disabled}
-            maxLength={maxLength}
             autoFocus={autoFocus}
             size={size}
           />
         )}
         
-        {/* Character count */}
-        <div style={{ marginTop: 4, minHeight: 16 }}>
+        {/* Character count and normalized preview */}
+        <div style={{ marginTop: 4, minHeight: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {getCharacterCount()}
+          {value && value.trim() && normalizeForPreview(value) !== value && (
+            <Text 
+              style={{ 
+                fontSize: '11px', 
+                color: '#666',
+                fontStyle: 'italic'
+              }}
+            >
+              Will be saved as: {normalizeForPreview(value)}
+            </Text>
+          )}
         </div>
       </div>
 
@@ -297,9 +335,9 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
           
           {validationState.status === 'error' && validationState.result.errorMessage && (
             <Alert
-              message="Invalid asset name"
-              description={validationState.result.errorMessage}
-              type="error"
+              message="Asset name needs adjustment"
+              description={validationState.result.errorMessage.replace(/uppercase/gi, '').replace(/security/gi, '').trim()}
+              type="warning"
               showIcon
               style={{ fontSize: '12px' }}
               action={
@@ -312,22 +350,6 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
             />
           )}
 
-          {/* Security flags display */}
-          {validationState.result.securityFlags && validationState.result.securityFlags.length > 0 && (
-            <Alert
-              message="Security Notice"
-              description={
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {validationState.result.securityFlags.map((flag, idx) => (
-                    <li key={idx} style={{ fontSize: '11px' }}>{flag}</li>
-                  ))}
-                </ul>
-              }
-              type="warning"
-              showIcon
-              style={{ fontSize: '12px', marginTop: 4 }}
-            />
-          )}
         </div>
       )}
 

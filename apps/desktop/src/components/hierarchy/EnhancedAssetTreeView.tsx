@@ -18,6 +18,7 @@ import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 import useBulkOperationsStore from '../../store/bulkOperations';
 import { AssetSelectionCheckbox } from '../bulk';
+import AdvancedDragDrop from './AdvancedDragDrop';
 
 const { Text } = Typography;
 
@@ -63,6 +64,9 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
     isSelected: isBulkSelected,
     selectAsset: selectBulkAsset,
     deselectAsset: deselectBulkAsset,
+    startBulkMove,
+    getSelectedAssets,
+    getSelectedCount,
   } = useBulkOperationsStore();
 
   // Convert hierarchy data to tree data nodes
@@ -103,6 +107,10 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
         isFolder,
         selectable: true,
         disabled: loading,
+        draggable: allowDragDrop && !loading && user !== null,
+        // Add data attributes for advanced drag-drop
+        'data-asset-id': asset.id,
+        'data-drop-target-id': isFolder ? asset.id : undefined,
       };
     };
 
@@ -142,7 +150,26 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
     // Context menu would be implemented here
   }, [user]);
 
-  // Handle drag and drop
+  // Handle multi-asset move for advanced drag-drop
+  const handleMultiAssetMove = useCallback(async (assetIds: number[], targetId: number | null) => {
+    if (!allowDragDrop) return;
+
+    try {
+      await startBulkMove({
+        asset_ids: assetIds,
+        new_parent_id: targetId,
+        options: {
+          new_parent_id: targetId,
+          validate_hierarchy: true,
+          skip_conflicts: false,
+        }
+      });
+    } catch (error) {
+      throw error; // Let AdvancedDragDrop handle the error display
+    }
+  }, [allowDragDrop, startBulkMove]);
+
+  // Handle legacy single-asset drag and drop for tree component
   const handleDrop = useCallback(async (info: any) => {
     if (!allowDragDrop || !onAssetMove) return;
 
@@ -202,7 +229,11 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
   }, [selectedAsset]);
 
   return (
-    <div className="enhanced-asset-tree-view">
+    <AdvancedDragDrop
+      assets={assets}
+      onMultiAssetMove={handleMultiAssetMove}
+      className="enhanced-asset-tree-view"
+    >
       <Tree<EnhancedAssetTreeDataNode>
         {...treeProps}
         style={{ 
@@ -211,7 +242,7 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
         }}
         titleRender={(node) => node.title}
       />
-    </div>
+    </AdvancedDragDrop>
   );
 };
 

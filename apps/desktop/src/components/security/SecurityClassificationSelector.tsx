@@ -89,36 +89,6 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
     </Space>
   );
 
-  const renderOption = (level: SecurityClassificationLevel) => {
-    const classification = SECURITY_CLASSIFICATIONS[level];
-    const isDisabled = isLevelDisabled(level);
-    
-    return (
-      <Option 
-        key={level} 
-        value={level} 
-        disabled={isDisabled}
-        style={{ 
-          opacity: isDisabled ? 0.6 : 1,
-          padding: '8px 12px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {renderClassificationBadge(classification)}
-          {isDisabled && (
-            <Tooltip title={getDisabledReason(level)}>
-              <InfoCircleOutlined style={{ color: '#999' }} />
-            </Tooltip>
-          )}
-        </div>
-        {showDescription && (
-          <div style={{ marginTop: 4, fontSize: '12px', color: '#666' }}>
-            {classification.description}
-          </div>
-        )}
-      </Option>
-    );
-  };
 
   const getDisabledReason = (level: SecurityClassificationLevel): string => {
     if (currentUserRole === 'Engineer' && 
@@ -146,25 +116,39 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
         disabled={disabled}
         style={{ width: '100%', minWidth: 200 }}
         size={size}
-        popupRender={(menu) => (
-          <div>
-            {menu}
-            {showAccessRequirements && selectedLevel && (
-              <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0' }}>
-                <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                  Access Requirements:
-                </Text>
-                <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: '11px', color: '#666' }}>
-                  {SECURITY_CLASSIFICATIONS[selectedLevel].accessRequirements.map((req, idx) => (
-                    <li key={idx}>{req}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
+        notFoundContent="No classifications available"
+        dropdownStyle={{ minWidth: 350 }}
+        optionLabelProp="label"
       >
-        {Object.values(SecurityClassificationLevel).map(renderOption)}
+        {Object.values(SecurityClassificationLevel).map(level => {
+          const classification = SECURITY_CLASSIFICATIONS[level];
+          return (
+            <Option 
+              key={level} 
+              value={level} 
+              label={classification.displayName}
+              disabled={isLevelDisabled(level)}
+              style={{ 
+                opacity: isLevelDisabled(level) ? 0.6 : 1,
+                padding: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {renderClassificationBadge(classification)}
+                  {isLevelDisabled(level) && (
+                    <Tooltip title={getDisabledReason(level)}>
+                      <InfoCircleOutlined style={{ color: '#999', marginLeft: '8px' }} />
+                    </Tooltip>
+                  )}
+                </div>
+                <div style={{ marginLeft: '28px', fontSize: '12px', color: '#666', lineHeight: '16px' }}>
+                  {classification.description}
+                </div>
+              </div>
+            </Option>
+          );
+        })}
       </Select>
 
       {/* Classification Inheritance Warning */}
@@ -191,35 +175,16 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
         />
       )}
 
-      {/* Selected Classification Details */}
-      {showDescription && selectedLevel && (
-        <Card 
-          size="small" 
-          style={{ marginTop: 12 }}
-          title={
-            <Space>
-              {renderClassificationBadge(SECURITY_CLASSIFICATIONS[selectedLevel])}
-              <Text type="secondary" style={{ fontSize: '12px' }}>Selected Classification</Text>
-            </Space>
-          }
-        >
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            <Text style={{ fontSize: '13px' }}>
-              {SECURITY_CLASSIFICATIONS[selectedLevel].description}
-            </Text>
-            
-            {showAccessRequirements && (
-              <div>
-                <Text strong style={{ fontSize: '12px' }}>Access Requirements:</Text>
-                <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                  {SECURITY_CLASSIFICATIONS[selectedLevel].accessRequirements.map((req, idx) => (
-                    <li key={idx} style={{ fontSize: '12px', marginBottom: 2 }}>{req}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </Space>
-        </Card>
+      {/* Selected Classification Details - Only show access requirements if enabled */}
+      {showAccessRequirements && selectedLevel && (
+        <div style={{ marginTop: 12, padding: '12px', backgroundColor: '#fafafa', borderRadius: '6px', border: '1px solid #f0f0f0' }}>
+          <Text strong style={{ fontSize: '12px', color: '#666' }}>Access Requirements:</Text>
+          <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+            {SECURITY_CLASSIFICATIONS[selectedLevel].accessRequirements.map((req, idx) => (
+              <li key={idx} style={{ fontSize: '12px', marginBottom: 2, color: '#666' }}>{req}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

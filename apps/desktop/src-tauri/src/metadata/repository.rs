@@ -10,7 +10,7 @@ use super::{
 
 /// Repository for managing metadata schemas
 pub trait MetadataRepository {
-    fn create_metadata_schema(&self, request: CreateMetadataSchemaRequest, created_by: i64) -> Result<AssetMetadataSchema>;
+    fn create_metadata_schema(&self, request: CreateMetadataSchemaRequest, created_by: Option<i64>) -> Result<AssetMetadataSchema>;
     fn get_metadata_schemas(&self, asset_type_filter: Option<String>) -> Result<Vec<AssetMetadataSchema>>;
     fn get_metadata_schema_by_id(&self, schema_id: i64) -> Result<Option<AssetMetadataSchema>>;
     fn update_metadata_schema(&self, schema_id: i64, request: UpdateMetadataSchemaRequest) -> Result<AssetMetadataSchema>;
@@ -64,7 +64,7 @@ impl<'a> SqliteMetadataRepository<'a> {
                 description TEXT NOT NULL,
                 schema_json TEXT NOT NULL,
                 asset_type_filter TEXT,
-                created_by INTEGER NOT NULL,
+                created_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 is_system_template BOOLEAN NOT NULL DEFAULT 0,
                 version INTEGER NOT NULL DEFAULT 1,
@@ -99,10 +99,7 @@ impl<'a> SqliteMetadataRepository<'a> {
                 UNIQUE(asset_id, schema_id)
             );
 
-            -- Add additional fields for enhanced API support
-            ALTER TABLE asset_metadata_schemas ADD COLUMN is_archived BOOLEAN DEFAULT 0;
-            ALTER TABLE asset_metadata_schemas ADD COLUMN archived_at DATETIME;
-            ALTER TABLE asset_metadata_schemas ADD COLUMN archive_reason TEXT;
+            -- These fields will be added through migration if needed
 
             -- External metadata mappings table
             CREATE TABLE IF NOT EXISTS external_metadata_mappings (
@@ -190,7 +187,7 @@ impl<'a> SqliteMetadataRepository<'a> {
             CREATE INDEX IF NOT EXISTS idx_metadata_schemas_asset_type ON asset_metadata_schemas(asset_type_filter);
             CREATE INDEX IF NOT EXISTS idx_metadata_schemas_created_by ON asset_metadata_schemas(created_by);
             CREATE INDEX IF NOT EXISTS idx_metadata_schemas_system ON asset_metadata_schemas(is_system_template);
-            CREATE INDEX IF NOT EXISTS idx_metadata_schemas_archived ON asset_metadata_schemas(is_archived);
+            -- Index for is_archived will be created in migration if column exists
 
             CREATE INDEX IF NOT EXISTS idx_field_templates_name ON metadata_field_templates(name);
             CREATE INDEX IF NOT EXISTS idx_field_templates_category ON metadata_field_templates(category);
@@ -239,6 +236,146 @@ impl<'a> SqliteMetadataRepository<'a> {
         }
 
         info!("System field templates populated successfully");
+        Ok(())
+    }
+
+    /// Create default metadata schema for equipment import
+    pub fn create_default_schema(&self) -> Result<()> {
+        info!("Creating default metadata schema for equipment import");
+        
+        // Check if default schema already exists
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM asset_metadata_schemas WHERE name = 'Default Equipment Schema'",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if count > 0 {
+            info!("Default schema already exists, skipping creation");
+            return Ok(());
+        }
+
+        // Create comprehensive default schema with common industrial equipment fields
+        let default_schema_json = serde_json::json!({
+            "type": "object",
+            "title": "Default Equipment Schema",
+            "description": "Standard schema for industrial equipment with common fields",
+            "properties": {
+                // Device Information
+                "manufacturer": {
+                    "type": "string",
+                    "title": "Manufacturer",
+                    "description": "Equipment manufacturer name"
+                },
+                "model_number": {
+                    "type": "string",
+                    "title": "Model Number",
+                    "description": "Equipment model or part number"
+                },
+                "serial_number": {
+                    "type": "string",
+                    "title": "Serial Number",
+                    "description": "Unique serial number"
+                },
+                "firmware_version": {
+                    "type": "string",
+                    "title": "Firmware Version",
+                    "description": "Current firmware or software version"
+                },
+                
+                // Network Configuration
+                "ip_address": {
+                    "type": "string",
+                    "title": "IP Address",
+                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+                    "description": "IPv4 address (e.g., 192.168.1.100)"
+                },
+                "subnet_mask": {
+                    "type": "string",
+                    "title": "Subnet Mask",
+                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+                    "description": "Network subnet mask (e.g., 255.255.255.0)"
+                },
+                "mac_address": {
+                    "type": "string",
+                    "title": "MAC Address",
+                    "pattern": "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
+                    "description": "Hardware MAC address (e.g., 00:1B:44:11:3A:B7)"
+                },
+                
+                // Physical Location
+                "facility": {
+                    "type": "string",
+                    "title": "Facility",
+                    "description": "Facility or site name"
+                },
+                "building": {
+                    "type": "string",
+                    "title": "Building",
+                    "description": "Building identifier"
+                },
+                "floor": {
+                    "type": "string",
+                    "title": "Floor",
+                    "description": "Floor number or identifier"
+                },
+                "room": {
+                    "type": "string",
+                    "title": "Room",
+                    "description": "Room number or area"
+                },
+                "rack": {
+                    "type": "string",
+                    "title": "Rack/Cabinet",
+                    "description": "Rack or cabinet identifier"
+                },
+                
+                // Operational Information
+                "install_date": {
+                    "type": "string",
+                    "format": "date",
+                    "title": "Installation Date",
+                    "description": "Date equipment was installed"
+                },
+                "commissioning_date": {
+                    "type": "string",
+                    "format": "date",
+                    "title": "Commissioning Date",
+                    "description": "Date equipment was commissioned"
+                },
+                "operational_status": {
+                    "type": "string",
+                    "title": "Operational Status",
+                    "enum": ["Active", "Inactive", "Maintenance", "Standby", "Decommissioned"],
+                    "description": "Current operational status"
+                },
+                "notes": {
+                    "type": "string",
+                    "title": "Notes",
+                    "description": "Additional notes or comments"
+                }
+            },
+            "required": []
+        }).to_string();
+
+        // Insert default schema as a system template that cannot be deleted
+        self.conn.execute(
+            "INSERT INTO asset_metadata_schemas (
+                name, description, schema_json, asset_type_filter, 
+                created_by, is_system_template, version
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                "Default Equipment Schema",
+                "Standard schema for industrial equipment with common fields for network, physical location, and operational information",
+                default_schema_json,
+                None::<String>,  // No asset type filter - applies to all
+                None::<i64>,  // NULL for system-created schemas
+                true,  // Mark as system template
+                1
+            ],
+        )?;
+
+        info!("Default metadata schema created successfully");
         Ok(())
     }
 
@@ -319,7 +456,7 @@ impl<'a> SqliteMetadataRepository<'a> {
 }
 
 impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
-    fn create_metadata_schema(&self, request: CreateMetadataSchemaRequest, created_by: i64) -> Result<AssetMetadataSchema> {
+    fn create_metadata_schema(&self, request: CreateMetadataSchemaRequest, created_by: Option<i64>) -> Result<AssetMetadataSchema> {
         // Validate schema name
         if request.name.trim().is_empty() {
             return Err(anyhow::anyhow!("Schema name cannot be empty"));
@@ -365,7 +502,7 @@ impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
                 &request.description,
                 &request.schema_json,
                 &request.asset_type_filter,
-                &created_by
+                created_by
             ],
             Self::row_to_metadata_schema,
         )?;
@@ -907,7 +1044,7 @@ mod tests {
             asset_type_filter: Some("device".to_string()),
         };
 
-        let schema = repo.create_metadata_schema(request, 1).unwrap();
+        let schema = repo.create_metadata_schema(request, Some(1)).unwrap();
         assert_eq!(schema.name, "PLC Configuration Schema");
         assert_eq!(schema.version, 1);
         assert!(!schema.is_system_template);
@@ -926,7 +1063,7 @@ mod tests {
             asset_type_filter: None,
         };
 
-        let result = repo.create_metadata_schema(request, 1);
+        let result = repo.create_metadata_schema(request, Some(1));
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Invalid JSON"));
     }
@@ -943,7 +1080,7 @@ mod tests {
             schema_json: json!({"type": "object"}).to_string(),
             asset_type_filter: Some("device".to_string()),
         };
-        repo.create_metadata_schema(request, 1).unwrap();
+        repo.create_metadata_schema(request, Some(1)).unwrap();
 
         let schemas = repo.get_metadata_schemas(Some("device".to_string())).unwrap();
         assert_eq!(schemas.len(), 1);
@@ -965,7 +1102,7 @@ mod tests {
             schema_json: json!({"type": "object"}).to_string(),
             asset_type_filter: None,
         };
-        let schema = repo.create_metadata_schema(request, 1).unwrap();
+        let schema = repo.create_metadata_schema(request, Some(1)).unwrap();
         let schema_id = schema.id.unwrap();
 
         // Update schema
@@ -1034,7 +1171,7 @@ mod tests {
             schema_json: json!({"type": "object"}).to_string(),
             asset_type_filter: None,
         };
-        let schema = repo.create_metadata_schema(schema_request, 1).unwrap();
+        let schema = repo.create_metadata_schema(schema_request, Some(1)).unwrap();
         let schema_id = schema.id.unwrap();
 
         // Create asset metadata

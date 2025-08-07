@@ -187,7 +187,7 @@ impl<'a> MetadataCrudApi<'a> {
                 schema_json: new_schema.schema_json.clone(),
                 asset_type_filter: new_schema.asset_type_filter.clone(),
             },
-            new_schema.created_by,
+            Some(new_schema.created_by.unwrap_or(1)),
         )
         .map_err(|e| format!("Failed to create duplicated schema: {}", e))?;
 

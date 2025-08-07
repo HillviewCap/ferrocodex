@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, Row};
+use rusqlite::{Connection, Row, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

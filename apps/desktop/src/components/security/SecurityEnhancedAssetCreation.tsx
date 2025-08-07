@@ -17,7 +17,7 @@ import {
   ToolOutlined, 
   CheckCircleOutlined,
   RightOutlined,
-  ShieldCheckOutlined,
+  SecurityScanOutlined,
   SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { AssetType, AssetHierarchy, CreateAssetRequest } from '../../types/assets';
@@ -107,11 +107,6 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
       icon: <RightOutlined />,
     },
     {
-      title: 'Security',
-      description: 'Security validation & classification',
-      icon: <ShieldCheckOutlined />,
-    },
-    {
       title: 'Details',
       description: 'Enter asset information',
       icon: <ToolOutlined />,
@@ -137,22 +132,14 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
         const parentId = form.getFieldValue('parent_id') || null;
         setFormData(prev => ({ ...prev, parent_id: parentId }));
       } else if (currentStep === 2) {
-        // Validate security settings
-        if (requiresSecurityValidation) {
-          if (!validationResult?.isValid) {
-            throw new Error('Asset name must pass security validation');
-          }
-          const classification = form.getFieldValue('security_classification');
-          if (!classification) {
-            throw new Error('Please select a security classification');
-          }
-          setFormData(prev => ({ ...prev, security_classification: classification }));
-        }
-      } else if (currentStep === 3) {
         // Validate details
-        await form.validateFields(['description']);
+        await form.validateFields(['name', 'description']);
+        const name = form.getFieldValue('name');
         const description = form.getFieldValue('description');
-        setFormData(prev => ({ ...prev, description }));
+        if (!name || !name.trim()) {
+          throw new Error('Please enter an asset name');
+        }
+        setFormData(prev => ({ ...prev, name, description }));
       }
       
       setCurrentStep(prev => prev + 1);
@@ -166,13 +153,6 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
     setCurrentStep(prev => prev - 1);
   };
 
-  const handleValidationChange = (result: SecurityValidationResult) => {
-    setValidationResult(result);
-    if (result.isValid && result.suggestedCorrections.length === 0) {
-      // Auto-update form data with validated name
-      setFormData(prev => ({ ...prev, name: form.getFieldValue('name') }));
-    }
-  };
 
   const handleCreate = async () => {
     try {
@@ -306,15 +286,11 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
                 <Form.Item 
                   name="name" 
                   rules={[
-                    { required: true, message: 'Please enter asset name' },
-                    { 
-                      validator: () => 
-                        validationResult?.isValid ? Promise.resolve() : Promise.reject('Name must pass security validation') 
-                    }
+                    { required: true, message: 'Please enter asset name' }
                   ]}
                 >
                   <SecurityValidationInput
-                    value={form.getFieldValue('name') || ''}
+                    value={formData.name || ''}
                     onChange={(value) => {
                       form.setFieldValue('name', value);
                       setFormData(prev => ({ ...prev, name: value }));
@@ -345,15 +321,15 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
               </div>
 
               {/* Validation status */}
-              {validationResult && (
+              {validationResult && formData.name && (
                 <div>
                   <Title level={5}>Validation Status</Title>
                   <ComplianceStatusIndicator
                     status={{
                       level: validationResult.isValid ? 'excellent' : 'needs-attention',
                       score: validationResult.isValid ? 100 : 0,
-                      issues: validationResult.isValid ? [] : [validationResult.errorMessage || 'Validation failed'],
-                      recommendations: validationResult.suggestedCorrections
+                      issues: validationResult.isValid ? [] : [validationResult.errorMessage || 'Name does not meet security requirements'],
+                      recommendations: validationResult.suggestedCorrections || []
                     }}
                     showScore={true}
                     showDetails={true}

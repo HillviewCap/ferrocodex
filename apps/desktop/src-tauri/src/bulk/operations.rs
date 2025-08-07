@@ -226,6 +226,7 @@ pub struct ValidationError {
     pub error_type: String,
     pub message: String,
     pub blocking: bool,
+    pub suggested_action: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -454,26 +455,26 @@ impl<'a> BulkOperationsRepository for SqliteBulkOperationsRepository<'a> {
     }
 
     fn get_active_operations(&self, user_id: Option<i32>) -> Result<Vec<BulkOperation>> {
-        let (query, params): (String, Vec<&dyn rusqlite::ToSql>) = if let Some(uid) = user_id {
-            (
-                "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
-                 FROM bulk_operations WHERE created_by = ?1 AND status IN ('pending', 'validating', 'processing') ORDER BY started_at DESC".to_string(),
-                vec![&uid]
-            )
-        } else {
-            (
-                "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
-                 FROM bulk_operations WHERE status IN ('pending', 'validating', 'processing') ORDER BY started_at DESC".to_string(),
-                vec![]
-            )
-        };
-
-        let mut stmt = self.conn.prepare(&query)?;
-        let operation_iter = stmt.query_map(params, Self::row_to_operation)?;
-        
         let mut operations = Vec::new();
-        for operation in operation_iter {
-            operations.push(operation?);
+        
+        if let Some(uid) = user_id {
+            let query = "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
+                 FROM bulk_operations WHERE created_by = ?1 AND status IN ('pending', 'validating', 'processing') ORDER BY started_at DESC";
+            let mut stmt = self.conn.prepare(query)?;
+            let operation_iter = stmt.query_map([uid], Self::row_to_operation)?;
+            
+            for operation in operation_iter {
+                operations.push(operation?);
+            }
+        } else {
+            let query = "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
+                 FROM bulk_operations WHERE status IN ('pending', 'validating', 'processing') ORDER BY started_at DESC";
+            let mut stmt = self.conn.prepare(query)?;
+            let operation_iter = stmt.query_map([], Self::row_to_operation)?;
+            
+            for operation in operation_iter {
+                operations.push(operation?);
+            }
         }
 
         Ok(operations)
@@ -481,50 +482,44 @@ impl<'a> BulkOperationsRepository for SqliteBulkOperationsRepository<'a> {
 
     fn get_operation_history(&self, user_id: Option<i32>, limit: Option<i32>) -> Result<BulkOperationHistory> {
         let limit_value = limit.unwrap_or(50);
-        
-        let (query, params): (String, Vec<&dyn rusqlite::ToSql>) = if let Some(uid) = user_id {
-            (
-                format!(
-                    "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
-                     FROM bulk_operations WHERE created_by = ?1 ORDER BY started_at DESC LIMIT {}",
-                    limit_value
-                ),
-                vec![&uid]
-            )
-        } else {
-            (
-                format!(
-                    "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
-                     FROM bulk_operations ORDER BY started_at DESC LIMIT {}",
-                    limit_value
-                ),
-                vec![]
-            )
-        };
-
-        let mut stmt = self.conn.prepare(&query)?;
-        let operation_iter = stmt.query_map(params, Self::row_to_operation)?;
-        
         let mut operations = Vec::new();
-        for operation in operation_iter {
-            operations.push(operation?);
+        
+        if let Some(uid) = user_id {
+            let query = format!(
+                "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
+                 FROM bulk_operations WHERE created_by = ?1 ORDER BY started_at DESC LIMIT {}",
+                limit_value
+            );
+            let mut stmt = self.conn.prepare(&query)?;
+            let operation_iter = stmt.query_map([uid], Self::row_to_operation)?;
+            
+            for operation in operation_iter {
+                operations.push(operation?);
+            }
+        } else {
+            let query = format!(
+                "SELECT id, operation_type, asset_ids, status, progress_percent, created_by, started_at, completed_at, error_details, metadata
+                 FROM bulk_operations ORDER BY started_at DESC LIMIT {}",
+                limit_value
+            );
+            let mut stmt = self.conn.prepare(&query)?;
+            let operation_iter = stmt.query_map([], Self::row_to_operation)?;
+            
+            for operation in operation_iter {
+                operations.push(operation?);
+            }
         }
 
         // Get total count
-        let (count_query, count_params): (String, Vec<&dyn rusqlite::ToSql>) = if let Some(uid) = user_id {
-            (
-                "SELECT COUNT(*) FROM bulk_operations WHERE created_by = ?1".to_string(),
-                vec![&uid]
-            )
+        let total_count: i32 = if let Some(uid) = user_id {
+            let count_query = "SELECT COUNT(*) FROM bulk_operations WHERE created_by = ?1";
+            let mut count_stmt = self.conn.prepare(count_query)?;
+            count_stmt.query_row([uid], |row| row.get(0))?
         } else {
-            (
-                "SELECT COUNT(*) FROM bulk_operations".to_string(),
-                vec![]
-            )
+            let count_query = "SELECT COUNT(*) FROM bulk_operations";
+            let mut count_stmt = self.conn.prepare(count_query)?;
+            count_stmt.query_row([], |row| row.get(0))?
         };
-
-        let mut count_stmt = self.conn.prepare(&count_query)?;
-        let total_count: i32 = count_stmt.query_row(count_params, |row| row.get(0))?;
 
         Ok(BulkOperationHistory {
             operations,

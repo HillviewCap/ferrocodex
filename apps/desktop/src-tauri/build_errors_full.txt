@@ -1,0 +1,15 @@
+Compiling ferrocodex v0.4.3 (F:\code\ferrocodex\apps\desktop\src-tauri)
+warning: unused imports: `AssetInfo`, `AssetRepository`, and `SqliteAssetRepository`
+ --> src\assets\tree_navigation.rs:4:21
+  |
+4 | use crate::assets::{AssetRepository, SqliteAssetRepository, AssetInfo, AssetHierarchy, AssetType};
+  |                     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+[Full build output would be here - truncated for brevity]
+
+Some errors have detailed explanations: E0063, E0277, E0308, E0560, E0599, E0616.
+For more information about an error, try `rustc --explain E0063`.
+warning: `ferrocodex` (lib) generated 214 warnings
+error: could not compile `ferrocodex` (lib) due to 171 previous errors; 214 warnings emitted
