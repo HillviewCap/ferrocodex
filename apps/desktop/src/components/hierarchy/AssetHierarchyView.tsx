@@ -27,9 +27,7 @@ import {
   DatabaseOutlined,
   CalendarOutlined,
   UserOutlined,
-  SafetyOutlined,
   CloudUploadOutlined,
-  FileTextOutlined,
   KeyOutlined
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
@@ -385,7 +383,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
             <div>
               <Text strong>Identity Vault: </Text>
               <VaultAccessIndicator 
-                vaultId={vaultInfo?.vault_id || 0}
+                vaultId={vaultInfo?.vault.id || 0}
                 compact={true}
               />
             </div>
@@ -596,7 +594,6 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         hierarchyData={hierarchyData}
         initialParentId={createModalParentId}
         initialAssetType={createModalAssetType}
-        requiresSecurityValidation={true}
       />
 
       {/* Quick Config Import Modal */}

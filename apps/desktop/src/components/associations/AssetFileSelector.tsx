@@ -9,7 +9,8 @@ import {
   Empty,
   Spin,
   Alert,
-  Tooltip
+  Tooltip,
+  Button
 } from 'antd';
 import { 
   FolderOutlined, 
@@ -18,7 +19,7 @@ import {
   InfoCircleOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import { AssetInfo, AssetSelectorProps, AssociationType } from '../../types/associations';
+import { AssetInfo, AssetSelectorProps } from '../../types/associations';
 
 const { Search } = Input;
 const { Title, Text } = Typography;
@@ -191,7 +192,7 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
               }}>
                 {asset.name}
               </span>
-              <Tag color={isDevice ? 'blue' : 'orange'} size="small">
+              <Tag color={isDevice ? 'blue' : 'orange'}>
                 {asset.assetType}
               </Tag>
               {!isSelectable && isDevice && (

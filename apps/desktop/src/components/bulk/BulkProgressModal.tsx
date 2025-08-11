@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Modal, Progress, Typography, Space, Button, List, Alert, Tag, Divider } from 'antd';
 import {
   CloseOutlined,
-  PauseCircleOutlined,
   StopOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
@@ -11,9 +10,8 @@ import {
 } from '@ant-design/icons';
 import useBulkOperationsStore from '../../store/bulkOperations';
 import { BulkOperationStatus } from '../../types/bulkOperations';
-import { formatBulkOperationDuration, getBulkOperationColor, getBulkOperationIcon } from '../../types/bulkOperations';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const BulkProgressModal: React.FC = () => {
   const {
@@ -26,7 +24,7 @@ const BulkProgressModal: React.FC = () => {
     isLoading,
   } = useBulkOperationsStore();
 
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [refreshInterval, setRefreshInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   
   const currentOperation = ui.currentOperation;
   const currentProgress = currentOperation ? operationProgress.get(currentOperation.id) : null;

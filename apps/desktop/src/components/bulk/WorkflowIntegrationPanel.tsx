@@ -18,30 +18,24 @@ import {
   Divider,
 } from 'antd';
 import {
-  PlayCircleOutlined,
-  PauseCircleOutlined,
   SyncOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ClockCircleOutlined,
-  SettingOutlined,
   BugOutlined,
   ApiOutlined,
   DatabaseOutlined,
   FolderOpenOutlined,
 } from '@ant-design/icons';
 import { 
-  BulkImportSession, 
-  BulkImportStatus, 
-  ProgressStatus,
+ 
   formatProcessingRate,
   formatEstimatedTime,
 } from '../../types/bulk';
-import { WorkflowStatus } from '../../types/workflow';
 import useBulkImportStore from '../../store/bulk';
 import { useWorkflowStore } from '../../store/workflow';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface WorkflowIntegrationPanelProps {
   sessionId?: number;
@@ -72,17 +66,14 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
 
   const {
     currentProgress,
-    currentSession,
     isLoading: bulkLoading,
     error: bulkError,
     getProgress,
   } = useBulkImportStore();
 
   const {
-    activeWorkflows,
     isLoading: workflowLoading,
     error: workflowError,
-    getActiveWorkflows,
   } = useWorkflowStore();
 
   useEffect(() => {
@@ -101,7 +92,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
   useEffect(() => {
     // Update health status based on current state
     updateHealthStatus();
-  }, [currentProgress, activeWorkflows, bulkError, workflowError]);
+  }, [currentProgress, bulkError, workflowError]);
 
   const syncWorkflowStatus = async () => {
     if (!sessionId) return;
@@ -109,7 +100,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
     try {
       await Promise.all([
         getProgress(sessionId),
-        getActiveWorkflows?.(),
+        // getActiveWorkflows?.(), // Not implemented
       ]);
       setLastSyncTime(new Date());
     } catch (error) {
@@ -137,9 +128,9 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
     // Check workflow health
     if (workflowError) {
       newStatus.assetCreation = 'error';
-    } else if (activeWorkflows && activeWorkflows.some(w => w.status === 'failed')) {
+    } else if (false) { // activeWorkflows not available
       newStatus.assetCreation = 'error';
-    } else if (activeWorkflows && activeWorkflows.some(w => w.status === 'warning')) {
+    } else if (false) { // activeWorkflows not available
       newStatus.assetCreation = 'warning';
     }
 
@@ -205,7 +196,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
 
   const renderIntegrationStatus = () => (
     <Card size="small" title="Integration Status">
-      <Timeline size="small">
+      <Timeline>
         <Timeline.Item 
           color={currentProgress ? 'blue' : 'gray'}
           dot={<DatabaseOutlined />}
@@ -219,13 +210,13 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
         </Timeline.Item>
         
         <Timeline.Item 
-          color={activeWorkflows && activeWorkflows.length > 0 ? 'green' : 'gray'}
+          color='gray' // activeWorkflows not available
           dot={<ApiOutlined />}
         >
           <Space direction="vertical" size={0}>
             <Text strong>Asset Creation Workflows</Text>
             <Text type="secondary">
-              {activeWorkflows ? `${activeWorkflows.length} active workflows` : 'No active workflows'}
+              {'No active workflows'} // activeWorkflows not available
             </Text>
           </Space>
         </Timeline.Item>
@@ -422,7 +413,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
         )}
       </Space>
     }>
-      <Space direction="vertical" style={{ width: '100%' }} size="medium">
+      <Space direction="vertical" style={{ width: '100%' }} size={16}>
         {/* Alert for any critical issues */}
         {(bulkError || workflowError) && (
           <Alert

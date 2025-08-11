@@ -852,71 +852,95 @@ pub async fn update_firmware_status(
     audit_state: State<'_, DatabaseState>,
 ) -> Result<(), String> {
     // Validate session
-    let session_manager_guard = session_manager.lock()
-        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
-    let session = match session_manager_guard.validate_session(&token) {
-        Ok(Some(session)) => session,
-        Ok(None) => return Err("Invalid or expired session".to_string()),
-        Err(e) => {
-            error!("Session validation error: {}", e);
-            return Err("Session validation error".to_string());
+    let session = {
+        let session_manager_guard = session_manager
+            .lock()
+            .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+        match session_manager_guard.validate_session(&token) {
+            Ok(Some(session)) => session,
+            Ok(None) => return Err("Invalid or expired session".to_string()),
+            Err(e) => {
+                error!("Session validation error: {}", e);
+                return Err("Session validation error".to_string());
+            }
         }
     };
-    drop(session_manager_guard);
 
     // Only Engineers and Administrators can update firmware status
     if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
-        warn!("User without sufficient permissions attempted to update firmware status: {}", session.username);
+        warn!(
+            "User without sufficient permissions attempted to update firmware status: {}",
+            session.username
+        );
         return Err("Only Engineers and Administrators can update firmware status".to_string());
     }
 
-    let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
-            
-            match firmware_repo.update_firmware_status(firmware_id, new_status.clone(), session.user_id, reason.clone()) {
-                Ok(_) => {
-                    // Log audit event
-                    if let Ok(audit_guard) = audit_state.lock() {
-                        if let Some(audit_db) = audit_guard.as_ref() {
-                            let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
-                            let audit_event = AuditEventRequest {
-                                event_type: AuditEventType::FirmwareStatusChange,
-                                user_id: Some(session.user_id),
-                                username: Some(session.username.clone()),
-                                admin_user_id: None,
-                                admin_username: None,
-                                target_user_id: None,
-                                target_username: None,
-                                description: format!("Firmware {} status updated to {}", firmware_id, new_status),
-                                metadata: Some(serde_json::json!({
-                                    "firmware_id": firmware_id,
-                                    "new_status": new_status.to_string(),
-                                    "reason": reason,
-                                    "changed_by": session.username
-                                }).to_string()),
-                                ip_address: None,
-                                user_agent: None,
-                            };
-                            if let Err(e) = audit_repo.log_event(&audit_event) {
-                                error!("Failed to log audit event: {}", e);
-                            }
-                        }
-                    }
-                    
-                    info!("Firmware {} status updated to {} by {}", firmware_id, new_status, session.username);
-                    Ok(())
-                }
-                Err(e) => {
-                    error!("Failed to update firmware status: {}", e);
-                    Err(format!("Failed to update firmware status: {}", e))
+    // 1) Do the database work in a tight scope and drop the db lock ASAP
+    {
+        let db_guard = db_state
+            .lock()
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Err("Database not initialized".to_string()),
+        };
+
+        let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+
+        if let Err(e) = firmware_repo.update_firmware_status(
+            firmware_id,
+            new_status.clone(),
+            session.user_id,
+            reason.clone(),
+        ) {
+            error!("Failed to update firmware status: {}", e);
+            return Err(format!("Failed to update firmware status: {}", e));
+        }
+        // db_guard dropped here
+    }
+
+    // 2) Perform audit logging in a separate lock scope AFTER db lock is released
+    {
+        if let Ok(audit_guard) = audit_state.lock() {
+            if let Some(audit_db) = audit_guard.as_ref() {
+                let audit_repo = SqliteAuditRepository::new(audit_db.get_connection());
+                let audit_event = AuditEventRequest {
+                    event_type: AuditEventType::FirmwareStatusChange,
+                    user_id: Some(session.user_id),
+                    username: Some(session.username.clone()),
+                    admin_user_id: None,
+                    admin_username: None,
+                    target_user_id: None,
+                    target_username: None,
+                    description: format!(
+                        "Firmware {} status updated to {}",
+                        firmware_id, new_status
+                    ),
+                    metadata: Some(
+                        serde_json::json!({
+                            "firmware_id": firmware_id,
+                            "new_status": new_status.to_string(),
+                            "reason": reason,
+                            "changed_by": session.username
+                        })
+                        .to_string(),
+                    ),
+                    ip_address: None,
+                    user_agent: None,
+                };
+                if let Err(e) = audit_repo.log_event(&audit_event) {
+                    error!("Failed to log audit event: {}", e);
+                    // Do not fail the status update if audit logging fails
                 }
             }
         }
-        None => Err("Database not initialized".to_string()),
     }
+
+    info!(
+        "Firmware {} status updated to {} by {}",
+        firmware_id, new_status, session.username
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -927,37 +951,44 @@ pub async fn get_firmware_status_history(
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<Vec<FirmwareStatusHistory>, String> {
     // Validate session
-    let session_manager_guard = session_manager.lock()
-        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
-    let session = match session_manager_guard.validate_session(&token) {
-        Ok(Some(session)) => session,
-        Ok(None) => return Err("Invalid or expired session".to_string()),
-        Err(e) => {
-            error!("Session validation error: {}", e);
-            return Err("Session validation error".to_string());
-        }
-    };
-    drop(session_manager_guard);
-
-    let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
-            
-            match firmware_repo.get_firmware_status_history(firmware_id) {
-                Ok(history) => {
-                    info!("Retrieved firmware status history for firmware {} by {}", firmware_id, session.username);
-                    Ok(history)
-                }
-                Err(e) => {
-                    error!("Failed to get firmware status history: {}", e);
-                    Err(format!("Failed to get firmware status history: {}", e))
-                }
+    let session = {
+        let guard = session_manager
+            .lock()
+            .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+        match guard.validate_session(&token) {
+            Ok(Some(session)) => session,
+            Ok(None) => return Err("Invalid or expired session".to_string()),
+            Err(e) => {
+                error!("Session validation error: {}", e);
+                return Err("Session validation error".to_string());
             }
         }
-        None => Err("Database not initialized".to_string()),
-    }
+    };
+
+    // Tight DB scope
+    let history = {
+        let db_guard = db_state
+            .lock()
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Err("Database not initialized".to_string()),
+        };
+        let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
+        match firmware_repo.get_firmware_status_history(firmware_id) {
+            Ok(history) => history,
+            Err(e) => {
+                error!("Failed to get firmware status history: {}", e);
+                return Err(format!("Failed to get firmware status history: {}", e));
+            }
+        }
+    };
+
+    info!(
+        "Retrieved firmware status history for firmware {} by {}",
+        firmware_id, session.username
+    );
+    Ok(history)
 }
 
 #[tauri::command]

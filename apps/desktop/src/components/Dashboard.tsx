@@ -10,9 +10,6 @@ import {
   DatabaseOutlined,
   ImportOutlined,
   QuestionCircleOutlined,
-  FileTextOutlined,
-  SearchOutlined,
-  AppstoreOutlined,
   SafetyCertificateOutlined,
   AuditOutlined
 } from '@ant-design/icons';

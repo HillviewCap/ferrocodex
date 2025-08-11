@@ -8,7 +8,6 @@ import {
   Tooltip, 
   Button,
   Switch,
-  Select,
   Empty,
   Alert,
   Badge,
@@ -24,12 +23,11 @@ import {
   ExclamationCircleOutlined,
   SettingOutlined
 } from '@ant-design/icons';
-import { AssociationInfo, AssetInfo, ValidationResult, HealthStatus } from '../../types/associations';
+import { AssociationInfo, HealthStatus } from '../../types/associations';
 import useAssociationStore from '../../store/associations';
 
 const { Title, Text } = Typography;
 const { TreeNode } = Tree;
-const { Option } = Select;
 
 interface AssociationVisualizationProps {
   assetId?: number;
@@ -202,12 +200,12 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
               <Space size={4}>
                 {configCount > 0 && (
                   <Badge count={configCount} size="small" style={{ backgroundColor: '#52c41a' }}>
-                    <Tag size="small" color="green">Config</Tag>
+                    <Tag color="green">Config</Tag>
                   </Badge>
                 )}
                 {firmwareCount > 0 && (
                   <Badge count={firmwareCount} size="small" style={{ backgroundColor: '#1890ff' }}>
-                    <Tag size="small" color="blue">Firmware</Tag>
+                    <Tag color="blue">Firmware</Tag>
                   </Badge>
                 )}
               </Space>
@@ -266,14 +264,12 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
                   }} />
                   <Text>{association.fileName}</Text>
                   <Tag 
-                    size="small" 
                     color={association.fileType === 'Configuration' ? 'green' : 'blue'}
                   >
                     {association.fileType}
                   </Tag>
                   {settings.showValidationStatus && association.validationStatus !== 'Passed' && (
                     <Tag 
-                      size="small" 
                       color={association.validationStatus === 'Failed' ? 'red' : 'orange'}
                     >
                       {association.validationStatus}
@@ -293,14 +289,13 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
     );
   };
 
-  const handleNodeSelect = (selectedKeys: React.Key[], info: any) => {
+  const handleNodeSelect = (selectedKeys: React.Key[]) => {
     if (!interactive) return;
     
     setSelectedKeys(selectedKeys as string[]);
     
     // If a device is selected, we could trigger additional actions
     if (selectedKeys.length > 0) {
-      const nodeId = parseInt(selectedKeys[0] as string);
       // Could trigger association details view, etc.
     }
   };

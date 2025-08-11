@@ -2,15 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Space, Card, Alert, Row, Col, Divider } from 'antd';
 import { SecurityScanOutlined, CheckCircleOutlined, ExclamationCircleOutlined, LockOutlined } from '@ant-design/icons';
 import { BaseStepProps, SecurityValidationData } from '../../../types/workflow';
-import { SecurityClassificationSelector } from '../../security/SecurityClassificationSelector';
-import { SecurityValidationInput } from '../../security/SecurityValidationInput';
+import SecurityClassificationSelector from '../../security/SecurityClassificationSelector';
 import { useWorkflowStore } from '../../../store/workflow';
-import { SecurityClassification } from '../../../types/security';
+import { SecurityClassificationLevel } from '../../../types/security';
 
 const { Title, Text, Paragraph } = Typography;
 
 export const SecurityValidationStep: React.FC<BaseStepProps> = ({
-  workflowId,
   data,
   onDataChange,
   onValidation
@@ -126,7 +124,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
     };
   };
 
-  const handleClassificationChange = async (classification: SecurityClassification) => {
+  const handleClassificationChange = async (classification: SecurityClassificationLevel) => {
     const updatedData = { 
       ...localData,
       security_classification: classification
@@ -204,12 +202,25 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
                 <Title level={5} style={{ margin: 0 }}>Naming Compliance</Title>
               </div>
 
-              <SecurityValidationInput
-                value={data.asset_name || ''}
-                validation={namingValidation}
-                readOnly={true}
-                label="Asset Name"
-              />
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Text strong>Asset Name</Text>
+                <div style={{ 
+                  padding: '8px 12px',
+                  border: namingValidation.isValid ? '1px solid #d9d9d9' : '1px solid #ff4d4f',
+                  borderRadius: '4px',
+                  background: '#f5f5f5'
+                }}>
+                  <Text>{data.asset_name || 'No name provided'}</Text>
+                </div>
+                {!namingValidation.isValid && (
+                  <Alert
+                    message={namingValidation.message}
+                    type="error"
+                    showIcon
+                    style={{ marginTop: '8px' }}
+                  />
+                )}
+              </Space>
             </Space>
           </Card>
         </Col>

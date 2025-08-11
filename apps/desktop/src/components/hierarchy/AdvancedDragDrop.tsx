@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { message, Typography } from 'antd';
+import { message } from 'antd';
 import { AssetHierarchy } from '../../types/assets';
 import useBulkOperationsStore from '../../store/bulkOperations';
 
-const { Text } = Typography;
 
 export interface DragPreviewData {
   assetIds: number[];
@@ -45,7 +44,6 @@ export const AdvancedDragDrop: React.FC<AdvancedDragDropProps> = ({
 
   const {
     getSelectedAssets,
-    getSelectedCount,
     isSelected,
     validateBulkMove
   } = useBulkOperationsStore();

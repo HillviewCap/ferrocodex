@@ -1,19 +1,17 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Tree, Typography, Dropdown, Menu, Modal, message, TreeSelect } from 'antd';
+import { Tree, Typography, Modal, message, TreeSelect, Spin } from 'antd';
 import { 
   FolderOutlined, 
   FolderOpenOutlined, 
   ToolOutlined, 
-  PlusOutlined, 
   EditOutlined, 
   DeleteOutlined,
   ScissorOutlined,
-  CopyOutlined,
   FolderAddOutlined,
   AppstoreAddOutlined
 } from '@ant-design/icons';
-import type { TreeProps, TreeDataNode, DataNode } from 'antd/es/tree';
-import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
+import type { TreeProps, DataNode } from 'antd/es/tree';
+import { AssetHierarchy, AssetType } from '../../types/assets';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 import { TreeSearchFilter } from './TreeSearchFilter';
@@ -34,9 +32,11 @@ export interface AssetTreeViewProps {
   searchPlaceholder?: string;
 }
 
-interface AssetTreeDataNode extends TreeDataNode {
+interface AssetTreeDataNode extends DataNode {
+  key: React.Key;
   asset: AssetHierarchy;
   isFolder: boolean;
+  children?: AssetTreeDataNode[];
 }
 
 export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
@@ -55,9 +55,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
   const { token } = useAuthStore();
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
-  const [dragOverNodeKey, setDragOverNodeKey] = useState<React.Key | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [draggedNode, setDraggedNode] = useState<React.Key | null>(null);
   const [cutAsset, setCutAsset] = useState<AssetHierarchy | null>(null);
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [assetToMove, setAssetToMove] = useState<AssetHierarchy | null>(null);
@@ -217,7 +215,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
     setSelectedKeys(selectedKeys);
     
     if (key) {
-      const nodeData = info.node as AssetTreeDataNode;
+      const nodeData = info.node as unknown as AssetTreeDataNode;
       onAssetSelect?.(nodeData.asset);
     } else {
       onAssetSelect?.(null);
@@ -231,7 +229,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
   const handleRightClick: TreeProps['onRightClick'] = ({ event, node }) => {
     event.preventDefault();
     event.stopPropagation();
-    const nodeData = node as AssetTreeDataNode;
+    const nodeData = node as unknown as AssetTreeDataNode;
     
     setContextMenu({
       visible: true,
@@ -452,8 +450,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
     const dragKey = info.dragNode.key;
     const dropToGap = info.dropToGap;
 
-    const dragNodeData = info.dragNode as AssetTreeDataNode;
-    const dropNodeData = info.node as AssetTreeDataNode;
+    const dragNodeData = info.dragNode as unknown as AssetTreeDataNode;
+    const dropNodeData = info.node as unknown as AssetTreeDataNode;
 
     // Prevent dropping onto self
     if (dragKey === dropKey) {
@@ -519,7 +517,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
       nodePos: info.node.pos,
       event: info.event
     });
-    setDragOverNodeKey(info.node.key);
+    // setDragOverNodeKey(info.node.key);
   };
 
   const handleDragLeave: TreeProps['onDragLeave'] = (info) => {
@@ -527,7 +525,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
       nodeKey: info.node.key,
       event: info.event
     });
-    setDragOverNodeKey(null);
+    // setDragOverNodeKey(null);
   };
   
   const handleDragStart: TreeProps['onDragStart'] = (info) => {
@@ -635,8 +633,9 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
         tabIndex={0}
         onContextMenu={handleEmptyAreaRightClick}
       >
-        <Tree
-          treeData={treeData}
+        <Spin spinning={loading || false}>
+          <Tree
+            treeData={treeData}
           onSelect={handleSelect}
           onExpand={handleExpand}
           onRightClick={handleRightClick}
@@ -659,7 +658,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
             }
             
             // Check if dropping into a folder or between nodes
-            const dropNodeData = dropNode as AssetTreeDataNode;
+            const dropNodeData = dropNode as unknown as AssetTreeDataNode;
             const isTargetFolder = dropNodeData?.isFolder;
             const isDropToGap = dropPosition === -1 || dropPosition === 1;
             
@@ -689,7 +688,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           onDragStart={(info) => {
             console.log('Drag started:', info.node?.key);
             setIsDragging(true);
-            setDraggedNode(info.node?.key || null);
+            // setDraggedNode(info.node?.key || null);
             // Ensure the drag effect is set
             if (info.event && info.event.dataTransfer) {
               info.event.dataTransfer.effectAllowed = 'move';
@@ -699,8 +698,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           onDragEnd={(info) => {
             console.log('Drag ended:', info.node?.key, 'wasDragging:', isDragging);
             setIsDragging(false);
-            setDraggedNode(null);
-            setDragOverNodeKey(null);
+            // setDraggedNode(null);
+            // setDragOverNodeKey(null);
           }}
           onDragEnter={(info) => {
             console.log('Drag enter:', info.node?.key);
@@ -712,7 +711,6 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           onDragLeave={(info) => {
             console.log('Drag leave');
           }}
-          loading={loading}
           showLine={{ showLeafIcon: false }}
           blockNode
           dropIndicatorRender={(props) => {
@@ -723,7 +721,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
             background: 'transparent',
             fontSize: '14px',
           }}
-        />
+          />
+        </Spin>
         {treeData.length === 0 && !loading && (
           <div style={{ 
             textAlign: 'center', 
@@ -836,7 +835,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           ]}
           showSearch
           filterTreeNode={(search, item) => {
-            return item.title.toLowerCase().indexOf(search.toLowerCase()) >= 0;
+            const titleStr = item.title?.toString() || '';
+            return titleStr.toLowerCase().indexOf(search.toLowerCase()) >= 0;
           }}
         />
         {selectedDestination !== null && (

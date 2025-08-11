@@ -1,13 +1,12 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Tree, Typography, Input, Spin, Empty } from 'antd';
 import { SearchOutlined, FolderOutlined, FolderOpenOutlined, ToolOutlined } from '@ant-design/icons';
-import type { TreeProps, TreeDataNode } from 'antd/es/tree';
+import type { TreeProps, DataNode } from 'antd/es/tree';
 import { AssetHierarchy, AssetType } from '../../types/assets';
 import { 
   HierarchyPerformanceOptimizer, 
   memoizeTreeNode, 
   createDebouncedSearch,
-  FlatTreeNode,
   flattenTree 
 } from '../../store/hierarchyOptimizations';
 
@@ -26,7 +25,7 @@ export interface OptimizedAssetTreeViewProps {
   enableVirtualization?: boolean;
 }
 
-interface OptimizedTreeDataNode extends TreeDataNode {
+interface OptimizedTreeDataNode extends DataNode {
   asset: AssetHierarchy;
   isFolder: boolean;
 }
@@ -34,8 +33,6 @@ interface OptimizedTreeDataNode extends TreeDataNode {
 export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
   hierarchyData,
   onAssetSelect,
-  onAssetCreate,
-  onAssetMove,
   selectedAssetId,
   loading = false,
   allowDragDrop = true,
@@ -47,7 +44,6 @@ export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [filteredData, setFilteredData] = useState<AssetHierarchy[]>([]);
   
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const treeRef = useRef<any>();
 
   // Calculate performance metrics

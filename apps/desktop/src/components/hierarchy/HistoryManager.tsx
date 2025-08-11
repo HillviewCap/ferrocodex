@@ -8,7 +8,6 @@ import {
   Tooltip,
   Tag,
   Empty,
-  Divider,
   message,
   Popconfirm
 } from 'antd';
@@ -19,12 +18,11 @@ import {
   DeleteOutlined,
   InfoCircleOutlined
 } from '@ant-design/icons';
-import { HistoryManager, HistoryOperation } from '../../utils/historyManager';
+import { HistoryManager as HistoryManagerUtil, HistoryOperation } from '../../utils/historyManager';
 import useBulkOperationsStore from '../../store/bulkOperations';
-import { invoke } from '@tauri-apps/api/core';
 import { BulkOperationType } from '../../types/bulkOperations';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface HistoryManagerProps {
   visible?: boolean;
@@ -34,7 +32,6 @@ interface HistoryManagerProps {
 }
 
 export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
-  visible = false,
   onVisibilityChange,
   className,
   style
@@ -46,7 +43,7 @@ export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
   const [isRedoing, setIsRedoing] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
 
-  const historyManager = HistoryManager.getInstance();
+  const historyManager = HistoryManagerUtil.getInstance();
   const { undoOperation } = useBulkOperationsStore();
 
   // Update state when history changes
@@ -329,5 +326,4 @@ export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
 };
 
 // Export both as named and default
-export const HistoryManager = HistoryManagerComponent;
 export default HistoryManagerComponent;

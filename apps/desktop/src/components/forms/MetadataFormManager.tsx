@@ -15,7 +15,6 @@ interface MetadataFormManagerProps {
 
 const MetadataFormManager: React.FC<MetadataFormManagerProps> = ({
   assetId,
-  assetType,
   mode = 'both',
   onClose
 }) => {

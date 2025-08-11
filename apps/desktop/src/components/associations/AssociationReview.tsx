@@ -7,7 +7,6 @@ import {
   Tag, 
   Alert, 
   Checkbox,
-  Button,
   Tooltip,
   Select,
   Input
@@ -16,8 +15,7 @@ import {
   CheckCircleOutlined, 
   ExclamationCircleOutlined,
   FileOutlined,
-  DatabaseOutlined,
-  EditOutlined
+  DatabaseOutlined
 } from '@ant-design/icons';
 import { 
   FileAssociationWizardState, 
@@ -268,7 +266,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
         <Tooltip title={record.validationMessages.join('; ')}>
           <Space>
             {getValidationIcon(record.validationStatus)}
-            <Tag color={getValidationColor(record.validationStatus)} size="small">
+            <Tag color={getValidationColor(record.validationStatus)}>
               {record.validationStatus}
             </Tag>
           </Space>

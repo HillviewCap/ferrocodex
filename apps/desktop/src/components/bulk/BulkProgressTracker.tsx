@@ -25,7 +25,6 @@ import {
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import { 
-  ProgressStatus, 
   BulkImportStatus, 
   formatProcessingRate, 
   formatEstimatedTime, 
@@ -58,11 +57,10 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
     pauseProcessing,
     resumeProcessing,
     cancelProcessing,
-    clearError,
   } = useBulkImportStore();
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     
     if (autoRefresh && sessionId) {
       // Initial load
@@ -404,7 +402,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         {/* Timeline for completed operations */}
         {['Completed', 'Failed', 'Cancelled'].includes(currentProgress.status) && currentSession && (
           <Card size="small" title="Import Timeline">
-            <Timeline size="small">
+            <Timeline>
               <Timeline.Item 
                 color="blue" 
                 dot={<CheckCircleOutlined />}

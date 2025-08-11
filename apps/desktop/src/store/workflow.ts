@@ -28,7 +28,7 @@ interface WorkflowStore {
   // Auto-save state
   autoSave: AutoSaveConfig;
   lastSaveTime: Date | null;
-  autoSaveIntervalId: NodeJS.Timeout | null;
+  autoSaveIntervalId: number | null;
   
   // Actions
   startWorkflow: (request: StartWorkflowRequest) => Promise<void>;
@@ -368,7 +368,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     // Clear existing interval
     get().disableAutoSave();
 
-    const autoSaveInterval = setInterval(() => {
+    const autoSaveInterval = window.setInterval(() => {
       get().saveWorkflowDraft();
     }, interval * 1000);
 
@@ -387,8 +387,8 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     const { autoSaveIntervalId } = get();
     
     // Clear existing interval if it exists
-    if (autoSaveIntervalId) {
-      clearInterval(autoSaveIntervalId);
+    if (autoSaveIntervalId !== null) {
+      window.clearInterval(autoSaveIntervalId);
     }
     
     set({

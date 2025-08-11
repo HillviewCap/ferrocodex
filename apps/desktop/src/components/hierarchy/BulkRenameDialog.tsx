@@ -425,7 +425,7 @@ export const BulkRenameDialog: React.FC<BulkRenameDialogProps> = ({
                     }}
                   >
                     <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                      <Space justify="space-between" style={{ width: '100%' }}>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                         <Space>
                           {preview.isValid ? (
                             <CheckCircleOutlined style={{ color: '#52c41a' }} />

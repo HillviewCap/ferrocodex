@@ -104,12 +104,7 @@ export interface AssociationWizardStep {
 
 export interface FileAssociationWizardState {
   currentStep: number;
-  selectedAsset?: {
-    id: number;
-    name: string;
-    description: string;
-    type: string;
-  };
+  selectedAsset?: AssetInfo;
   selectedFiles: File[];
   uploadedFiles: {
     file: File;

@@ -203,7 +203,7 @@ export class FormValidator {
 export class CrossFieldValidator {
   static mustMatch(fieldA: string, fieldB: string, message?: string): ValidationRule {
     return FormValidator.custom(
-      (value, allValues) => {
+      (_value, allValues) => {
         return allValues[fieldA] === allValues[fieldB] || 
                (message || `Must match ${fieldB}`);
       }
@@ -212,7 +212,7 @@ export class CrossFieldValidator {
 
   static mustBeDifferent(fieldA: string, fieldB: string, message?: string): ValidationRule {
     return FormValidator.custom(
-      (value, allValues) => {
+      (_value, allValues) => {
         return allValues[fieldA] !== allValues[fieldB] || 
                (message || `Must be different from ${fieldB}`);
       }

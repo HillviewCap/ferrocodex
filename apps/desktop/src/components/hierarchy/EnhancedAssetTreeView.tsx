@@ -1,26 +1,17 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Tree, Typography, Dropdown, Menu, Modal, message, Space, Checkbox } from 'antd';
+import { Tree, Typography, message, Space } from 'antd';
 import { 
   FolderOutlined, 
   FolderOpenOutlined, 
-  ToolOutlined, 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined,
-  ScissorOutlined,
-  CopyOutlined,
-  FolderAddOutlined,
-  AppstoreAddOutlined
+  ToolOutlined
 } from '@ant-design/icons';
-import type { TreeProps, TreeDataNode } from 'antd/es/tree';
-import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
-import { invoke } from '@tauri-apps/api/core';
+import type { TreeProps, DataNode } from 'antd/es/tree';
+import { AssetHierarchy, AssetType } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 import useBulkOperationsStore from '../../store/bulkOperations';
 import { AssetSelectionCheckbox } from '../bulk';
 import AdvancedDragDrop from './AdvancedDragDrop';
 
-const { Text } = Typography;
 
 export interface EnhancedAssetTreeViewProps {
   assets: AssetHierarchy[];
@@ -36,7 +27,7 @@ export interface EnhancedAssetTreeViewProps {
   bulkSelectionContext?: 'tree' | 'search' | 'manual';
 }
 
-interface EnhancedAssetTreeDataNode extends TreeDataNode {
+interface EnhancedAssetTreeDataNode extends DataNode {
   asset: AssetHierarchy;
   isFolder: boolean;
 }
@@ -45,9 +36,6 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
   assets,
   selectedAsset,
   onAssetSelect,
-  onAssetCreate,
-  onAssetEdit,
-  onAssetDelete,
   onAssetMove,
   loading = false,
   allowDragDrop = true,
@@ -56,17 +44,12 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
 }) => {
   const { user } = useAuthStore();
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
-  const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   
   // Bulk operations store
   const {
     isSelected: isBulkSelected,
-    selectAsset: selectBulkAsset,
-    deselectAsset: deselectBulkAsset,
-    startBulkMove,
-    getSelectedAssets,
-    getSelectedCount,
+    startBulkMove
   } = useBulkOperationsStore();
 
   // Convert hierarchy data to tree data nodes

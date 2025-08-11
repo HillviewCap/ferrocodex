@@ -32,7 +32,7 @@ interface BulkImportState {
   error: string | null;
   
   // Actions
-  createSession: (request: CreateBulkImportSessionRequest) => Promise<void>;
+  createSession: (request: CreateBulkImportSessionRequest) => Promise<BulkImportSession>;
   loadSessions: () => Promise<void>;
   loadSessionDetails: (sessionId: number) => Promise<void>;
   deleteSession: (sessionId: number) => Promise<void>;
@@ -85,6 +85,7 @@ const useBulkImportStore = create<BulkImportState>()(
           
           const sessions = [...get().sessions, session];
           set({ sessions, isLoading: false });
+          return session;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to create session';
           set({ error: errorMessage, isLoading: false });

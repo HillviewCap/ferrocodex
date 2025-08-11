@@ -283,7 +283,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
               <div>
                 <Text strong>Location:</Text>
                 <div style={{ marginLeft: 16, marginTop: 4 }}>
-                  <Text type="secondary">{getParentPath(formData.parent_id)}</Text>
+                  <Text type="secondary">{getParentPath(formData.parent_id ?? null)}</Text>
                 </div>
               </div>
 

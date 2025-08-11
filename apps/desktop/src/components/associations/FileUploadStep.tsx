@@ -20,7 +20,7 @@ import {
   DeleteOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
-import { AssetInfo, AssociationType, FileUploadProgress } from '../../types/associations';
+import { AssetInfo, AssociationType } from '../../types/associations';
 
 const { Dragger } = Upload;
 const { Title, Text } = Typography;
@@ -388,7 +388,7 @@ const FileUploadStep: React.FC<FileUploadStepProps> = ({
                   title={
                     <Space>
                       <Text>{item.file.name}</Text>
-                      <Tag color={getStatusColor(item.status)} size="small">
+                      <Tag color={getStatusColor(item.status)}>
                         {item.status.toUpperCase()}
                       </Tag>
                     </Space>

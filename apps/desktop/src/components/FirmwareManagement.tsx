@@ -53,7 +53,14 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
 
   useEffect(() => {
     if (error) {
-      message.error(error);
+      const msg = typeof error === 'string' ? error : String(error);
+      // Ensure AntD message gets a string, not an Error object
+      try {
+        message.error(msg);
+      } catch {
+        // Fallback just in case
+        console.error('Failed to display error message:', error);
+      }
       clearError();
     }
   }, [error, clearError]);
@@ -79,7 +86,7 @@ const FirmwareManagement: React.FC<FirmwareManagementProps> = ({ asset }) => {
       setConfigurationVersions(configs);
     } catch (error) {
       console.error('Failed to load configuration versions:', error);
-      message.error('Failed to load configuration versions');
+      message.error(error instanceof Error ? error.message : 'Failed to load configuration versions');
     } finally {
       setConfigVersionsLoading(false);
     }

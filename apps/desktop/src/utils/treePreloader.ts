@@ -5,8 +5,7 @@
  * by anticipating user navigation patterns and preloading likely-to-be-accessed nodes.
  */
 
-import { AssetHierarchy, AssetInfo } from '../types/assets';
-import { invoke } from '@tauri-apps/api/core';
+import { AssetHierarchy } from '../types/assets';
 
 export interface PreloadConfig {
   maxConcurrentRequests: number;
@@ -417,7 +416,7 @@ export class TreePreloader {
   /**
    * Preload node path
    */
-  private async preloadNodePath(nodeId: number): Promise<AssetInfo[]> {
+  private async preloadNodePath(nodeId: number): Promise<any[]> {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve([]); // Placeholder

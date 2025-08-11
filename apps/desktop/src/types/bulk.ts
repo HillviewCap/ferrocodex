@@ -28,6 +28,8 @@ export interface BulkImportItem {
 
 export type BulkItemStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Skipped';
 
+export type ValidationMode = 'strict' | 'permissive';
+
 export interface BulkImportSessionDetails {
   session: BulkImportSession;
   items: BulkImportItem[];

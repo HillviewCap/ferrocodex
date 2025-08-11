@@ -41,7 +41,6 @@ import BulkProgressTracker from './BulkProgressTracker';
 import WorkflowIntegrationPanel from './WorkflowIntegrationPanel';
 
 const { Title, Text } = Typography;
-const { TabPane } = Tabs;
 
 const BulkManagement: React.FC = () => {
   const [wizardVisible, setWizardVisible] = useState(false);
@@ -145,10 +144,8 @@ const BulkManagement: React.FC = () => {
     {
       title: 'Progress',
       key: 'progress',
-      render: (_, record: BulkImportSession) => {
-        const percentage = record.total_items > 0 
-          ? Math.round((record.processed_items / record.total_items) * 100)
-          : 0;
+      render: (_: any, record: BulkImportSession) => {
+        // Progress calculation not displayed in this view
         const successRate = calculateSuccessRate(record.processed_items, record.failed_items);
         
         return (
@@ -164,7 +161,7 @@ const BulkManagement: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record: BulkImportSession) => (
+      render: (_: any, record: BulkImportSession) => (
         <Space>
           <Button
             icon={<EyeOutlined />}

@@ -58,18 +58,18 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      console.log('Dialog: Form validated, values:', values);
       setLoading(true);
       
+      console.log('Dialog: Calling onConfirm...');
       await onConfirm(values.newStatus, values.reason);
+      console.log('Dialog: onConfirm completed successfully');
       
-      // Reset form and close modal on successful update
+      // Reset form after successful update
+      // The parent component will handle closing the modal
       form.resetFields();
-      // Use setTimeout to ensure state updates complete before closing
-      setTimeout(() => {
-        onCancel();
-      }, 100);
     } catch (error) {
-      console.error('Status update failed:', error);
+      console.error('Dialog: Status update failed:', error);
       // Don't close the dialog on error - leave it open for user to retry or cancel
     } finally {
       setLoading(false);

@@ -44,7 +44,6 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<ImportTemplate | null>(null);
   const [selectedType, setSelectedType] = useState(templateType);
 
   const {
@@ -170,13 +169,13 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
       render: (fields: string[]) => (
         <Space wrap>
           {fields.slice(0, 3).map(field => (
-            <Tag key={field} color="orange" size="small">
+            <Tag key={field} color="orange">
               {field}
             </Tag>
           ))}
           {fields.length > 3 && (
             <Tooltip title={fields.slice(3).join(', ')}>
-              <Tag size="small">+{fields.length - 3} more</Tag>
+              <Tag>+{fields.length - 3} more</Tag>
             </Tooltip>
           )}
         </Space>
@@ -185,7 +184,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record: ImportTemplate) => (
+      render: (_: any, record: ImportTemplate) => (
         <Space>
           {onSelectTemplate && (
             <Button
@@ -207,7 +206,13 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
             <Button
               icon={<EditOutlined />}
               size="small"
-              onClick={() => setEditingTemplate(record)}
+              onClick={() => {
+                // TODO: Implement template editing
+                notification.info({
+                  message: 'Template Editing',
+                  description: 'Template editing will be implemented in the next phase',
+                });
+              }}
             />
           </Tooltip>
           <Popconfirm

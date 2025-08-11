@@ -185,17 +185,18 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       throw new Error('No firmware selected');
     }
 
+    console.log('Starting status update:', { newStatus, firmwareId: selectedFirmwareForStatus.id });
+
     try {
       if (newStatus === 'Golden') {
         await promoteFirmwareToGolden(selectedFirmwareForStatus.id, reason || '');
       } else {
         await updateFirmwareStatus(selectedFirmwareForStatus.id, newStatus, reason);
       }
-      
+
+      console.log('Status update successful');
       message.success(`Firmware status updated to ${newStatus}`);
-      setStatusDialogVisible(false);
-      setSelectedFirmwareForStatus(null);
-      
+
       // Don't call onDelete here as the store already updates the state
       // Only call it if we need to reload for other reasons (e.g., Golden promotion affects multiple versions)
       if (newStatus === 'Golden' && onDelete) {
@@ -204,9 +205,11 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       }
     } catch (error) {
       console.error('Failed to update firmware status:', error);
-      message.error(`Failed to update firmware status: ${error}`);
-      // Re-throw the error so the dialog can handle its loading state
-      throw error;
+      message.error(`Failed to update firmware status: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      // Always close the dialog, even on error
+      setStatusDialogVisible(false);
+      setSelectedFirmwareForStatus(null);
     }
   };
 

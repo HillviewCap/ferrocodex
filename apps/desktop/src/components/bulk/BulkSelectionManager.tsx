@@ -2,10 +2,6 @@ import React, { useCallback, useEffect } from 'react';
 import { Checkbox, Button, Space, Typography, Badge, Popover } from 'antd';
 import {
   SelectOutlined,
-  DeleteOutlined,
-  ExportOutlined,
-  FolderMoveOutlined,
-  TagOutlined,
   ClearOutlined,
   SwapOutlined,
   InfoCircleOutlined,
@@ -30,7 +26,6 @@ const BulkSelectionManager: React.FC<BulkSelectionManagerProps> = ({
     selectAll,
     selectNone,
     invertSelection,
-    ui,
     showSelectionToolbar,
   } = useBulkOperationsStore();
 
@@ -46,7 +41,7 @@ const BulkSelectionManager: React.FC<BulkSelectionManagerProps> = ({
     if (isAllSelected) {
       selectNone();
     } else {
-      selectAll(availableAssetIds, 'manual');
+      selectAll(availableAssetIds, 'search');
     }
   }, [isAllSelected, selectAll, selectNone, availableAssetIds]);
 

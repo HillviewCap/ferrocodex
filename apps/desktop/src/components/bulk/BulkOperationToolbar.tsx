@@ -3,7 +3,7 @@ import { Button, Space, Dropdown, Modal, message, Typography } from 'antd';
 import {
   DeleteOutlined,
   ExportOutlined,
-  FolderMoveOutlined,
+  FolderOpenOutlined,
   TagOutlined,
   DownOutlined,
   HistoryOutlined,
@@ -277,7 +277,7 @@ const BulkOperationToolbar: React.FC<BulkOperationToolbarProps> = ({ className }
         >
           <Button
             type="default"
-            icon={<FolderMoveOutlined />}
+            icon={<FolderOpenOutlined />}
             size="small"
             loading={isOperationInProgress}
           >

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { Checkbox } from 'antd';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
 import useBulkOperationsStore from '../../store/bulkOperations';
@@ -7,21 +7,18 @@ interface AssetSelectionCheckboxProps {
   assetId: number;
   assetName?: string;
   assetType?: string;
-  context?: 'tree' | 'search' | 'manual';
+  context?: 'tree' | 'search';
   disabled?: boolean;
   className?: string;
-  size?: 'small' | 'middle' | 'large';
   onClick?: (event: React.MouseEvent) => void;
 }
 
 const AssetSelectionCheckbox: React.FC<AssetSelectionCheckboxProps> = ({
   assetId,
   assetName,
-  assetType,
-  context = 'manual',
+  context = 'search',
   disabled = false,
   className,
-  size = 'small',
   onClick,
 }) => {
   const {
@@ -29,14 +26,11 @@ const AssetSelectionCheckbox: React.FC<AssetSelectionCheckboxProps> = ({
     toggleAsset,
     selectAsset,
     deselectAsset,
-    selectRange,
     setLastFocusedAsset,
     setSelectionAnchor,
-    keyboardState,
     selection,
   } = useBulkOperationsStore();
 
-  const checkboxRef = useRef<HTMLInputElement>(null);
   const selected = isSelected(assetId);
 
   // Handle checkbox change
@@ -82,29 +76,7 @@ const AssetSelectionCheckbox: React.FC<AssetSelectionCheckboxProps> = ({
     selection.last_selection_anchor,
   ]);
 
-  // Handle keyboard navigation
-  useEffect(() => {
-    const checkbox = checkboxRef.current;
-    if (!checkbox) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle space key for toggling
-      if (e.code === 'Space' && document.activeElement === checkbox) {
-        e.preventDefault();
-        toggleAsset(assetId, context);
-        return;
-      }
-
-      // Handle arrow keys for navigation (would need parent container support)
-      if (['ArrowUp', 'ArrowDown'].includes(e.code)) {
-        // This would need to be implemented in coordination with the parent list component
-        e.preventDefault();
-      }
-    };
-
-    checkbox.addEventListener('keydown', handleKeyDown);
-    return () => checkbox.removeEventListener('keydown', handleKeyDown);
-  }, [assetId, context, toggleAsset]);
+  // Note: Keyboard navigation would need to be implemented at the parent component level
 
   // Handle focus events for keyboard navigation
   const handleFocus = useCallback(() => {
@@ -120,14 +92,12 @@ const AssetSelectionCheckbox: React.FC<AssetSelectionCheckboxProps> = ({
 
   return (
     <Checkbox
-      ref={checkboxRef}
       checked={selected}
       onChange={handleChange}
       onClick={handleClick}
       onFocus={handleFocus}
       disabled={disabled}
       className={`asset-selection-checkbox ${className || ''}`}
-      size={size}
       title={`${selected ? 'Deselect' : 'Select'} ${assetName || `Asset ${assetId}`}`}
       style={{
         userSelect: 'none',

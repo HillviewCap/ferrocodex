@@ -344,7 +344,7 @@ export const useTreeStateStore = create<TreeState>()(
               return item ? serializer.deserialize(item) : null;
             },
             setItem: (name, value) => {
-              localStorage.setItem(name, serializer.serialize(value as TreeState));
+              localStorage.setItem(name, serializer.serialize(value as TreeViewState));
             },
             removeItem: (name) => {
               localStorage.removeItem(name);

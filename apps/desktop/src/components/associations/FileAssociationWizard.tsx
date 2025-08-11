@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { 
   Modal, 
   Steps, 
@@ -8,14 +8,14 @@ import {
   Alert,
   notification
 } from 'antd';
-import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined } from '@ant-design/icons';
 import useAssociationStore from '../../store/associations';
 import AssetFileSelector from './AssetFileSelector';
 import FileUploadStep from './FileUploadStep';
 import AssociationReview from './AssociationReview';
 import { AssetInfo, AssociationType } from '../../types/associations';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { Step } = Steps;
 
 interface FileAssociationWizardProps {

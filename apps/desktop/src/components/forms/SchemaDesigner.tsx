@@ -12,8 +12,6 @@ import {
   message,
   Tabs,
   Space,
-  Divider,
-  Tooltip,
   Popconfirm,
   InputNumber
 } from 'antd';
@@ -23,12 +21,9 @@ import {
   DeleteOutlined,
   EyeOutlined,
   SaveOutlined,
-  DownloadOutlined,
-  UploadOutlined,
-  CodeOutlined
+  DownloadOutlined
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import DynamicMetadataForm from './DynamicMetadataForm';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 
@@ -71,10 +66,8 @@ const FIELD_TYPES = [
 
 const SchemaDesigner: React.FC<SchemaDesignerProps> = ({
   schemaId,
-  onSave,
-  onCancel
+  onSave
 }) => {
-  const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [activeTab, setActiveTab] = useState('designer');

@@ -12,18 +12,15 @@ import {
   Space,
   Table,
   Alert,
-  Switch,
   Checkbox,
   notification,
   Divider,
   Tag,
-  Progress,
 } from 'antd';
 import {
   InboxOutlined,
   FileTextOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
   SettingOutlined,
   PlayCircleOutlined,
   UploadOutlined,
@@ -34,7 +31,6 @@ import {
   ValidationResults, 
   ProcessingOptions, 
   ValidationMode,
-  AssetPreview,
   validateSessionName,
   validateImportType,
   validateCSVFile,
@@ -42,10 +38,9 @@ import {
 import useBulkImportStore from '../../store/bulk';
 import ImportTemplateManager from './ImportTemplateManager';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { Option } = Select;
 const { Dragger } = Upload;
-const { Step } = Steps;
 
 interface BulkImportWizardProps {
   visible: boolean;
@@ -60,7 +55,6 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(0);
-  const [sessionData, setSessionData] = useState<CreateBulkImportSessionRequest | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [validationResults, setValidationResults] = useState<ValidationResults | null>(null);
   const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>({
@@ -94,7 +88,6 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
 
   const resetWizard = () => {
     setCurrentStep(0);
-    setSessionData(null);
     setSelectedFile(null);
     setValidationResults(null);
     setSessionId(null);
@@ -116,7 +109,6 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       };
 
       const session = await createSession(sessionRequest);
-      setSessionData(sessionRequest);
       setSessionId(session.id);
       setCurrentStep(1);
     } catch (error) {
@@ -492,7 +484,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
                 <Button 
                   type="primary" 
                   onClick={handleConfiguration}
-                  disabled={validationResults && !validationResults.is_valid}
+                  disabled={validationResults ? !validationResults.is_valid : false}
                 >
                   Continue to Configuration
                 </Button>

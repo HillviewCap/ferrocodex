@@ -330,7 +330,7 @@ export function createDebouncedSave(
   persistenceManager: TreeStatePersistenceManager,
   delay: number = 300
 ): (state: Partial<TreeViewState>) => void {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: ReturnType<typeof setTimeout>;
   
   return (state: Partial<TreeViewState>) => {
     clearTimeout(timeoutId);

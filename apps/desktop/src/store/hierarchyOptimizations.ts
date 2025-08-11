@@ -69,12 +69,14 @@ export const memoizeTreeNode = <T>(fn: (node: T) => any) => {
 
 // Debounced search for large hierarchies
 export const createDebouncedSearch = (delay: number = 300) => {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: number | undefined;
   
   return (searchFn: (term: string) => void) => {
     return (searchTerm: string) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = window.setTimeout(() => {
         searchFn(searchTerm);
       }, delay);
     };

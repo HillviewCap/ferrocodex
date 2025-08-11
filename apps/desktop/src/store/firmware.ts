@@ -57,11 +57,12 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
         isLoading: false,
       }));
     } catch (error) {
-      set({ 
-        isLoading: false, 
-        error: error as string 
+      const msg = error instanceof Error ? error.message : String(error);
+      set({
+        isLoading: false,
+        error: msg
       });
-      throw error;
+      throw new Error(msg);
     }
   },
 
@@ -118,16 +119,17 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
         }
       });
     } catch (error) {
-      set({ 
-        isUploading: false, 
-        error: error as string,
-        uploadProgress: { 
-          progress: 0, 
+      const msg = error instanceof Error ? error.message : String(error);
+      set({
+        isUploading: false,
+        error: msg,
+        uploadProgress: {
+          progress: 0,
           status: 'error',
-          message: error as string
+          message: msg
         }
       });
-      throw error;
+      throw new Error(msg);
     }
   },
 
@@ -155,8 +157,9 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
 
       set({ firmwareVersions: updatedVersions });
     } catch (error) {
-      set({ error: error as string });
-      throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg });
+      throw new Error(msg);
     }
   },
 
@@ -170,19 +173,30 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
       throw new Error('Not authenticated');
     }
 
+    set({ error: null });
+    
+    console.log('Store: Updating firmware status:', { firmwareId, newStatus, reason });
+    
     try {
-      set({ error: null });
+      // Create a promise that will timeout after 60 seconds (configurable if needed)
+      const timeoutMs = 60000;
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Command timeout after 60 seconds')), timeoutMs);
+      });
       
-      console.log('Updating firmware status:', { firmwareId, newStatus, reason });
-      
-      await invoke('update_firmware_status', {
+      // Tauri v2 expects camelCase and converts to snake_case automatically
+      const commandPromise = invoke('update_firmware_status', {
         token,
         firmwareId,
         newStatus,
         reason,
       });
-
-      console.log('Firmware status updated successfully');
+      
+      console.log('Store: Waiting for Tauri command response...');
+      const result = await Promise.race([commandPromise, timeoutPromise]);
+      
+      console.log('Store: Tauri command result:', result);
+      console.log('Store: Firmware status updated successfully');
 
       // Update the firmware in state
       const firmwareVersions = get().firmwareVersions;
@@ -197,10 +211,12 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
       }
 
       set({ firmwareVersions: updatedVersions });
+      console.log('Store: State updated');
     } catch (error) {
-      console.error('Failed to update firmware status:', error);
-      set({ error: error as string });
-      throw error;
+      console.error('Store: Failed to update firmware status:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg });
+      throw new Error(msg);
     }
   },
 
@@ -242,8 +258,9 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
         await get().loadFirmwareVersions(Number(assetId));
       }
     } catch (error) {
-      set({ error: error as string });
-      throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg });
+      throw new Error(msg);
     }
   },
 
@@ -276,8 +293,9 @@ const useFirmwareStore = create<FirmwareState & FirmwareActions>((set, get) => (
 
       set({ firmwareVersions: updatedVersions });
     } catch (error) {
-      set({ error: error as string });
-      throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg });
+      throw new Error(msg);
     }
   },
 

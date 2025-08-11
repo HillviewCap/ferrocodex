@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Space, Card, Spin, Alert } from 'antd';
 import { SettingOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { BaseStepProps, MetadataConfigurationData } from '../../../types/workflow';
-import { DynamicMetadataForm } from '../../forms/DynamicMetadataForm';
+import DynamicMetadataForm from '../../forms/DynamicMetadataForm';
 import { useWorkflowStore } from '../../../store/workflow';
 
 const { Title, Text, Paragraph } = Typography;

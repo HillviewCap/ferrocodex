@@ -94,16 +94,16 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           });
 
           // Validate file extension
-          const extensionError = validateFirmwareFileExtension(metadata.name);
-          if (extensionError) {
-            message.error(extensionError);
+          const extensionValidation = validateFirmwareFileExtension(metadata.name);
+          if (!extensionValidation.isValid) {
+            message.error(extensionValidation.message || 'Invalid file extension');
             return;
           }
 
           // Validate file size (2GB limit)
-          const sizeError = validateFirmwareFileSize(metadata.size);
-          if (sizeError) {
-            message.error(sizeError);
+          const sizeValidation = validateFirmwareFileSize(metadata.size);
+          if (!sizeValidation.isValid) {
+            message.error(sizeValidation.message || 'Invalid file size');
             return;
           }
 
@@ -240,8 +240,8 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           rules={[
             { validator: async (_, value) => {
               if (value) {
-                const error = validateFirmwareVendor(value);
-                if (error) throw new Error(error);
+                const validation = validateFirmwareVendor(value);
+                if (!validation.isValid) throw new Error(validation.message || 'Invalid vendor');
               }
             }}
           ]}
@@ -255,8 +255,8 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           rules={[
             { validator: async (_, value) => {
               if (value) {
-                const error = validateFirmwareModel(value);
-                if (error) throw new Error(error);
+                const validation = validateFirmwareModel(value);
+                if (!validation.isValid) throw new Error(validation.message || 'Invalid model');
               }
             }}
           ]}
@@ -271,8 +271,8 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
             { required: true, message: 'Please enter firmware version' },
             { validator: async (_, value) => {
               if (value) {
-                const error = validateFirmwareVersion(value);
-                if (error) throw new Error(error);
+                const validation = validateFirmwareVersion(value);
+                if (!validation.isValid) throw new Error(validation.message || 'Invalid version');
               }
             }}
           ]}
@@ -286,8 +286,8 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           rules={[
             { validator: async (_, value) => {
               if (value) {
-                const error = validateFirmwareNotes(value);
-                if (error) throw new Error(error);
+                const validation = validateFirmwareNotes(value);
+                if (!validation.isValid) throw new Error(validation.message || 'Invalid notes');
               }
             }}
           ]}

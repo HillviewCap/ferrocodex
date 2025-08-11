@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "ferrocodex"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "aes-gcm",
  "anyhow",

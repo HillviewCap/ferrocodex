@@ -20,10 +20,8 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   DragOutlined,
-  PlusOutlined
 } from '@ant-design/icons';
 import { 
-  DragDropAssociationData, 
   AssetInfo, 
   AssociationType,
   CreateAssociationRequest 
@@ -57,7 +55,7 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
   disabled = false
 }) => {
   const [draggedFiles, setDraggedFiles] = useState<DraggedFile[]>([]);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDragOver] = useState(false);
   const { createAssociation, loading } = useAssociationStore();
 
   const detectFileType = (fileName: string): AssociationType => {
@@ -358,13 +356,6 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
             backgroundColor: isDragOver ? '#f0f8ff' : undefined,
             borderColor: isDragOver ? '#1890ff' : undefined,
           }}
-          onDrop={(e) => {
-            setIsDragOver(false);
-            const files = Array.from(e.dataTransfer.files);
-            handleDrop(files);
-          }}
-          onDragEnter={() => setIsDragOver(true)}
-          onDragLeave={() => setIsDragOver(false)}
         >
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ color: isDragOver ? '#1890ff' : undefined }} />
@@ -428,10 +419,10 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
                   title={
                     <Space>
                       <Text>{item.file.name}</Text>
-                      <Tag color={item.fileType === 'Configuration' ? 'green' : 'blue'} size="small">
+                      <Tag color={item.fileType === 'Configuration' ? 'green' : 'blue'}>
                         {item.fileType}
                       </Tag>
-                      <Tag color={getStatusColor(item.status)} size="small">
+                      <Tag color={getStatusColor(item.status)}>
                         {item.status.toUpperCase()}
                       </Tag>
                     </Space>

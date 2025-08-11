@@ -156,7 +156,7 @@ export const useHierarchyStore = create<HierarchyState>()(
     }),
     {
       name: 'hierarchy-store',
-      partialize: (state) => ({
+      partialize: (state: HierarchyState) => ({
         expandedKeys: state.expandedKeys,
         selectedAsset: state.selectedAsset,
       }),

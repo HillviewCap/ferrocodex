@@ -25,15 +25,13 @@ import {
   HomeOutlined,
   HistoryOutlined,
   DatabaseOutlined,
-  CalendarOutlined,
-  UserOutlined,
   SafetyOutlined,
   SelectOutlined,
   UnorderedListOutlined
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
 import { CreateAssetModal } from './CreateAssetModal';
-import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
+import { AssetHierarchy, AssetInfo } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyError, useSelectedAsset } from '../../store/hierarchy';
 import useBulkOperationsStore from '../../store/bulkOperations';
@@ -47,7 +45,7 @@ import {
 } from '../bulk';
 
 const { Sider, Content } = Layout;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export interface EnhancedAssetHierarchyViewProps {
   onAssetSelect?: (asset: AssetHierarchy | null) => void;
@@ -66,17 +64,16 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
   const [isBulkModeEnabled, setIsBulkModeEnabled] = useState(false);
   
   // Store hooks
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const hierarchyData = useHierarchyData();
   const isLoading = useHierarchyLoading();
   const error = useHierarchyError();
   const selectedAsset = useSelectedAsset();
-  const { loadHierarchy, setSelectedAsset } = useHierarchyStore();
+  const { loadHierarchy, selectAsset } = useHierarchyStore();
   
   // Bulk operations store
   const {
     getSelectedCount,
-    getSelectedAssets,
     ui: bulkUI,
     resetSelection,
   } = useBulkOperationsStore();
@@ -86,7 +83,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
   // Load hierarchy data on mount
   useEffect(() => {
     if (!hierarchyData) {
-      loadHierarchy();
+      loadHierarchy(token || '');
     }
   }, [hierarchyData, loadHierarchy]);
 
@@ -113,7 +110,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
 
   // Handle asset selection - integrate with bulk operations
   const handleAssetSelect = (asset: AssetHierarchy | null) => {
-    setSelectedAsset(asset);
+    selectAsset(asset);
     if (onAssetSelect) {
       onAssetSelect(asset);
     }
@@ -122,7 +119,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await loadHierarchy();
+      await loadHierarchy(token || '');
       message.success('Asset hierarchy refreshed');
     } catch (err) {
       message.error('Failed to refresh asset hierarchy');
@@ -137,7 +134,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
 
   const handleAssetCreated = () => {
     setShowCreateModal(false);
-    loadHierarchy();
+    loadHierarchy(token || '');
   };
 
   const handleViewHistory = () => {
@@ -261,7 +258,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
           <Space align="center">
             {isDevice ? <ToolOutlined /> : <FolderOutlined />}
             <Text strong>{selectedAsset.name}</Text>
-            {vaultInfo && <VaultAccessIndicator />}
+            {vaultInfo && <VaultAccessIndicator vaultId={vaultInfo.vault.id} />}
           </Space>
         }
         extra={
@@ -348,7 +345,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
         description={error}
         type="error"
         action={
-          <Button size="small" danger onClick={loadHierarchy}>
+          <Button size="small" danger onClick={() => loadHierarchy(token || '')}>
             Retry
           </Button>
         }
@@ -411,11 +408,10 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
                   </div>
                 ) : hierarchyData && hierarchyData.length > 0 ? (
                   <AssetTreeView
-                    assets={hierarchyData}
-                    selectedAsset={selectedAsset}
+                    hierarchyData={hierarchyData}
+                    selectedAssetId={selectedAsset?.id}
                     onAssetSelect={handleAssetSelect}
-                    enableBulkSelection={isBulkModeEnabled}
-                    bulkSelectionContext="tree"
+                    showSearch={true}
                   />
                 ) : (
                   <Empty 
@@ -435,10 +431,11 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
 
       {/* Modals */}
       <CreateAssetModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onAssetCreated={handleAssetCreated}
-        parentAsset={selectedAsset?.asset_type === 'Folder' ? selectedAsset : null}
+        open={showCreateModal}
+        onCancel={() => setShowCreateModal(false)}
+        onSuccess={handleAssetCreated}
+        hierarchyData={hierarchyData || []}
+        initialParentId={selectedAsset?.asset_type === 'Folder' ? selectedAsset.id : null}
       />
 
       {/* Bulk Operations Progress Modal */}

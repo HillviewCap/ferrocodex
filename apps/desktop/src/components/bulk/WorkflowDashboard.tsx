@@ -7,8 +7,6 @@ import {
   Button,
   Space,
   Typography,
-  Select,
-  DatePicker,
   Statistic,
   Progress,
   Table,
@@ -19,7 +17,6 @@ import {
   Drawer,
   Switch,
   InputNumber,
-  Divider,
   Empty,
 } from 'antd';
 import {
@@ -28,29 +25,19 @@ import {
   ReloadOutlined,
   ExpandOutlined,
   ShrinkOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
   BarChartOutlined,
   LineChartOutlined,
-  PieChartOutlined,
-  TableOutlined,
 } from '@ant-design/icons';
 import { 
   BulkImportSession, 
-  BulkOperationStats, 
-  ProgressStatus,
   BulkImportStatus,
   calculateSuccessRate,
-  formatProcessingRate,
 } from '../../types/bulk';
 import useBulkImportStore from '../../store/bulk';
 import BulkProgressTracker from './BulkProgressTracker';
 import WorkflowIntegrationPanel from './WorkflowIntegrationPanel';
 
 const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
-const { Option } = Select;
 
 interface DashboardWidget {
   id: string;
@@ -130,7 +117,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
 
     if (autoRefresh) {
       interval = setInterval(() => {
@@ -183,15 +170,8 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
     ));
   };
 
-  const updateWidgetConfig = (widgetId: string, config: Record<string, any>) => {
-    setWidgets(prev => prev.map(widget => 
-      widget.id === widgetId 
-        ? { ...widget, config: { ...widget.config, ...config } }
-        : widget
-    ));
-  };
 
-  const renderStatsWidget = (widget: DashboardWidget) => {
+  const renderStatsWidget = (_widget: DashboardWidget) => {
     if (!stats) {
       return <Empty description="No statistics available" />;
     }
@@ -263,7 +243,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
     );
   };
 
-  const renderSessionsWidget = (widget: DashboardWidget) => {
+  const renderSessionsWidget = (_widget: DashboardWidget) => {
     const activeSessions = sessions.filter(s => 
       ['Created', 'Validating', 'Processing', 'Paused'].includes(s.status)
     );
@@ -293,7 +273,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
       {
         title: 'Progress',
         key: 'progress',
-        render: (_, record: BulkImportSession) => {
+        render: (_: any, record: BulkImportSession) => {
           const percentage = record.total_items > 0 
             ? Math.round((record.processed_items / record.total_items) * 100)
             : 0;
@@ -309,7 +289,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
       {
         title: 'Actions',
         key: 'actions',
-        render: (_, record: BulkImportSession) => (
+        render: (_: any, record: BulkImportSession) => (
           <Button
             size="small"
             onClick={() => setSelectedSessionId(record.id)}
@@ -334,14 +314,14 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
     );
   };
 
-  const renderIntegrationWidget = (widget: DashboardWidget) => (
+  const renderIntegrationWidget = (_widget: DashboardWidget) => (
     <WorkflowIntegrationPanel
       sessionId={selectedSessionId || undefined}
       compact={true}
     />
   );
 
-  const renderChartWidget = (widget: DashboardWidget) => {
+  const renderChartWidget = (_widget: DashboardWidget) => {
     // Placeholder for chart implementation
     // In a real implementation, this would use a charting library like Chart.js or Recharts
     const recentSessions = sessions

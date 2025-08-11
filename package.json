@@ -1,6 +1,6 @@
 {
   "name": "ferrocodex",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "A secure desktop application for password management and digital organization",
   "homepage": "https://ferrocodex.readthedocs.io",

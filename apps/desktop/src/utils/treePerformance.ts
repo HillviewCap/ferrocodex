@@ -36,7 +36,7 @@ export class TreePerformanceMonitor {
   private metrics: PerformanceMetrics;
   private renderTimeHistory: number[] = [];
   private frameTimeHistory: number[] = [];
-  private memoryCheckInterval?: NodeJS.Timeout;
+  private memoryCheckInterval?: ReturnType<typeof setInterval>;
   private observers: ((metrics: PerformanceMetrics) => void)[] = [];
 
   constructor(config: Partial<TreePerformanceConfig> = {}) {
@@ -405,7 +405,7 @@ export function debounce<T extends (...args: any[]) => any>(
   func: T,
   delay: number
 ): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: ReturnType<typeof setTimeout>;
   
   return (...args: Parameters<T>) => {
     clearTimeout(timeoutId);
@@ -421,7 +421,7 @@ export function throttle<T extends (...args: any[]) => any>(
   delay: number
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: ReturnType<typeof setTimeout>;
   
   return (...args: Parameters<T>) => {
     const now = Date.now();

@@ -178,7 +178,7 @@ export function useVirtualScrollOptimization(
   
   const [scrollTop, setScrollTop] = React.useState(0);
   const [isScrolling, setIsScrolling] = React.useState(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const visibleRange = useMemo(() => {
     const startIndex = Math.floor(scrollTop / itemHeight);
@@ -315,7 +315,7 @@ export function useRenderPerformance(componentName: string) {
   useEffect(() => {
     const renderTime = performance.now() - renderStartTime.current;
     
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       if (renderTime > 16) { // More than one frame at 60fps
         console.warn(`Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`);
       }
@@ -401,7 +401,7 @@ export const RenderOptimization = {
     func: T,
     delay: number
   ): ((...args: Parameters<T>) => void) => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
     return (...args: Parameters<T>) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => func(...args), delay);
