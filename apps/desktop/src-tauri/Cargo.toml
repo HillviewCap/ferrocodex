@@ -45,7 +45,7 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.21"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
-rand = "0.8"
+rand = "0.9"
 async-trait = "0.1"
 csv = "1.3"
 unicode-normalization = "0.1"
