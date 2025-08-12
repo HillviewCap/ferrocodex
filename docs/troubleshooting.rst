@@ -140,14 +140,49 @@ Slow Application Start
 * Ensure 10% free disk space
 * Restart application
 
-Slow Search Results
-^^^^^^^^^^^^^^^^^^^
+Slow Search Results (Enhanced in v0.5.0)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Optimizations:**
+**v0.5.0 Search Performance:**
 
-1. Use specific search terms
-2. Apply filters before searching
-3. Limit date ranges
+With SQLite FTS5, searches should complete in under 200ms. If experiencing slowness:
+
+*Solutions:*
+
+1. **Rebuild Search Index**:
+   
+   * Navigate to Settings → Search Performance
+   * Click "Rebuild Index"
+   * Wait for completion (5-10 minutes)
+
+2. **Optimize Search Queries**:
+   
+   * Use specific field searches: ``manufacturer:siemens``
+   * Avoid wildcards at start: ``*pump`` (slow) vs ``pump*`` (fast)
+   * Use filters to narrow scope
+
+3. **Check Index Health**:
+   
+   * Settings → Search Performance → Index Health
+   * Look for fragmentation warnings
+   * Run "Optimize Index" if needed
+
+4. **Clear Search Cache**:
+   
+   * Settings → Search Performance → Clear Cache
+   * Helps with stale results
+
+Slow Tree Navigation (v0.5.0)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Asset hierarchy tree is slow**
+
+*Solutions:*
+
+1. **Collapse Unused Branches**: Reduce rendered nodes
+2. **Use Search Instead**: Navigate directly to assets
+3. **Archive Old Assets**: Move inactive assets to archive
+4. **Check Asset Count**: Limit folders to < 500 items
 4. Search within specific categories
 
 Database Performance
@@ -162,6 +197,109 @@ Database Performance
 3. Compact database (Settings → Maintenance)
 4. Ensure adequate disk space
 
+Asset Hierarchy Issues (v0.5.0)
+--------------------------------
+
+Asset Naming Errors
+^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Invalid asset name" error**
+
+*v0.5.0 Requirements:*
+
+Asset names must follow the pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
+
+*Solutions:*
+
+1. Use UPPERCASE letters only
+2. Remove spaces (use hyphen or underscore)
+3. Ensure 3-50 character length
+4. Avoid reserved names (CON, PRN, AUX, etc.)
+
+*Examples:*
+
+* ❌ ``plc-west-01`` → ✅ ``PLC-WEST-01``
+* ❌ ``PLC WEST 01`` → ✅ ``PLC-WEST-01``
+* ❌ ``_sensor`` → ✅ ``SENSOR-01``
+
+Cannot Create Asset
+^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Asset creation failed"**
+
+*Common Causes:*
+
+1. **Duplicate Name**: Name already exists in same folder
+2. **Invalid Parent**: Parent folder doesn't exist
+3. **Permissions**: Insufficient rights
+4. **Validation Error**: Metadata field validation failed
+
+*Solutions:*
+
+* Use unique name within folder
+* Verify parent folder exists
+* Check metadata field requirements
+* Review validation error messages
+
+Drag-and-Drop Not Working
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Cannot drag assets in tree**
+
+*Solutions:*
+
+1. **Check Browser**: Use Chrome, Firefox, or Edge
+2. **Permissions**: Verify edit rights on assets
+3. **Target Folder**: Ensure target allows children
+4. **Circular Reference**: Cannot move folder into itself
+
+Metadata Field Issues
+^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Invalid metadata value"**
+
+*Solutions:*
+
+1. Check field type requirements
+2. Verify pattern matching (for text fields)
+3. Ensure date format is correct
+4. Check numeric ranges
+
+**Issue: Cannot add custom fields**
+
+*Solutions:*
+
+1. Administrator privileges may be required
+2. Check metadata schema restrictions
+3. Verify field name uniqueness
+4. Review JSON schema if applicable
+
+Search Not Finding Assets
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: Search returns no results**
+
+*v0.5.0 Search Tips:*
+
+1. **Check Syntax**:
+   
+   * Simple: ``pump``
+   * Field-specific: ``location:west``
+   * Boolean: ``pump AND cooling``
+
+2. **Rebuild Index** (Admin):
+   
+   * Settings → Search Performance
+   * Click "Rebuild Index"
+
+3. **Check Permissions**: 
+   
+   * Only assets you can access are searchable
+
+4. **Clear Cache**:
+   
+   * Settings → Search Performance → Clear Cache
+
 Configuration Management
 ------------------------
 
@@ -173,13 +311,14 @@ Upload Failures
 *Common Causes:*
 
 1. **File too large**: Check size limits
-2. **Invalid characters**: in filename
+2. **Invalid characters**: in filename (v0.5.0 stricter)
 3. **Permissions**: Insufficient user rights
 4. **Disk space**: Storage full
 
 *Solutions:*
 
-* Rename file (remove special characters)
+* Ensure filename follows security rules (v0.5.0)
+* Remove special characters
 * Check available disk space
 * Verify user has Engineer/Admin role
 * Try smaller file or compress
