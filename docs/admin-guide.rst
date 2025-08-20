@@ -1,7 +1,7 @@
 Administrator Guide
 ===================
 
-This guide covers administrative functions and best practices for managing Ferrocodex in your organization. As an administrator, you have full control over users, permissions, system configuration, and security policies.
+This guide covers administrative functions and best practices for managing Ferrocodex in your organization, including new v0.5.0 features for asset hierarchy management, metadata schemas, and enhanced security compliance.
 
 .. contents:: Table of Contents
    :local:
@@ -18,6 +18,9 @@ As a Ferrocodex administrator, you are responsible for:
 * **User Management**: Creating accounts, resetting passwords, managing roles
 * **Access Control**: Granting and revoking permissions, including vault access
 * **System Configuration**: Managing settings, security policies, and preferences
+* **Asset Hierarchy Management** (v0.5.0): Overseeing organizational structures and naming compliance
+* **Metadata Schema Administration** (v0.5.0): Defining and managing custom field templates
+* **Search Performance** (v0.5.0): Optimizing search indexes and monitoring performance
 * **Audit Oversight**: Monitoring system activity and investigating incidents
 * **Data Management**: Overseeing backups, exports, and data retention
 * **Compliance**: Ensuring the system meets organizational and regulatory requirements
@@ -292,6 +295,239 @@ Password Policy Management
 * Grace period for updates
 * Exemption management
 
+Asset Hierarchy Administration (v0.5.0)
+----------------------------------------
+
+Asset Naming Security
+^^^^^^^^^^^^^^^^^^^^^
+
+**Cybersecurity-Compliant Naming Enforcement:**
+
+Ferrocodex v0.5.0 enforces strict naming conventions for security:
+
+.. code-block:: regex
+
+   ^[A-Z0-9][A-Z0-9_-]{2,49}$
+
+**Administrator Controls:**
+
+1. **Naming Policy Configuration**:
+   
+   * Navigate to **Settings** → **Asset Security**
+   * Configure naming rules:
+     
+     - Enforce uppercase only
+     - Block reserved names (CON, PRN, AUX, etc.)
+     - Set minimum/maximum length
+     - Custom regex patterns
+
+2. **Validation Rules**:
+   
+   * Real-time validation during creation
+   * Bulk rename validation
+   * Import sanitization
+   * Audit non-compliant names
+
+3. **Reserved Name Management**:
+   
+   * View blocked Windows names
+   * Add organization-specific restrictions
+   * Configure exceptions (with logging)
+   * Generate compliance reports
+
+**File Upload Security:**
+
+* Automatic filename sanitization
+* Path traversal prevention
+* Extension validation
+* SHA-256 integrity verification
+* Quarantine suspicious files
+
+Metadata Schema Management
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Creating Organization-Wide Schemas:**
+
+1. Navigate to **Settings** → **Metadata Schemas**
+2. Click **"Create Schema Template"**
+3. Define schema structure:
+   
+   * Field definitions
+   * Validation rules
+   * Default values
+   * Required fields
+   * Conditional logic
+
+4. Set schema properties:
+   
+   * **Name**: Template identifier
+   * **Asset Types**: Applicable to folders/devices
+   * **Mandatory**: Force on asset creation
+   * **Version**: Track schema changes
+
+**Field Type Configuration:**
+
+.. list-table:: Available Field Types and Validation
+   :header-rows: 1
+   :widths: 20 30 50
+
+   * - Field Type
+     - Validation Options
+     - Use Cases
+   * - Text
+     - Pattern, length, character set
+     - Serial numbers, descriptions
+   * - Number
+     - Min/max, decimals, step
+     - Counts, measurements
+   * - Date
+     - Range, relative constraints
+     - Install dates, warranties
+   * - Dropdown
+     - Option list, multi-select
+     - Categories, status
+   * - IP Address
+     - IPv4/IPv6, subnet validation
+     - Network configuration
+   * - JSON
+     - Schema validation
+     - Complex structured data
+
+**Schema Deployment:**
+
+1. **Testing**:
+   
+   * Create test assets
+   * Validate field behavior
+   * Check search indexing
+   * Verify validation rules
+
+2. **Rollout**:
+   
+   * Apply to asset types
+   * Migrate existing data
+   * Set as default template
+   * Monitor adoption
+
+3. **Maintenance**:
+   
+   * Version control schemas
+   * Track field usage
+   * Update validation rules
+   * Archive obsolete fields
+
+Search Performance Management
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Search Index Administration:**
+
+1. **Index Monitoring**:
+   
+   * Navigate to **Settings** → **Search Performance**
+   * View metrics:
+     
+     - Index size and fragmentation
+     - Query response times
+     - Cache hit rates
+     - Slow query log
+
+2. **Optimization Tasks**:
+   
+   * **Rebuild Index**: Full reconstruction
+   * **Optimize Index**: Defragmentation
+   * **Clear Cache**: Reset search cache
+   * **Analyze Queries**: Performance profiling
+
+3. **Configuration**:
+   
+   * Set cache size limits
+   * Configure background optimization
+   * Adjust relevance scoring
+   * Manage stopwords
+
+**Performance Tuning:**
+
+.. code-block:: text
+
+   Recommended Settings for Different Scales:
+   
+   Small (< 1,000 assets):
+   - Cache: 100MB
+   - Background optimization: Weekly
+   - Full-text index: All fields
+   
+   Medium (1,000 - 10,000 assets):
+   - Cache: 500MB
+   - Background optimization: Daily
+   - Full-text index: Selected fields
+   
+   Large (> 10,000 assets):
+   - Cache: 1GB+
+   - Background optimization: Continuous
+   - Full-text index: Optimized fields only
+
+**Search Analytics:**
+
+* Popular search terms
+* Failed searches (no results)
+* User search patterns
+* Performance trends
+* Optimization recommendations
+
+Asset Security Classification
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Managing Security Tags:**
+
+1. **Classification Levels**:
+   
+   * Public
+   * Internal
+   * Confidential
+   * Secret
+   * Top Secret
+
+2. **Classification Impact**:
+   
+   * Search result filtering
+   * Export restrictions
+   * Audit detail level
+   * Access control enforcement
+   * Compliance reporting
+
+3. **Bulk Classification**:
+   
+   * Select multiple assets
+   * Apply classification
+   * Cascade to children
+   * Generate reports
+
+Hierarchy Management Best Practices
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Organizational Structure Guidelines:**
+
+1. **Design Principles**:
+   
+   * Logical grouping (function/location)
+   * Consistent depth (5-7 levels max)
+   * Clear naming conventions
+   * Avoid circular references
+
+2. **Performance Considerations**:
+   
+   * Archive inactive branches
+   * Limit folder contents (< 500 items)
+   * Use search for navigation
+   * Regular structure review
+
+3. **Access Control**:
+   
+   * Inherit permissions from parent
+   * Override at specific levels
+   * Document exceptions
+   * Regular permission audits
+
 System Configuration
 --------------------
 
@@ -362,6 +598,9 @@ Import/Export Configuration
 1. **Full System Backup**:
    
    * All assets and configurations
+   * **Asset hierarchies** (v0.5.0)
+   * **Custom metadata schemas** (v0.5.0)
+   * **Search indexes** (v0.5.0)
    * User accounts (without passwords)
    * Audit logs
    * System settings
@@ -506,7 +745,14 @@ Compliance Dashboard
    * Time-limited expiry
    * Segregation violations
 
-3. **System Security**:
+3. **Asset Compliance** (v0.5.0):
+   
+   * Naming convention adherence
+   * Metadata completeness
+   * Security classification coverage
+   * Hierarchy organization standards
+
+4. **System Security**:
    
    * Failed login trends
    * Security incidents
@@ -658,6 +904,8 @@ Daily Tasks
 - [ ] Monitor system alerts
 - [ ] Verify backup completion
 - [ ] Review critical audit entries
+- [ ] Check search performance metrics (v0.5.0)
+- [ ] Review asset naming violations (v0.5.0)
 
 Weekly Tasks
 ^^^^^^^^^^^^
@@ -677,6 +925,9 @@ Monthly Tasks
 - [ ] User account cleanup
 - [ ] System performance review
 - [ ] Security training updates
+- [ ] Optimize search indexes (v0.5.0)
+- [ ] Review metadata schema usage (v0.5.0)
+- [ ] Audit asset hierarchy structure (v0.5.0)
 
 Quarterly Tasks
 ^^^^^^^^^^^^^^^

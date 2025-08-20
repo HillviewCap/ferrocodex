@@ -40,55 +40,205 @@ The main navigation sidebar includes:
 Asset Management
 ----------------
 
+.. note::
+   **New in v0.5.0**: Hierarchical asset organization with folders and devices, custom metadata fields, advanced search capabilities, and cybersecurity-compliant naming. See the comprehensive :doc:`asset-hierarchy-guide` for detailed information.
+
 Understanding Assets
 ^^^^^^^^^^^^^^^^^^^^
 
-Assets represent your industrial equipment and devices:
+Ferrocodex v0.5.0 introduces two types of assets for better organization:
+
+**Folder Assets** (Organizational Containers):
+
+* Production lines
+* Facility areas
+* Equipment categories
+* Geographic locations
+* Unlimited nesting depth
+
+**Device Assets** (Industrial Equipment):
 
 * PLCs (Programmable Logic Controllers)
 * HMIs (Human Machine Interfaces)
 * SCADA systems
 * Network devices
+* Sensors and actuators
 * Any configurable industrial equipment
+
+Hierarchical Organization
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Assets are now organized in a tree structure:
+
+.. figure:: _static/images/asset-hierarchy-tree.png
+   :alt: Asset hierarchy tree view
+   :align: center
+   :width: 700px
+
+   *Hierarchical asset organization with folders and devices*
+
+**Key Features:**
+
+* **Tree Navigation**: Expandable/collapsible folder structure
+* **Drag-and-Drop**: Reorganize assets by dragging
+* **Visual Indicators**: Icons distinguish folders from devices
+* **Breadcrumb Path**: Shows current location in hierarchy
+* **Keyboard Navigation**: Full keyboard support for accessibility
 
 Creating Assets
 ^^^^^^^^^^^^^^^
 
+**Creating a Folder Asset:**
+
 1. Navigate to **Assets** from the sidebar
-2. Click **"Add Asset"** button
-3. Complete the form:
+2. Click **"Add Asset"** → **"Folder"**
+3. Complete the folder form:
+
+   * **Name**: Must follow pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
+   * **Parent Folder**: Select location in hierarchy
+   * **Description**: Purpose of the folder
+   * **Custom Metadata**: Add relevant fields
+
+4. Click **"Create"** to save
+
+**Creating a Device Asset:**
+
+1. Navigate to target folder (or root)
+2. Click **"Add Asset"** → **"Device"**
+3. Complete the device form:
 
    * **Name**: Unique identifier (e.g., "PLC-WEST-01")
    * **Type**: Equipment category
    * **Manufacturer**: Device manufacturer
    * **Model**: Specific model number
    * **Location**: Physical or logical location
+   * **Custom Metadata**: Equipment-specific fields
    * **Description**: Additional details
 
 4. Click **"Create"** to save
 
-Best Practices for Asset Naming
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Asset Naming Requirements
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Use consistent naming conventions
-* Include location identifiers
-* Add equipment type prefixes
-* Avoid special characters
-* Keep names descriptive but concise
+**v0.5.0 Security-Compliant Naming Pattern:**
 
-Example naming convention::
+All asset names must follow cybersecurity best practices:
 
-    [TYPE]-[LOCATION]-[NUMBER]
-    PLC-WEST-01
-    HMI-LINE2-03
-    SCADA-MAIN-01
+.. code-block:: regex
+
+   ^[A-Z0-9][A-Z0-9_-]{2,49}$
+
+**Rules:**
+
+* Start with uppercase letter or number
+* Only uppercase letters, numbers, underscore, hyphen
+* Length: 3-50 characters
+* No spaces or special characters
+* No leading/trailing underscore or hyphen
+
+**Valid Examples:**
+
+* ``PLC-WEST-01``
+* ``HMI_LINE2_03``
+* ``PRODUCTION-LINE-1``
+* ``SENSOR_TEMP_001``
+
+**Invalid Examples:**
+
+* ``plc-west-01`` (lowercase not allowed)
+* ``PLC WEST 01`` (spaces not allowed)
+* ``_PLC-WEST`` (leading underscore)
+* ``AB`` (too short)
+
+**Reserved Names Blocked:**
+
+* ``CON``, ``PRN``, ``AUX``, ``NUL``
+* ``COM1`` through ``COM9``
+* ``LPT1`` through ``LPT9``
+
+Custom Metadata Management
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**v0.5.0 Feature**: Define custom fields for your assets:
+
+1. Select an asset or create new
+2. Click **"Manage Metadata"**
+3. Add custom fields:
+
+   * **Text Fields**: Serial numbers, descriptions
+   * **Numbers**: Counts, measurements
+   * **Dates**: Install dates, warranties
+   * **Dropdowns**: Status, categories
+   * **Checkboxes**: Features, compliance
+   * **IP Addresses**: Network configuration
+   * **URLs**: Documentation links
+
+4. Set validation rules:
+
+   * Required/optional
+   * Pattern matching
+   * Value ranges
+   * Default values
+
+**Pre-built Templates:**
+
+* **Network Equipment**: IP, subnet, gateway, VLAN
+* **Location**: Facility, building, floor, room
+* **Maintenance**: Install date, warranty, service schedule
+
+Advanced Search and Filtering
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**v0.5.0 Search Capabilities:**
+
+* **Full-Text Search**: SQLite FTS5 with sub-200ms performance
+* **Metadata Search**: Search across all custom fields
+* **Hierarchical Search**: Search within specific folders
+* **Advanced Filters**: Complex AND/OR/NOT combinations
+* **Search Suggestions**: Auto-complete with history
+* **Similar Asset Discovery**: Find related equipment
+
+**Search Syntax Examples:**
+
+.. code-block:: text
+
+   Simple search:
+   pump                    # Find all assets with "pump"
+   
+   Field-specific:
+   manufacturer:siemens    # Search by manufacturer
+   
+   Boolean operators:
+   pump AND cooling        # Both terms required
+   pump OR fan            # Either term
+   
+   Wildcards:
+   PLC-*                  # Matches PLC-001, PLC-002, etc.
+
+Bulk Operations
+^^^^^^^^^^^^^^^
+
+**v0.5.0 Bulk Features:**
+
+* **Multi-Select**: Ctrl/Cmd+Click for multiple assets
+* **Bulk Move**: Drag multiple assets to new folder
+* **Bulk Rename**: Pattern-based renaming
+* **Bulk Metadata Update**: Update fields across assets
+* **Import/Export**: CSV and JSON formats
+* **Batch Delete**: Remove multiple assets
 
 Editing Assets
 ^^^^^^^^^^^^^^
 
-1. Click on any asset in the list
+1. Click on any asset in the tree or list view
 2. Select **"Edit"** from the actions menu
-3. Update information as needed
+3. Update information as needed:
+
+   * Basic properties
+   * Custom metadata
+   * Security classification
+   * Parent folder location
+
 4. Save changes
 
 .. note::
