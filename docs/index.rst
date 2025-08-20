@@ -1,7 +1,7 @@
 Welcome to Ferrocodex Documentation
 ===================================
 
-Ferrocodex is a secure operational technology (OT) configuration management platform designed for industrial environments. It provides offline-first configuration management for industrial equipment with enterprise-grade security features.
+Ferrocodex is a secure operational technology (OT) configuration management platform designed for industrial environments. It provides offline-first configuration management for industrial equipment with enterprise-grade security features and comprehensive asset hierarchy management.
 
 .. toctree::
    :maxdepth: 2
@@ -9,17 +9,34 @@ Ferrocodex is a secure operational technology (OT) configuration management plat
 
    getting-started
    user-guide
+   asset-hierarchy-guide
    firmware-guide
    admin-guide
    security
    troubleshooting
    migration-guide
 
+What's New in v0.5.0
+--------------------
+
+**Asset Hierarchy Management System** - Complete transformation of asset organization:
+
+* **Hierarchical Organization**: Folder-based structure with unlimited nesting for intuitive asset management
+* **Advanced Search**: SQLite FTS5 full-text search with sub-200ms performance across all metadata
+* **Custom Metadata**: Flexible field definitions with templates, validation rules, and JSON schema support
+* **Cybersecurity Compliance**: Enforced naming conventions following security best practices
+* **Bulk Operations**: Import/export, batch updates, and multi-asset management capabilities
+* **Drag-and-Drop Interface**: Intuitive reorganization with visual tree navigation
+* **Keyboard Navigation**: Full keyboard support for power users and accessibility
+
 Overview
 --------
 
 Ferrocodex helps industrial organizations manage their equipment configurations securely and efficiently. Key features include:
 
+* **Asset Hierarchy Management** (v0.5.0): Organize assets in hierarchical structures with folders and devices
+* **Advanced Search & Filtering** (v0.5.0): Full-text search with complex filtering and metadata queries
+* **Custom Metadata System** (v0.5.0): Define equipment-specific fields with validation and templates
 * **Offline-First Design**: Work without internet connectivity in air-gapped environments
 * **Version Control**: Track all configuration changes with built-in branching and auditing
 * **Identity Vault**: Secure credential management with password rotation and compliance tracking

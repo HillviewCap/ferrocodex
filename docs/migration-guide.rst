@@ -50,8 +50,12 @@ Version Compatibility
      - 0.4.x
      - Semi-automatic
      - Minimal
+   * - 0.4.x
+     - 0.5.x
+     - Semi-automatic
+     - Minimal
    * - Any
-     - 0.4.x
+     - 0.5.x
      - Manual possible
      - Extended
 
@@ -215,6 +219,110 @@ Migrating to v0.4.0 (Asset Identity Vault)
        }
      }
    }
+
+Migrating to v0.5.0 (Asset Hierarchy Management)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Major Changes:**
+
+* Complete asset hierarchy system with folders and devices
+* Advanced metadata management with custom fields
+* SQLite FTS5 full-text search implementation
+* Cybersecurity-compliant naming enforcement
+* Bulk operations and import/export enhancements
+* Drag-and-drop asset organization
+
+**Migration Process:**
+
+1. **Pre-Migration Requirements**:
+   
+   * Backup existing database
+   * Document current asset structure
+   * Plan hierarchy organization
+   * Review naming compliance
+
+2. **Database Schema Updates**:
+   
+   The migration will automatically:
+   
+   * Add asset_type field (folder/device)
+   * Create parent_id for hierarchy
+   * Add metadata_json columns
+   * Create FTS5 search tables
+   * Build search indexes
+
+3. **Asset Name Compliance**:
+   
+   Non-compliant asset names will be automatically converted:
+   
+   .. code-block:: text
+   
+      Original: "plc west 01" → Converted: "PLC-WEST-01"
+      Original: "_sensor_01" → Converted: "SENSOR-01"
+      Original: "ab" → Converted: "AB-001" (padded)
+   
+   A migration report will list all renamed assets.
+
+4. **Hierarchy Organization**:
+   
+   * Existing assets become root-level devices
+   * Create folder structure post-migration
+   * Use bulk move to organize
+   * Set up metadata templates
+
+5. **Search Index Building**:
+   
+   * Automatic index creation
+   * Initial indexing may take 5-10 minutes
+   * Progress shown in migration log
+   * Verify search performance
+
+**Post-Migration Steps:**
+
+1. **Organize Asset Hierarchy**:
+   
+   * Create logical folder structure
+   * Move devices into folders
+   * Apply security classifications
+   * Set up metadata schemas
+
+2. **Configure Metadata**:
+   
+   * Define custom fields
+   * Apply templates to asset types
+   * Migrate existing data to fields
+   * Set validation rules
+
+3. **Verify Search**:
+   
+   * Test full-text search
+   * Check metadata filtering
+   * Validate performance
+   * Train users on syntax
+
+4. **User Training**:
+   
+   * Hierarchy navigation
+   * Drag-and-drop operations
+   * Advanced search features
+   * Metadata management
+
+Migrating from v0.3.x to v0.4.x
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Major Changes:**
+
+* Asset Identity Vault added
+* Password rotation management
+* Enhanced security features
+
+**Migration Process:**
+
+1. Export configurations
+2. Install new version
+3. Database migration (automatic)
+4. Configure vault policies
+5. Train users on vault features
 
 Migrating from v0.2.x to v0.3.x
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

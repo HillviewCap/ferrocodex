@@ -94,28 +94,54 @@ Creating Your First User
 Basic Workflow
 --------------
 
-1. Managing Assets
-^^^^^^^^^^^^^^^^^
+1. Managing Assets (Enhanced in v0.5.0)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Adding an Asset:**
+**Understanding Asset Types (v0.5.0):**
 
-1. Navigate to the Assets page
-2. Click "Add Asset"
-3. Enter asset details:
+Ferrocodex now supports two asset types for better organization:
+
+* **Folders**: Organizational containers for grouping related equipment
+* **Devices**: Actual industrial equipment (PLCs, HMIs, etc.)
+
+**Creating Your First Asset Hierarchy:**
+
+1. **Create a Folder Structure (v0.5.0):**
    
-   * Name (e.g., "PLC-01")
-   * Type (e.g., "PLC")
-   * Manufacturer
-   * Model
-   * Location
+   a. Navigate to the Assets page
+   b. Click "Add Asset" → "Folder"
+   c. Name it following the security pattern (e.g., "PRODUCTION-LINE-1")
+   d. Click "Create"
 
-4. Click "Create" to save
+2. **Add a Device to the Folder:**
+   
+   a. Select your folder in the tree view
+   b. Click "Add Asset" → "Device"  
+   c. Enter device details:
+      
+      * Name: Must follow ``^[A-Z0-9][A-Z0-9_-]{2,49}$`` (e.g., "PLC-LINE1-01")
+      * Type: Equipment category
+      * Manufacturer: Device vendor
+      * Model: Specific model
+      * Custom Metadata: Add fields as needed (v0.5.0)
+   
+   d. Click "Create" to save
 
-**Organizing Assets:**
+**Asset Naming Requirements (v0.5.0):**
 
-* Use descriptive names following your naming convention
-* Group related assets by location or function
-* Add detailed descriptions for easier searching
+All asset names must follow cybersecurity best practices:
+
+* Use UPPERCASE letters and numbers only
+* Can include underscore (_) and hyphen (-)
+* Length: 3-50 characters
+* Examples: ``PLC-001``, ``HMI_MAIN_01``, ``SENSOR-TEMP-001``
+
+**Organizing Assets with Hierarchy (v0.5.0):**
+
+* Create logical folder structures (by location, function, or type)
+* Use drag-and-drop to reorganize assets
+* Navigate with the tree view or use search
+* Add custom metadata fields for better organization
 
 2. Configuration Management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

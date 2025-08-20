@@ -20,6 +20,9 @@ Core Security Features
 * **Comprehensive Audit Trail**: Immutable activity logging
 * **Session Management**: Secure token-based authentication
 * **Input Validation**: Protection against injection attacks
+* **Asset Naming Security** (v0.5.0): Cybersecurity-compliant naming enforcement
+* **File Integrity Verification** (v0.5.0): SHA-256 checksums for all uploads
+* **Metadata Validation** (v0.5.0): JSON schema validation for custom fields
 
 Data Protection
 ^^^^^^^^^^^^^^^
@@ -87,6 +90,90 @@ Session Security
 * **Concurrent session limits**
 * **Session invalidation on logout**
 * **Activity monitoring**
+
+Asset Naming Security (v0.5.0)
+-------------------------------
+
+Cybersecurity-Compliant Naming
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Ferrocodex v0.5.0 enforces strict naming conventions to prevent security vulnerabilities:
+
+**Naming Pattern Requirements:**
+
+.. code-block:: regex
+
+   ^[A-Z0-9][A-Z0-9_-]{2,49}$
+
+**Security Benefits:**
+
+* **Path Traversal Prevention**: No ``../`` or special characters
+* **Command Injection Protection**: No shell metacharacters
+* **SQL Injection Prevention**: Restricted character set
+* **Cross-Site Scripting (XSS) Prevention**: No HTML/JavaScript characters
+* **Unicode Attack Prevention**: ASCII-only enforcement
+
+**Reserved Name Blocking:**
+
+The following Windows reserved names are automatically blocked:
+
+* System devices: ``CON``, ``PRN``, ``AUX``, ``NUL``
+* Serial ports: ``COM1`` through ``COM9``
+* Parallel ports: ``LPT1`` through ``LPT9``
+
+**File Upload Security:**
+
+* **Filename Sanitization**: Automatic cleaning of uploaded filenames
+* **Extension Validation**: Checked against security policies
+* **Path Component Validation**: No directory traversal sequences
+* **Length Limits**: Maximum 255 characters enforced
+* **SHA-256 Verification**: Integrity checking for all uploads
+
+Metadata Security (v0.5.0)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Field Validation:**
+
+* **Input Sanitization**: All metadata inputs sanitized
+* **Type Enforcement**: Strict type checking for fields
+* **Pattern Validation**: Regex patterns for text fields
+* **Range Validation**: Min/max for numeric fields
+* **JSON Schema Validation**: Structure validation for complex data
+
+**SQL Injection Prevention:**
+
+* **Parameterized Queries**: All metadata queries use parameters
+* **Input Escaping**: Special characters properly escaped
+* **Type Casting**: Explicit type conversion
+* **Query Validation**: No dynamic SQL generation
+
+**Cross-Site Scripting (XSS) Prevention:**
+
+* **Output Encoding**: HTML entity encoding for display
+* **Content Security Policy**: Strict CSP headers
+* **Input Filtering**: Remove script tags and events
+* **Template Sanitization**: Safe rendering of metadata
+
+Security Classification System
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Assets can be tagged with security classifications affecting system behavior:
+
+**Classification Levels:**
+
+1. **Public**: No restrictions
+2. **Internal**: Company-wide access
+3. **Confidential**: Department-level access
+4. **Secret**: Need-to-know basis
+5. **Top Secret**: Maximum security
+
+**Classification Enforcement:**
+
+* **Search Filtering**: Results filtered by user clearance
+* **Export Restrictions**: Higher classifications require approval
+* **Audit Detail**: More logging for sensitive assets
+* **Access Control**: Automatic permission adjustment
+* **Compliance Tracking**: Classification-based reporting
 
 Physical Security
 -----------------
