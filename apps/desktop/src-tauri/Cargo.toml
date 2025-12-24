@@ -26,14 +26,14 @@ tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
-bcrypt = "0.17.0"
+bcrypt = "0.17.1"
 tracing = "0.1.40"
 tracing-subscriber = "0.3"
 log = "0.4"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 tempfile = "3.13"
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.18", features = ["v4"] }
 thiserror = "2.0"
 flate2 = "1.0.24"
 sha2 = "0.10"
