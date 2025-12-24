@@ -11,7 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Mock auth store
 vi.mock('../../store/auth', () => ({
-  useAuthStore: () => ({
+  default: () => ({
     token: 'mock-token',
   }),
 }));

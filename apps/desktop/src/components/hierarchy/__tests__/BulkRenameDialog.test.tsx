@@ -20,13 +20,13 @@ vi.mock('../../../store/bulkOperations', () => ({
 
 // Mock Ant Design Modal
 vi.mock('antd', async () => {
-  const actual = await vi.importActual('antd');
+  const actual = await vi.importActual<typeof import('antd')>('antd');
+  const Modal = (props: any) => <actual.Modal {...props} />;
+  Object.assign(Modal, actual.Modal);
+  (Modal as any).error = vi.fn();
   return {
     ...actual,
-    Modal: {
-      ...actual.Modal,
-      error: vi.fn()
-    }
+    Modal,
   };
 });
 
@@ -144,7 +144,7 @@ describe('BulkRenameDialog', () => {
       />
     );
 
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     await waitFor(() => {
@@ -164,7 +164,7 @@ describe('BulkRenameDialog', () => {
       />
     );
 
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     await waitFor(() => {
@@ -232,7 +232,7 @@ describe('BulkRenameDialog', () => {
     );
 
     // Switch to pattern mode
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     // Set pattern
@@ -301,7 +301,7 @@ describe('BulkRenameDialog', () => {
     );
 
     // Switch to pattern mode and set invalid pattern
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     await waitFor(() => {
@@ -415,7 +415,7 @@ describe('BulkRenameDialog', () => {
     );
 
     // Switch to pattern mode and set invalid pattern
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     await waitFor(() => {
@@ -440,7 +440,7 @@ describe('BulkRenameDialog', () => {
     );
 
     // Switch to pattern mode
-    const patternSwitch = screen.getByRole('switch');
+    const patternSwitch = screen.getAllByRole('switch')[0];
     fireEvent.click(patternSwitch);
 
     await waitFor(() => {
