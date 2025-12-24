@@ -1,0 +1,63 @@
+name: Bump Version on Dependabot Merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    # Trigger only if the push is from Dependabot and not a release bump itself (to avoid loops)
+    if: (github.actor == 'dependabot[bot]' || contains(github.event.head_commit.message, 'dependabot')) && !contains(github.event.head_commit.message, 'chore(release): bump version')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Bump version in apps/desktop
+        id: bump
+        run: |
+          cd apps/desktop
+          
+          # Bump patch version in package.json and package-lock.json
+          # --no-git-tag-version prevents npm from creating a commit/tag immediately
+          npm version patch --no-git-tag-version
+          
+          # Get the new version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          
+          echo "Bumping to version $NEW_VERSION"
+          
+          # Update tauri.conf.json using jq
+          # We use a temp file to safely write the output
+          jq --arg v "$NEW_VERSION" '.version = $v' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          
+      - name: Commit and Push
+        run: |
+          # Stage the changes
+          # We explicitly add package-lock.json in case npm version updated it
+          git add apps/desktop/package.json apps/desktop/package-lock.json apps/desktop/src-tauri/tauri.conf.json
+          
+          # Commit
+          git commit -m "chore(release): bump version to ${{ env.NEW_VERSION }} [skip ci]"
+          
+          # Tag (this triggers the Release workflow)
+          git tag "v${{ env.NEW_VERSION }}"
+          
+          # Push commit and tag
+          git push origin main --tags
