@@ -6,58 +6,59 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
+
+# Serialize bumps so back-to-back Dependabot merges don't race on main.
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
 
 jobs:
   bump-version:
-    # Trigger only if the push is from Dependabot and not a release bump itself (to avoid loops)
-    if: (github.actor == 'dependabot[bot]' || contains(github.event.head_commit.message, 'dependabot')) && !contains(github.event.head_commit.message, 'chore(release): bump version')
+    # Run only when the push contains a Dependabot-authored commit (squash or merge).
+    # The bump commit is authored by github-actions[bot], so it doesn't retrigger this job.
+    if: contains(github.event.commits.*.author.name, 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # GITHUB_TOKEN can't push past main's branch protection, and tags it pushes
+      # don't trigger release.yml, so this job needs an admin PAT.
+      - name: Require RELEASE_TOKEN
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::Repository secret RELEASE_TOKEN is not set (admin PAT with Contents: read and write)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
+          ref: main
+          token: ${{ secrets.RELEASE_TOKEN }}
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: lts/*
 
       - name: Configure Git
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Bump version in apps/desktop
+      - name: Bump version
         id: bump
+        run: node .github/scripts/bump-version.mjs
+
+      - name: Commit, tag, and push
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.version }}
         run: |
-          cd apps/desktop
-          
-          # Bump patch version in package.json and package-lock.json
-          # --no-git-tag-version prevents npm from creating a commit/tag immediately
-          npm version patch --no-git-tag-version
-          
-          # Get the new version
-          NEW_VERSION=$(node -p "require('./package.json').version")
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          
-          echo "Bumping to version $NEW_VERSION"
-          
-          # Update tauri.conf.json using jq
-          # We use a temp file to safely write the output
-          jq --arg v "$NEW_VERSION" '.version = $v' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
-          
-      - name: Commit and Push
-        run: |
-          # Stage the changes
-          # We explicitly add package-lock.json in case npm version updated it
-          git add apps/desktop/package.json apps/desktop/package-lock.json apps/desktop/src-tauri/tauri.conf.json
-          
-          # Commit
-          git commit -m "chore(release): bump version to ${{ env.NEW_VERSION }} [skip ci]"
-          
-          # Tag (this triggers the Release workflow)
-          git tag "v${{ env.NEW_VERSION }}"
-          
-          # Push commit and tag
-          git push origin main --tags
+          git add package.json package-lock.json \
+            apps/desktop/package.json apps/desktop/package-lock.json \
+            apps/desktop/src-tauri/tauri.conf.json \
+            apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
+          git commit -m "chore(release): bump version to $NEW_VERSION"
+          git tag "v$NEW_VERSION"
+          # The tag push triggers release.yml.
+          git push --atomic origin main "v$NEW_VERSION"
