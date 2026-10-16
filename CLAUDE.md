@@ -54,7 +54,7 @@ There is no linter configured: `npm run lint` resolves to a turbo task that no p
 
 - The version string is duplicated in `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`.
 - Pushing a `v*` tag runs `release.yml`. It uses `tauri-action` to build Windows, macOS (arm64 and x64), and Linux, and creates a **draft** GitHub release.
-- Dependabot PRs auto-merge. `post-dependabot-bump.yml` then bumps the patch version in `apps/desktop/package.json` and `tauri.conf.json` (not the root `package.json` or `Cargo.toml`), commits, and pushes a tag, which triggers a release.
+- When a push to `main` contains a Dependabot-authored commit, `post-dependabot-bump.yml` runs `.github/scripts/bump-version.mjs`. The script bumps the patch version in all four files plus both `package-lock.json` files and `Cargo.lock`. The workflow then commits, tags, and pushes, which triggers a release. It pushes with the `RELEASE_TOKEN` secret (an admin PAT), because `GITHUB_TOKEN` can't get past branch protection and its tag pushes don't trigger other workflows.
 
 ## Other Repo Contents
 
