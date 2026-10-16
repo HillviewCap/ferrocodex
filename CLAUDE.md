@@ -4,183 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ferrocodex is a secure OT (Operational Technology) configuration management platform built as a cross-platform desktop application using Tauri 2.0. It combines a Rust backend with a React/TypeScript frontend to provide offline-first configuration management for industrial equipment.
+Ferrocodex is an offline-first OT (Operational Technology) configuration management desktop app built with Tauri 2.0: a Rust backend (`apps/desktop/src-tauri`) and a React 18 + TypeScript + Vite + Ant Design + Zustand frontend (`apps/desktop/src`). It is an npm-workspaces/Turborepo monorepo, but `apps/desktop` is currently the only package.
 
-## Development Commands
-
-### Quick Start
+## Commands
 
 ```bash
-# Install dependencies (from root)
+# From root
 npm install
+npm run dev            # turbo → vite dev server only (port 1420, strictPort)
+npm run build          # turbo → vite build
+npm run test           # turbo → runs build first (turbo.json dependsOn), then vitest
 
-# Start development server (recommended)
-npm run dev
+# From apps/desktop
+npm run tauri:dev      # full app: Vite + Rust backend
+npm run tauri:build    # production bundle
+npm run test:run       # vitest once (`npm run test` is watch mode)
+npm run test:run -- src/components/Dashboard.test.tsx   # single file
+npm run test:run -- -t "test name"                        # single test by name
+npx tsc --noEmit       # type-check (no separate typecheck script)
 
-# Or specifically for Tauri development
-cd apps/desktop
-npm run tauri:dev
-```
-
-### Essential Commands
-
-```bash
-# From root directory:
-npm run dev          # Start development server with hot reload
-npm run build        # Build all packages
-npm run test         # Run all tests across workspaces
-npm run lint         # Run linting across all workspaces
-npm run clean        # Clean build artifacts
-
-# From apps/desktop directory:
-npm run test         # Run frontend tests in watch mode
-npm run test:run     # Run frontend tests once
-npm run test:coverage # Run tests with coverage report
-npm run tauri:dev    # Start Tauri development mode
-npm run tauri:build  # Build production desktop app
-
-# Backend tests (from root):
+# Backend (from root)
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
-
-# Running specific tests:
-# Frontend test for specific file
-cd apps/desktop
-npm run test -- src/components/Dashboard.test.tsx
-
-# Backend test for specific module
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- users::tests
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- vault::   # tests under one module
 ```
 
-### Release & Deployment
+There is no linter configured: `npm run lint` resolves to a turbo task that no package defines. CI (`.github/workflows/test.yml`) runs `npm run test` in `apps/desktop` and `cargo test` on macOS, Ubuntu 22.04, and Windows. On Linux, building requires `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`.
 
-```bash
-# Create a release (triggers automatic binary building):
-git tag v1.0.0
-git push origin v1.0.0
+## Architecture
 
-# GitHub Actions will automatically:
-# - Build binaries for Windows, macOS (Intel + ARM), and Linux
-# - Run all tests across platforms
-# - Create GitHub release with downloadable assets
-```
+### Backend (Rust)
 
-## Architecture Overview
+- **Entry point**: `src-tauri/src/lib.rs` declares all modules, registers managed state, and lists every command in `generate_handler!` (~167 active). A new command must be added there or the frontend can't call it. The workflow, association, and enhanced tree-navigation commands are currently commented out ("temporarily disabled").
+- **Managed state** (`lib.rs`): `DatabaseState = Mutex<Option<Database>>` (it is `None` until the frontend calls `initialize_database`), `SessionManagerState`, `LoginAttemptTrackerState`, and `RateLimiterState`.
+- **Commands** (`src/commands/*_commands.rs`, glob re-exported from `commands/mod.rs`) hold the real request logic. The usual shape is: take `token: String` as the first argument, lock `SessionManagerState` and call `validate_session(&token)`, drop the guard, sanitize inputs with `validation::InputSanitizer`, check roles, lock the DB, call a repository, write an audit event, and return `Result<T, String>`.
+- **`src/handlers/`** is mostly dead code. Only `workflow_commands.rs` (which is disabled) imports from it. Put new logic in commands or domain modules, not handlers.
+- **Domain modules** (`assets/`, `configurations/`, `vault/`, `firmware/`, ...): most keep models, an `XRepository` trait, and a `SqliteXRepository<'a>` wrapping `&Connection` together in `mod.rs`. Only some (`metadata/`, `workflow/`, `firmware_analysis/`) have a separate `repository.rs`.
+- **Schema**: there is no migration runner. Each repository has an `initialize_schema()` using `CREATE TABLE IF NOT EXISTS`, and all of them are called in order from `database::Database::initialize_schema()`. Data fixes go in `Database::run_data_migrations()`. A new table must be registered in that function. The `.sql` files in `src-tauri/migrations/` are not referenced by code.
+- **Encryption**: the SQLite DB (`<app_data_dir>/ferrocodex.db`, WAL mode) is **not** encrypted as a whole. AES-256-GCM (`encryption::FileEncryption`) encrypts specific payloads: configuration file content, firmware files on disk, vault secrets. Keys come from `derive_key_from_user_credentials(user_id, username)`.
+- **Roles**: only `Administrator` and `Engineer`. They are enforced in commands and mirrored in the frontend by `src/utils/roleUtils.ts` and `components/RoleGuard.tsx`.
 
-### Technology Stack
+### Frontend
 
-- **Frontend**: React 18 + TypeScript + Vite + Ant Design + Zustand
-- **Backend**: Rust + Tauri 2.0 + SQLite (encrypted) + bcrypt
-- **Testing**: Vitest (frontend) + Rust built-in tests (backend)
-- **Monorepo**: Turborepo for task orchestration
+- **IPC**: components and Zustand stores (`src/store/*.ts`) call `invoke('snake_case_command', { camelCaseArgs })` directly. Tauri maps camelCase keys to the Rust snake_case parameters. Almost every call passes the session `token` from `useAuthStore`, which is persisted with zustand `persist`.
+- **Types**: `src/types/*.ts` mirror the Rust serde structs by hand. If you change a Rust struct, update its TS type too.
+- **Routing**: `App.tsx` has only `/setup` (first launch, admin creation), `/login`, and `/dashboard`. Feature screens are switched inside `Dashboard.tsx`, not through routes.
+- **Tests**: `src/test-setup.ts` already mocks `@tauri-apps/api/core` `invoke` globally, along with `matchMedia`, `ResizeObserver`, and `getComputedStyle` for Ant Design. In tests, use `vi.mocked(invoke).mockResolvedValue(...)` rather than re-mocking. `tsconfig.json` excludes test files from type-checking.
 
-### Key Architectural Patterns
+## Versioning & Release
 
-1. **Tauri IPC Communication**: Frontend invokes Rust commands via `invoke` API
-   - All commands defined and registered in `src-tauri/src/lib.rs` (270+ commands)
-   - Command handlers organized in `src-tauri/src/commands/` by feature area
-   - Business logic separated into `src-tauri/src/handlers/` modules
-   - TypeScript types in `src/types/` mirror Rust structures
-   - Example: `await invoke('create_user', { userData })`
+- The version string is duplicated in `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`.
+- Pushing a `v*` tag runs `release.yml`. It uses `tauri-action` to build Windows, macOS (arm64 and x64), and Linux, and creates a **draft** GitHub release.
+- Dependabot PRs auto-merge. `post-dependabot-bump.yml` then bumps the patch version in `apps/desktop/package.json` and `tauri.conf.json` (not the root `package.json` or `Cargo.toml`), commits, and pushes a tag, which triggers a release.
 
-2. **State Management**:
-   - Frontend: Zustand store in `src/store/`
-   - Backend: Thread-safe Mutex-wrapped state
-   - Session management with token validation
+## Other Repo Contents
 
-3. **Database Layer**:
-   - Repository pattern: Each entity has its own repository (`src-tauri/src/*/repository.rs`)
-   - All data encrypted at rest (AES-256)
-   - Audit trail for all operations
-
-4. **Security**:
-   - Role-based access control (Administrator, Engineer)
-   - Rate limiting on sensitive operations
-   - Input validation on both frontend and backend
-   - Session tokens with automatic validation
-
-### Project Structure
-
-```
-apps/desktop/
-├── src/                    # React frontend
-│   ├── components/         # UI components organized by feature
-│   │   ├── forms/         # Dynamic metadata forms and validation
-│   │   ├── hierarchy/     # Asset hierarchy and tree views  
-│   │   ├── search/        # Metadata search and filtering
-│   │   ├── error/         # Enhanced error handling components
-│   │   ├── firmware/      # Firmware analysis and management UI
-│   │   └── recovery/      # Recovery package components
-│   ├── store/             # Zustand state management
-│   ├── types/             # TypeScript type definitions
-│   ├── contexts/          # React contexts (SearchContext)
-│   └── utils/             # Utility functions
-└── src-tauri/             # Rust backend
-    └── src/
-        ├── assets/        # Asset (equipment) management
-        ├── audit/         # Audit logging
-        ├── auth/          # Authentication & sessions
-        ├── branches/      # Configuration branching
-        ├── commands/      # Tauri command handlers
-        ├── configurations/ # Config file management
-        ├── database/      # SQLite database layer
-        ├── encryption/    # AES-256 encryption
-        ├── error_handling/ # Enhanced error handling with circuit breakers
-        ├── firmware/      # Firmware management
-        ├── firmware_analysis/ # Firmware analysis queue and processing
-        ├── handlers/      # Business logic handlers
-        ├── metadata/      # Dynamic metadata schemas and search
-        ├── recovery/      # Recovery package handling
-        ├── users/         # User management
-        ├── user_settings/ # User preferences and settings
-        ├── validation/    # Input validation
-        └── vault/         # Asset Identity Vault with password rotation
-```
-
-### Important Conventions
-
-1. **Error Handling**:
-   - Backend returns `Result<T, String>` for all operations
-   - Frontend displays user-friendly error messages via Ant Design notifications
-   - All errors logged to audit trail
-
-2. **Testing**:
-   - Frontend components use React Testing Library
-   - Mock Tauri API calls in tests with `vi.mock('@tauri-apps/api/core')`
-   - Backend uses `#[cfg(test)]` modules with test fixtures
-
-3. **Database Operations**:
-   - Always use prepared statements to prevent SQL injection
-   - Transaction support for multi-step operations
-   - Automatic database initialization on first run
-
-4. **Frontend Routing**:
-   - Routes defined in `src/App.tsx`
-   - Protected routes check authentication status
-   - Role-based component rendering
-
-### Development Notes
-
-- **Port 1420** must be available for development server (1421 for HMR)
-- **Node.js 18+** and **Rust 1.78.0+** required
-- Database automatically created in app data directory
-- Hot reload works for both frontend and Rust backend
-- Tauri commands are async - always use await or proper promise handling
-- Extensive command system with 270+ registered Tauri commands organized by feature
-- Uses Turborepo for monorepo task orchestration and caching
-
-### Key Dependencies
-
-**Frontend:**
-- React 18 with TypeScript and Vite
-- Ant Design (~5.26.6) for UI components
-- Zustand (~5.0.6) for state management
-- React Router DOM (^7.7.0) for routing
-- Vitest for testing with jsdom environment
-
-**Backend:**
-- Tauri 2.0 with multiple plugins (dialog, fs, process, opener)
-- SQLite with rusqlite (0.31.0) and bundled features
-- bcrypt (0.17.0) for password hashing
-- AES-GCM (0.10) and PBKDF2 for encryption
-- Tokio async runtime with full features
-- Additional tools: regex, uuid, chrono, base64, csv, jsonschema
+- `docs/`: Sphinx (`.rst`) user and admin docs published to Read the Docs (`.readthedocs.yaml`), plus PRDs and design notes in Markdown.
+- `.bmad-core/`, `_bmad/`, `_bmad-output/`, `.claude/agents|commands`: BMAD story-driven workflow tooling, not application code.
+- `src-tauri/*.txt` (`build_errors.txt`, etc.): stray build logs, not source.
