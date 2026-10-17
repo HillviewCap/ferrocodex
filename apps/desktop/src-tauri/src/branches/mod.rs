@@ -779,35 +779,28 @@ mod tests {
                 FOREIGN KEY (created_by) REFERENCES users(id)
             );
             
-            CREATE TABLE configuration_versions (
-                id INTEGER PRIMARY KEY,
-                asset_id INTEGER NOT NULL,
-                version_number TEXT NOT NULL,
-                file_name TEXT NOT NULL,
-                file_content BLOB NOT NULL,
-                file_size INTEGER NOT NULL,
-                content_hash TEXT NOT NULL,
-                author INTEGER NOT NULL,
-                notes TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author) REFERENCES users(id)
-            );
-            
             INSERT INTO users (id, username, password_hash, role) VALUES (1, 'testuser', 'hash', 'Engineer');
             INSERT INTO assets (id, name, description, created_by) VALUES (1, 'Test Asset', 'Test Description', 1);
-            INSERT INTO configuration_versions (id, asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes) 
-            VALUES (1, 1, 'v1', 'test.json', 'content', 7, 'hash', 1, 'Test version');
             "#,
+        ).unwrap();
+        
+        // Use the real configuration_versions schema (status column, etc.)
+        let config_repo = crate::configurations::SqliteConfigurationRepository::new(&conn);
+        config_repo.initialize_schema().unwrap();
+        
+        // Firmware schema must exist before inserting versions (firmware_version_id foreign key)
+        let firmware_repo = crate::firmware::SqliteFirmwareRepository::new(&conn);
+        firmware_repo.initialize_schema().unwrap();
+        
+        conn.execute(
+            "INSERT INTO configuration_versions (id, asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes) 
+            VALUES (1, 1, 'v1', 'test.json', 'content', 7, 'hash', 1, 'Test version')",
+            [],
         ).unwrap();
         
         let repo = SqliteBranchRepository::new(&conn);
         repo.initialize_schema().unwrap();
-        
-        // Initialize firmware schema for tests that use firmware functionality
-        let firmware_repo = crate::firmware::SqliteFirmwareRepository::new(&conn);
-        firmware_repo.initialize_schema().unwrap();
-        
+
         (temp_file, conn)
     }
 

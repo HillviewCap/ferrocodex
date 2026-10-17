@@ -816,11 +816,22 @@ mod tests {
     fn test_operation_logs() {
         let (_temp_file, conn) = setup_test_db();
         let repo = SqliteBulkOperationsRepository::new(&conn);
+        let service = BulkOperationService::new(&repo);
 
-        let operation_id = "test-operation";
+        // Logs reference bulk_operations(id), so create a real operation first
+        let request = BulkDeleteRequest {
+            asset_ids: vec![1],
+            options: BulkDeleteOptions {
+                force_delete: false,
+                delete_children: false,
+                skip_protected: true,
+            },
+        };
+        let operation_id = service.create_bulk_delete_operation(request, 1).unwrap();
+
         let log = BulkOperationLog {
             id: Uuid::new_v4().to_string(),
-            bulk_operation_id: operation_id.to_string(),
+            bulk_operation_id: operation_id.clone(),
             asset_id: 1,
             action: "move".to_string(),
             status: "success".to_string(),
@@ -830,7 +841,7 @@ mod tests {
 
         repo.add_operation_log(&log).unwrap();
 
-        let logs = repo.get_operation_logs(operation_id).unwrap();
+        let logs = repo.get_operation_logs(&operation_id).unwrap();
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].asset_id, 1);
         assert_eq!(logs[0].action, "move");
