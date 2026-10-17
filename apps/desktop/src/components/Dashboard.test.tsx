@@ -24,6 +24,13 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
   open: vi.fn(),
 }));
 
+// The search page needs a router and its own IPC calls; stub it to keep this a Dashboard test
+vi.mock('./search/MetadataSearchPage', () => ({
+  default: ({ embedded }: { embedded?: boolean }) => (
+    <div data-testid="metadata-search-page">{embedded ? 'embedded' : 'standalone'}</div>
+  ),
+}));
+
 // Mock the Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue({
@@ -70,7 +77,9 @@ test('renders navigation menu', () => {
   const bulkElements = screen.getAllByText('Bulk Operations');
   expect(bulkElements.length).toBeGreaterThan(0);
 
-  // Metadata menu is temporarily hidden in Dashboard.tsx pending field testing
+  // Metadata Search is a top-level entry; the rest of the Metadata menu is
+  // temporarily hidden in Dashboard.tsx pending field testing
+  expect(screen.getByText('Metadata Search')).toBeInTheDocument();
   expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
   
   // Check for Security menu item (admin only)
@@ -80,6 +89,14 @@ test('renders navigation menu', () => {
   // Check for User Management menu item (admin only)
   const userManagementElements = screen.getAllByText('User Management');
   expect(userManagementElements.length).toBeGreaterThan(0);
+});
+
+test('opens the embedded metadata search page from the sidebar', () => {
+  render(<Dashboard />);
+
+  fireEvent.click(screen.getByText('Metadata Search'));
+
+  expect(screen.getByTestId('metadata-search-page')).toHaveTextContent('embedded');
 });
 
 test('renders feature cards', () => {
