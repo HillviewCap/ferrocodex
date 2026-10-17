@@ -36,9 +36,26 @@ jobs:
         run: npm ci
 
       - name: Run frontend tests
-        run: npm run test
+        run: npm run test:run
+        working-directory: apps/desktop
+
+      - name: Build frontend
+        run: npm run build
         working-directory: apps/desktop
 
       - name: Run backend tests
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
+  # Branch protection requires a check named "Build". This job reports one result
+  # for the whole matrix, so the required check doesn't change when platforms do.
+  build:
+    name: Build
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every test job to pass
+        if: needs.test.result != 'success'
+        run: |
+          echo "test matrix result: ${{ needs.test.result }}"
+          exit 1
