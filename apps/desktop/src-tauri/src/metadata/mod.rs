@@ -485,7 +485,7 @@ mod tests {
             "Test description".to_string(),
             valid_schema.to_string(),
             None,
-            1,
+            Some(1),
         );
 
         assert!(schema.validate_schema().is_ok());
@@ -500,7 +500,7 @@ mod tests {
             "Test description".to_string(),
             invalid_schema.to_string(),
             None,
-            1,
+            Some(1),
         );
 
         assert!(schema.validate_schema().is_err());

@@ -580,7 +580,7 @@ mod tests {
                 "required": ["name"]
             }).to_string(),
             None,
-            1,
+            Some(1),
         );
         
         // Valid values

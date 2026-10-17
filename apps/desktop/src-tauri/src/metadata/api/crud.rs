@@ -641,8 +641,7 @@ mod tests {
     fn setup_test_db() -> (Database, tempfile::TempDir) {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db = Database::new(db_path.to_str().unwrap()).unwrap();
-        db.initialize().unwrap();
+        let db = Database::new(db_path).unwrap();
         (db, temp_dir)
     }
 

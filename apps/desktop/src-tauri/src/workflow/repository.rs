@@ -431,11 +431,9 @@ fn string_to_workflow_step(s: &str) -> WorkflowResult<WorkflowStepName> {
 mod tests {
     use super::*;
     use crate::database::DatabaseManager;
-    use tempfile::NamedTempFile;
 
     async fn create_test_repository() -> WorkflowRepository {
-        let temp_file = NamedTempFile::new().unwrap();
-        let db_manager = DatabaseManager::new(temp_file.path().to_str().unwrap()).unwrap();
+        let db_manager = DatabaseManager::new(":memory:".into()).unwrap();
         let repo = WorkflowRepository::new(Arc::new(Mutex::new(db_manager)));
         repo.initialize_tables().await.unwrap();
         repo

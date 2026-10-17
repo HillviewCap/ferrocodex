@@ -495,20 +495,18 @@ impl WorkflowService {
 mod tests {
     use super::*;
     use crate::database::DatabaseManager;
-    use tempfile::NamedTempFile;
     use std::sync::{Arc, Mutex};
 
     // Helper to create test service (would need actual implementations of dependencies)
     async fn create_test_service() -> WorkflowService {
-        let temp_file = NamedTempFile::new().unwrap();
         let db_manager = Arc::new(Mutex::new(
-            DatabaseManager::new(temp_file.path().to_str().unwrap()).unwrap()
+            DatabaseManager::new(":memory:".into()).unwrap()
         ));
         
         // Note: In real tests, these would be mock implementations
         let asset_service = Arc::new(AssetService::new(db_manager.clone()));
         let audit_service = Arc::new(AuditService::new(db_manager.clone()));
-        let auth_service = Arc::new(AuthService::new(db_manager.clone()));
+        let auth_service = Arc::new(AuthService::new());
 
         let service = WorkflowService::new(
             db_manager,
@@ -541,10 +539,10 @@ mod tests {
     #[test]
     fn test_merge_step_data() {
         let service = WorkflowService::new(
-            Arc::new(Mutex::new(DatabaseManager::new(":memory:").unwrap())),
-            Arc::new(AssetService::new(Arc::new(Mutex::new(DatabaseManager::new(":memory:").unwrap())))),
-            Arc::new(AuditService::new(Arc::new(Mutex::new(DatabaseManager::new(":memory:").unwrap())))),
-            Arc::new(AuthService::new(Arc::new(Mutex::new(DatabaseManager::new(":memory:").unwrap())))),
+            Arc::new(Mutex::new(DatabaseManager::new(":memory:".into()).unwrap())),
+            Arc::new(AssetService::new(Arc::new(Mutex::new(DatabaseManager::new(":memory:".into()).unwrap())))),
+            Arc::new(AuditService::new(Arc::new(Mutex::new(DatabaseManager::new(":memory:".into()).unwrap())))),
+            Arc::new(AuthService::new()),
         );
 
         let mut target = WorkflowData::default();

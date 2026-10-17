@@ -539,12 +539,10 @@ impl WorkflowValidator {
 mod tests {
     use super::*;
     use crate::database::DatabaseManager;
-    use tempfile::NamedTempFile;
 
     fn create_test_validator() -> WorkflowValidator {
-        let temp_file = NamedTempFile::new().unwrap();
         let db_manager = Arc::new(Mutex::new(
-            DatabaseManager::new(temp_file.path().to_str().unwrap()).unwrap()
+            DatabaseManager::new(":memory:".into()).unwrap()
         ));
         WorkflowValidator::new(db_manager)
     }

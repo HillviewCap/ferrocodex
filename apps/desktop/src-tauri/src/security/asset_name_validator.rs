@@ -368,10 +368,11 @@ mod tests {
         let validator = AssetNameValidator::new();
 
         // Test invalid names
+        let too_long = "A".repeat(51);
         let invalid_names = vec![
             "",              // Empty
             "AB",            // Too short
-            "a" * 51,        // Too long
+            too_long.as_str(), // Too long
             "_INVALID",      // Starts with underscore
             "-INVALID",      // Starts with hyphen
             "INVALID@123",   // Contains @
