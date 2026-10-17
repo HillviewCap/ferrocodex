@@ -4,220 +4,164 @@
 
 ![Ferrocodex Logo](apps/desktop/src/assets/ferrocodex-logo.png)
 
-🏗️ **Secure OT Configuration Management Platform**
+**Secure, offline-first configuration management for operational technology**
 
 [![GitHub release](https://img.shields.io/github/release/HillviewCap/ferrocodex.svg)](https://github.com/HillviewCap/ferrocodex/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Build Status](https://github.com/HillviewCap/ferrocodex/workflows/Release/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions)
+[![Test](https://github.com/HillviewCap/ferrocodex/actions/workflows/test.yml/badge.svg)](https://github.com/HillviewCap/ferrocodex/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/ferrocodex/badge/?version=latest)](https://ferrocodex.readthedocs.io/en/latest/?badge=latest)
-
-A cross-platform desktop application for secure offline-first configuration management in operational technology (OT) environments.
 
 </div>
 
-## 🚀 Overview
+## Overview
 
-Ferrocodex is a secure configuration management platform designed specifically for industrial equipment and operational technology environments. Built with Tauri 2.0, it combines the power of Rust's security and performance with React's modern UI capabilities to deliver an offline-first solution for managing critical infrastructure configurations.
+Ferrocodex is a cross-platform desktop application for managing configuration files, firmware, and credentials for industrial equipment. It is built for operational technology (OT) environments where systems are often air-gapped: all data is stored locally, and no network connection is required.
 
-### Key Features
+The application is built with Tauri 2.0, with a Rust backend and a React frontend. Native builds are available for Windows, macOS, and Linux.
 
-- 🔒 **Enterprise-grade Security**: Role-based access control, session management, and audit trails
-- 💾 **Offline-First Architecture**: Full functionality without internet connectivity
-- 🔐 **Data Protection**: AES-256 encryption for all stored configurations (coming in v2.0)
-- 🌐 **Cross-Platform**: Native desktop apps for Windows, macOS, and Linux
-- 🎯 **OT-Focused**: Designed for industrial control systems and equipment
-- 📝 **Comprehensive Audit Trail**: Track all configuration changes and access
-- 🌳 **Version Control**: Built-in branching and versioning for configurations
-- 👥 **Multi-User Support**: Administrator and Engineer role separation
+## Features
 
-### ✨ New in v0.5.0 - Asset Hierarchy Management
+- **Offline-first**: Fully functional without network access. Data is stored in a local SQLite database.
+- **Configuration versioning**: Branching, version history, and a promotion workflow from working versions to approved ("golden") configurations.
+- **Asset hierarchy**: Tree-based organisation of equipment with drag-and-drop, virtualised rendering for large datasets, and bulk import, export, and rename.
+- **Search**: SQLite FTS5 full-text search across assets and metadata, with saved searches and filter presets.
+- **Metadata schemas**: Dynamic, JSON Schema-validated metadata with field templates.
+- **Firmware management**: Firmware files stored alongside their configurations, with analysis and integrity checks.
+- **Identity vault**: Encrypted storage for equipment credentials, with password rotation, history, and per-user access permissions.
+- **Encryption at rest**: Configuration content, firmware files, and vault secrets are encrypted with AES-256-GCM.
+- **Access control**: Administrator and Engineer roles, session management, and login rate limiting.
+- **Audit trail**: Every configuration change and data access is recorded.
+- **Recovery packages**: Export and import bundles for restoring equipment.
 
-- 🏗️ **Complete Asset Hierarchy System**: Tree-based navigation with drag-and-drop, virtualized rendering for large datasets
-- 🔍 **Advanced Search & Filtering**: SQLite FTS5 full-text search with sub-200ms performance
-- 📦 **Bulk Operations**: Import/export, bulk rename, and batch metadata updates
-- ⌨️ **Keyboard Navigation**: Full keyboard shortcuts for power users
-- 🔄 **Workflow Management**: Multi-step workflows with draft management and progress tracking
-- 🛡️ **Enhanced Security**: Asset name validation, file integrity checks, and compliance indicators
-- 📊 **Metadata Management**: Dynamic schemas, field templates, and conditional logic
-- 📈 **Performance Optimized**: Virtualized tree rendering, optimized search indexes, and efficient caching
+See the [documentation](https://ferrocodex.readthedocs.io/en/latest/) for user and administrator guides, and the [releases page](https://github.com/HillviewCap/ferrocodex/releases) for the changelog.
 
-## 📋 Prerequisites
+## Installation
 
-- **Node.js**: 18+ 
-- **Rust**: 1.78.0+
-- **Platform-specific dependencies**:
-  - **Linux**: `libwebkit2gtk-4.1-dev`, `build-essential`, `curl`, `wget`, `file`, `libgtk-3-dev`, `librsvg2-dev`
+### Pre-built binaries
+
+Download the installer for your platform from the [releases page](https://github.com/HillviewCap/ferrocodex/releases). Windows (`.msi`, `.exe`), macOS (`.dmg`, Apple Silicon and Intel), and Linux (`.AppImage`, `.deb`, `.rpm`) builds are provided for each release.
+
+### Building from source
+
+Prerequisites:
+
+- Node.js 22.12 or newer
+- Rust (stable toolchain)
+- Platform dependencies:
+  - **Linux**: `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `patchelf`, `build-essential`, `curl`, `wget`, `file`, `libgtk-3-dev`
   - **macOS**: Xcode Command Line Tools
   - **Windows**: Microsoft Visual Studio C++ Build Tools
 
-## 🛠️ Installation
-
-### From Source
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/HillviewCap/ferrocodex.git
-   cd ferrocodex
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Install platform dependencies** (Linux example):
-   ```bash
-   sudo apt update
-   sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libgtk-3-dev librsvg2-dev
-   ```
-
-### Pre-built Binaries
-
-Download the latest release for your platform from the [releases page](https://github.com/HillviewCap/ferrocodex/releases).
-
-## 💻 Development
-
-### Running in Development Mode
-
 ```bash
-# Start the development server (both frontend and backend)
-npm run dev
+git clone https://github.com/HillviewCap/ferrocodex.git
+cd ferrocodex
+npm install
 
-# Or from the desktop app directory
-cd apps/desktop
-npm run tauri:dev
-```
-
-The application will start with hot reload enabled for both the React frontend and Rust backend.
-
-### Building for Production
-
-```bash
-# Build all packages
-npm run build
-
-# Build platform-specific binary
+# Production bundle for the current platform
 cd apps/desktop
 npm run tauri:build
+```
+
+On Debian or Ubuntu, the Linux dependencies can be installed with:
+
+```bash
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+  build-essential curl wget file libgtk-3-dev
+```
+
+## Development
+
+```bash
+# Run the full application with hot reload (Vite frontend and Rust backend)
+cd apps/desktop
+npm run tauri:dev
+
+# Frontend only (Vite dev server on port 1420)
+npm run dev
 ```
 
 ### Testing
 
 ```bash
-# Run all tests
-npm run test
-
-# Frontend tests with coverage
-cd apps/desktop
+# Frontend tests (from apps/desktop)
+npm run test:run
 npm run test:coverage
 
-# Backend tests
+# Type-check the frontend (from apps/desktop)
+npm run typecheck
+
+# Backend tests (from the repository root)
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
-## 📁 Project Structure
+Continuous integration runs the frontend tests, the type-check, the frontend build, and the backend tests on macOS, Ubuntu, and Windows for every pull request.
+
+## Project structure
 
 ```
 ferrocodex/
-├── apps/
-│   └── desktop/              # Main Tauri application
-│       ├── src/              # React frontend
-│       │   ├── components/   # UI components
-│       │   │   ├── hierarchy/     # Asset tree views and navigation
-│       │   │   ├── forms/         # Dynamic metadata forms
-│       │   │   ├── security/      # Security validation components
-│       │   │   ├── workflow/      # Multi-step workflow components
-│       │   │   ├── bulk/          # Bulk operations UI
-│       │   │   └── metadata/      # Metadata management
-│       │   ├── store/        # Zustand state management
-│       │   ├── types/        # TypeScript types
-│       │   └── utils/        # Utility functions
-│       ├── src-tauri/        # Rust backend
-│       │   └── src/
-│       │       ├── assets/        # Equipment management
-│       │       ├── associations/  # File associations
-│       │       ├── audit/         # Audit logging
-│       │       ├── auth/          # Authentication
-│       │       ├── branches/      # Configuration branching
-│       │       ├── bulk/          # Bulk operations backend
-│       │       ├── configurations/# Config file management
-│       │       ├── database/      # SQLite layer with FTS5
-│       │       ├── encryption/    # AES-256 encryption
-│       │       ├── metadata/      # Dynamic metadata & search
-│       │       ├── security/      # Security validation
-│       │       ├── users/         # User management
-│       │       ├── validation/    # Input validation
-│       │       └── workflow/      # Workflow management
-│       └── package.json      
-├── packages/
-│   └── shared-types/         # Shared TypeScript types
-├── .github/
-│   └── workflows/           # GitHub Actions
-├── CLAUDE.md                # AI assistant instructions
-├── SECURITY.md              # Security policy
-└── package.json             # Workspace configuration
+├── apps/desktop/             # Tauri application
+│   ├── src/                  # React frontend
+│   │   ├── components/       # UI components, grouped by feature
+│   │   ├── store/            # Zustand state
+│   │   ├── types/            # TypeScript mirrors of the Rust models
+│   │   └── utils/
+│   └── src-tauri/            # Rust backend
+│       └── src/
+│           ├── commands/     # Tauri command handlers
+│           ├── assets/       # Equipment and asset hierarchy
+│           ├── configurations/
+│           ├── branches/
+│           ├── firmware/
+│           ├── vault/        # Credential storage and rotation
+│           ├── metadata/     # Schemas, validation, and search
+│           ├── encryption/
+│           ├── audit/
+│           ├── auth/
+│           └── database/     # SQLite layer
+├── docs/                     # Sphinx documentation (Read the Docs)
+├── .github/workflows/        # CI, release, and Dependabot automation
+└── CLAUDE.md                 # Guidance for AI-assisted development
 ```
 
-## 🔧 Configuration
+## Data storage
 
-Ferrocodex stores its data in platform-specific locations:
+Ferrocodex stores its database and encrypted files in the platform application-data directory:
 
-- **Windows**: `%APPDATA%/com.ferrocodex.app/`
+- **Windows**: `%APPDATA%\com.ferrocodex.app\`
 - **macOS**: `~/Library/Application Support/com.ferrocodex.app/`
 - **Linux**: `~/.config/com.ferrocodex.app/`
 
-The SQLite database is automatically initialized on first run with:
-- WAL mode for better concurrency
-- Optimized pragma settings
-- Automatic schema migrations
+The SQLite database is created on first launch and opened in WAL mode. Encryption keys are derived from user credentials; the database file itself is not encrypted as a whole, but configuration content, firmware files, and vault secrets are.
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are welcome. To propose a change:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork the repository and create a branch for your change.
+2. Add or update tests for the behaviour you change.
+3. Make sure `npm run test:run`, `npm run typecheck`, and `cargo test` pass.
+4. Open a pull request against `main`.
 
-### Development Guidelines
+## Security
 
-- Follow the existing code style
-- Add tests for new functionality
-- Update documentation as needed
-- Ensure all tests pass before submitting
+Ferrocodex is intended for use in industrial environments, and security issues are treated accordingly. Please do not open public issues for vulnerabilities; email security@ferrocodex.com with details instead.
 
-## 🔒 Security
+## License
 
-Security is paramount for OT environments. Please report vulnerabilities responsibly:
+Ferrocodex is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE) for the full text.
 
-- **DO NOT** open public issues for security vulnerabilities
-- Email security@ferrocodex.com with details
-- See [SECURITY.md](SECURITY.md) for more information
+Under the AGPL, modified versions and derivative works must also be released under the AGPL-3.0, and anyone running a modified version as a network service must make the source available to its users.
 
-## 📜 License
+## Built with
 
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+- [Tauri](https://tauri.app/)
+- [React](https://react.dev/)
+- [Ant Design](https://ant.design/)
+- [Rust](https://www.rust-lang.org/)
 
-This means that any modifications or derivative works must also be released under the AGPL-3.0 license, and if you run a modified version on a server, you must offer the source code to users of that server.
+## Support
 
-## 🙏 Acknowledgments
-
-Built with:
-- [Tauri](https://tauri.app/) - Build smaller, faster, and more secure desktop applications
-- [React](https://reactjs.org/) - A JavaScript library for building user interfaces
-- [Ant Design](https://ant.design/) - Enterprise-class UI design language
-- [Rust](https://www.rust-lang.org/) - Performance, reliability, and productivity
-
-## 📞 Support
-
-- 📖 [Documentation](https://ferrocodex.readthedocs.io/en/latest/)
-- 🐛 [Issue Tracker](https://github.com/HillviewCap/ferrocodex/issues)
-- 💬 [Discussions](https://github.com/HillviewCap/ferrocodex/discussions)
-
----
-
-<div align="center">
-Made with ❤️ for the OT community
-</div>
+- [Documentation](https://ferrocodex.readthedocs.io/en/latest/)
+- [Issue tracker](https://github.com/HillviewCap/ferrocodex/issues)
