@@ -10,8 +10,8 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
 }));
 
-// Mock react-beautiful-dnd
-vi.mock('react-beautiful-dnd', () => ({
+// Mock @hello-pangea/dnd
+vi.mock('@hello-pangea/dnd', () => ({
   DragDropContext: ({ children }: any) => children,
   Droppable: ({ children }: any) => children({ innerRef: vi.fn(), droppableProps: {}, placeholder: null }),
   Draggable: ({ children }: any) => children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: {} }, {})

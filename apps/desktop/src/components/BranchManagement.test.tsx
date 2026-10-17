@@ -264,7 +264,11 @@ describe('BranchManagement', () => {
       expect(invoke).toHaveBeenCalledTimes(1);
     });
     
-    const refreshButton = screen.getByText('Refresh');
+    // The button ignores clicks while the initial fetch is still loading
+    const refreshButton = screen.getByRole('button', { name: /Refresh/ });
+    await waitFor(() => {
+      expect(refreshButton).not.toHaveClass('ant-btn-loading');
+    });
     fireEvent.click(refreshButton);
     
     await waitFor(() => {

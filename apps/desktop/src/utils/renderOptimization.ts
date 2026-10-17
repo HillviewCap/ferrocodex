@@ -178,7 +178,7 @@ export function useVirtualScrollOptimization(
   
   const [scrollTop, setScrollTop] = React.useState(0);
   const [isScrolling, setIsScrolling] = React.useState(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const visibleRange = useMemo(() => {
     const startIndex = Math.floor(scrollTop / itemHeight);

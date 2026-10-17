@@ -44,7 +44,7 @@ export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [filteredData, setFilteredData] = useState<AssetHierarchy[]>([]);
   
-  const treeRef = useRef<any>();
+  const treeRef = useRef<any>(undefined);
 
   // Calculate performance metrics
   const performanceMetrics = useMemo(() => {
