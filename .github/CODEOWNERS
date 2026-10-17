@@ -9,7 +9,6 @@
 package.json @HillviewCap
 package-lock.json @HillviewCap
 apps/desktop/package.json @HillviewCap
-apps/desktop/package-lock.json @HillviewCap
 
 # Rust backend dependencies
 apps/desktop/src-tauri/Cargo.toml @HillviewCap

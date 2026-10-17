@@ -55,7 +55,7 @@ jobs:
           NEW_VERSION: ${{ steps.bump.outputs.version }}
         run: |
           git add package.json package-lock.json \
-            apps/desktop/package.json apps/desktop/package-lock.json \
+            apps/desktop/package.json \
             apps/desktop/src-tauri/tauri.conf.json \
             apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
           git commit -m "chore(release): bump version to $NEW_VERSION"
