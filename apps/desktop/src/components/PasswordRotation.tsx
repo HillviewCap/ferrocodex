@@ -116,7 +116,10 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
 
     try {
       setLoading(true);
-      const values = form.getFieldsValue();
+      // The password and reason Form.Items are unmounted on the Confirm step, so
+      // getFieldsValue() (registered fields only) would return {}. Read the whole
+      // form store instead; Form `preserve` keeps unmounted field values.
+      const values = form.getFieldsValue(true);
 
       const request: PasswordRotationRequest = {
         secret_id: secret.id,
