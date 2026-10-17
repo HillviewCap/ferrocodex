@@ -97,9 +97,6 @@ describe('PasswordRotation', () => {
     expect(screen.getByText('85/100')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Rotate Password/ }));
-    // Pre-existing bug, outside the antd migration: handleRotation reads
-    // `form.getFieldsValue()` on the confirm step, where no named fields are mounted, so
-    // new_password / rotation_reason are not included. Only the stable parts are asserted.
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('rotate_password', {
         token: 'test-token',
@@ -108,5 +105,34 @@ describe('PasswordRotation', () => {
     });
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     expect(await screen.findByText('Rotation Successful')).toBeInTheDocument();
+  });
+
+  it('sends the typed password and reason from the confirm step', async () => {
+    render(<PasswordRotation secret={secret} visible onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Rotation Reason'), { target: { value: 'Security incident' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    const passwordInput = await screen.findByPlaceholderText('Enter new password');
+    fireEvent.change(passwordInput, { target: { value: 'Typed#Manually!Pass42' } });
+    expect(await screen.findByText('Password Strength: 85/100')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Rotation Summary')).toBeInTheDocument();
+    // The password Form.Item is unmounted on this step; the values must still be sent.
+    expect(screen.queryByPlaceholderText('Enter new password')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Rotate Password/ }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('rotate_password', {
+        token: 'test-token',
+        request: {
+          secret_id: 9,
+          new_password: 'Typed#Manually!Pass42',
+          rotation_reason: 'Security incident',
+          author_id: 1,
+        },
+      });
+    });
   });
 });
