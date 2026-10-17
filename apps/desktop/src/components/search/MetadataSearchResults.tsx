@@ -120,15 +120,17 @@ const MetadataSearchResults: React.FC<SearchResultsProps> = ({
     if (path.length === 0) return null;
 
     return (
-      <Breadcrumb style={{ fontSize: '12px' }}>
-        {path.map((segment, index) => (
-          <Breadcrumb.Item key={index}>
+      <Breadcrumb
+        style={{ fontSize: '12px' }}
+        items={path.map((segment, index) => ({
+          key: index,
+          title: (
             <Text type="secondary" style={{ fontSize: '12px' }}>
               {segment}
             </Text>
-          </Breadcrumb.Item>
-        ))}
-      </Breadcrumb>
+          ),
+        }))}
+      />
     );
   };
 
@@ -301,7 +303,7 @@ const MetadataSearchResults: React.FC<SearchResultsProps> = ({
     return (
       <div className={`metadata-search-results ${className}`}>
         <Alert
-          message="Search Error"
+          title="Search Error"
           description={error}
           type="error"
           showIcon

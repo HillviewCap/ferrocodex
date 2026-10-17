@@ -151,9 +151,9 @@ const BulkProgressModal: React.FC = () => {
       ]}
       width={600}
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Operation Details */}
         <div>
           <Text strong>Operation Type: </Text>
@@ -228,7 +228,7 @@ const BulkProgressModal: React.FC = () => {
           <div>
             <Divider />
             <Alert
-              message="Operation Errors"
+              title="Operation Errors"
               type="warning"
               showIcon
               description={
@@ -237,7 +237,7 @@ const BulkProgressModal: React.FC = () => {
                   dataSource={currentProgress.errors.slice(0, 5)} // Show first 5 errors
                   renderItem={(error) => (
                     <List.Item>
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                         <Text strong>Asset {error.asset_id} ({error.asset_name})</Text>
                         <Text type="danger" style={{ fontSize: '12px' }}>
                           {error.error_message}
@@ -259,7 +259,7 @@ const BulkProgressModal: React.FC = () => {
         {/* General Error */}
         {error && (
           <Alert
-            message="Operation Error"
+            title="Operation Error"
             description={error}
             type="error"
             showIcon
@@ -270,7 +270,7 @@ const BulkProgressModal: React.FC = () => {
         {/* Completion Status */}
         {isComplete && (
           <Alert
-            message="Operation Completed Successfully"
+            title="Operation Completed Successfully"
             description={`Processed ${currentProgress?.processed_items || 0} items with ${currentProgress?.failed_items || 0} failures.`}
             type="success"
             showIcon
@@ -279,7 +279,7 @@ const BulkProgressModal: React.FC = () => {
 
         {isFailed && (
           <Alert
-            message="Operation Failed"
+            title="Operation Failed"
             description="The bulk operation encountered errors and could not complete successfully."
             type="error"
             showIcon
@@ -288,7 +288,7 @@ const BulkProgressModal: React.FC = () => {
 
         {isCancelled && (
           <Alert
-            message="Operation Cancelled"
+            title="Operation Cancelled"
             description="The bulk operation was cancelled by user request."
             type="warning"
             showIcon

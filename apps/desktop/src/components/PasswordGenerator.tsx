@@ -170,7 +170,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
         </Button>
       ]}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Configuration */}
         <Card title="Password Configuration" size="small">
           <Form
@@ -248,7 +248,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
 
           {!isValidConfiguration() && (
             <Alert
-              message="At least one character type must be selected"
+              title="At least one character type must be selected"
               type="warning"
               showIcon
               style={{ marginTop: '16px' }}
@@ -327,7 +327,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
 
         {/* Security Notice */}
         <Alert
-          message="Security Notice"
+          title="Security Notice"
           description="Generated passwords use cryptographically secure random number generation and are never stored in plain text. The password strength analysis ensures compliance with security policies."
           type="info"
           showIcon

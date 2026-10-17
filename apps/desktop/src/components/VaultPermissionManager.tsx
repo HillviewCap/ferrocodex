@@ -41,7 +41,7 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
       setPermissions(result);
     } catch (error) {
       notification.error({
-        message: 'Error Loading Permissions',
+        title: 'Error Loading Permissions',
         description: error as string
       });
     } finally {
@@ -76,7 +76,7 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
       await invoke('grant_vault_access', { token, request });
       
       notification.success({
-        message: 'Access Granted',
+        title: 'Access Granted',
         description: `${selectedPermission} access granted successfully`
       });
 
@@ -89,7 +89,7 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
       loadPermissions();
     } catch (error) {
       notification.error({
-        message: 'Error Granting Access',
+        title: 'Error Granting Access',
         description: error as string
       });
     } finally {
@@ -118,14 +118,14 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
           await invoke('revoke_vault_access', { token, request });
           
           notification.success({
-            message: 'Access Revoked',
+            title: 'Access Revoked',
             description: 'Access revoked successfully'
           });
           
           loadPermissions();
         } catch (error) {
           notification.error({
-            message: 'Error Revoking Access',
+            title: 'Error Revoking Access',
             description: error as string
           });
         } finally {
@@ -280,7 +280,7 @@ const VaultPermissionManager: React.FC<VaultPermissionManagerProps> = ({ vaultId
         okText="Grant Access"
         okButtonProps={{ disabled: !selectedUser }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           <div>
             <label>Select User:</label>
             <Select

@@ -152,7 +152,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       title: 'Information',
       icon: <InfoCircleOutlined />,
       content: (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <div>
             <Title level={4} style={{ color: '#1890ff', marginBottom: '16px' }}>
               <TrophyOutlined style={{ marginRight: '8px' }} />
@@ -211,7 +211,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       title: 'Impact Assessment',
       icon: <WarningOutlined />,
       content: (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <div>
             <Title level={4} style={{ color: '#fa8c16', marginBottom: '16px' }}>
               <WarningOutlined style={{ marginRight: '8px' }} />
@@ -233,7 +233,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
             </Card>
           ) : !eligible ? (
             <Alert
-              message="Not Eligible for Promotion"
+              title="Not Eligible for Promotion"
               description="This version cannot be promoted to Golden. Only versions with 'Approved' status are eligible for Golden promotion."
               type="error"
               showIcon
@@ -241,7 +241,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
           ) : (
             <>
               <Alert
-                message="Promotion Eligible"
+                title="Promotion Eligible"
                 description="This version meets the requirements for Golden promotion."
                 type="success"
                 showIcon
@@ -318,7 +318,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       title: 'Confirmation',
       icon: <CheckCircleOutlined />,
       content: (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <div>
             <Title level={4} style={{ color: '#52c41a', marginBottom: '16px' }}>
               <StarOutlined style={{ marginRight: '8px' }} />
@@ -331,12 +331,11 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
 
           {error && (
             <Alert
-              message="Promotion Failed"
+              title="Promotion Failed"
               description={error}
               type="error"
               showIcon
-              closable
-              onClose={() => setError(null)}
+              closable={{ onClose: () => setError(null) }}
             />
           )}
 
@@ -363,7 +362,7 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
           </Form>
 
           <Alert
-            message="This action cannot be undone"
+            title="This action cannot be undone"
             description="Once promoted to Golden, this version will become the official master version. The previous Golden version (if any) will be automatically archived but can be restored if needed through the version history."
             type="warning"
             showIcon
@@ -436,10 +435,10 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       width={800}
       destroyOnHidden
       footer={getFooterButtons()}
-      maskClosable={!loading}
+      mask={{ closable: !loading }}
       closable={!loading}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <Steps
           current={currentStep}
           size="small"

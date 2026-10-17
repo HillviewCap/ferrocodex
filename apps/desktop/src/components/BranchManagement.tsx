@@ -471,7 +471,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
 
         {/* Info Alert */}
         <Alert
-          message="Branch Management"
+          title="Branch Management"
           description="Branches allow you to safely experiment with configuration changes without affecting the main development line. Each branch maintains its own history and can be merged or kept separate."
           type="info"
           showIcon
@@ -537,7 +537,7 @@ const BranchManagement: React.FC<BranchManagementProps> = ({
             {showTreeView ? (
               <div style={{ marginTop: '16px' }}>
                 <Alert
-                  message="Tree View"
+                  title="Tree View"
                   description="This view shows branches organized by their parent configuration version, making it easier to understand the branching structure."
                   type="info"
                   showIcon

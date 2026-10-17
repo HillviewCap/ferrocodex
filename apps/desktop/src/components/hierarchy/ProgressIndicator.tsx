@@ -118,7 +118,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       className={`progress-indicator ${animationClass} ${className || ''}`}
       style={style}
     >
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {/* Status Header */}
         <Space justify="space-between" style={{ width: '100%' }}>
           <Space>
@@ -140,7 +140,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
             percent={progressPercent}
             status={status === 'failed' ? 'exception' : 'active'}
             strokeColor={statusConfig.color}
-            trailColor="#f0f0f0"
+            railColor="#f0f0f0"
             size="small"
             showInfo={false}
             strokeLinecap="round"
@@ -149,7 +149,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
         {/* Details */}
         {showDetails && progress && (
-          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={2} style={{ width: '100%' }}>
             <Space justify="space-between" style={{ width: '100%' }}>
               <Text style={{ fontSize: '12px', color: '#666' }}>
                 Processed: {progress.processed_items} / {progress.total_items}
@@ -264,7 +264,7 @@ export const ProgressIndicatorSkeleton: React.FC<{
         ...style
       }}
     >
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         <Space justify="space-between" style={{ width: '100%' }}>
           <Space>
             <Spin size="small" />

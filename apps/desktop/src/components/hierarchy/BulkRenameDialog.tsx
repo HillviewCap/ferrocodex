@@ -287,10 +287,10 @@ export const BulkRenameDialog: React.FC<BulkRenameDialogProps> = ({
         </Button>
       ]}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         {/* Summary */}
         <Alert
-          message={`Renaming ${selectedAssetIds.length} selected assets`}
+          title={`Renaming ${selectedAssetIds.length} selected assets`}
           description={
             showPreview && validPreviews !== totalPreviews ?
               `${validPreviews} valid, ${totalPreviews - validPreviews} invalid` :
@@ -425,7 +425,7 @@ export const BulkRenameDialog: React.FC<BulkRenameDialogProps> = ({
                       padding: '8px 12px'
                     }}
                   >
-                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                    <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                         <Space>
                           {preview.isValid ? (

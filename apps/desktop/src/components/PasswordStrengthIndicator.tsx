@@ -31,7 +31,7 @@ const PasswordStrengthIndicator: React.FC<PasswordStrengthIndicatorProps> = ({
 
   return (
     <div>
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {/* Main strength indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {getIcon()}
@@ -49,7 +49,7 @@ const PasswordStrengthIndicator: React.FC<PasswordStrengthIndicatorProps> = ({
 
         {/* Details */}
         {showDetails && (
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
               <Space size="small">
                 <Text type="secondary">Length:</Text>

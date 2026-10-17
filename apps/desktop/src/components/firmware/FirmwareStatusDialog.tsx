@@ -153,7 +153,7 @@ const FirmwareStatusDialog: React.FC<FirmwareStatusDialogProps> = ({
 
         {isGoldenPromotion && (
           <Alert
-            message="Golden Promotion Warning"
+            title="Golden Promotion Warning"
             description="Promoting this version to Golden will automatically archive any existing Golden versions for this asset. This action cannot be undone."
             type="warning"
             showIcon

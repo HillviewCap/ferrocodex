@@ -106,7 +106,7 @@ const VaultListWithAccess: React.FC<VaultListWithAccessProps> = ({
     } catch (error) {
       console.error('Failed to load vaults:', error);
       notification.error({
-        message: 'Error',
+        title: 'Error',
         description: 'Failed to load vault information'
       });
     } finally {
@@ -129,7 +129,7 @@ const VaultListWithAccess: React.FC<VaultListWithAccessProps> = ({
       });
 
       notification.success({
-        message: 'Access Requested',
+        title: 'Access Requested',
         description: 'Your access request has been submitted and is pending approval.'
       });
 
@@ -138,7 +138,7 @@ const VaultListWithAccess: React.FC<VaultListWithAccessProps> = ({
     } catch (error) {
       console.error('Failed to request access:', error);
       notification.error({
-        message: 'Error',
+        title: 'Error',
         description: 'Failed to submit access request'
       });
     } finally {

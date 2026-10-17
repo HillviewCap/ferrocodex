@@ -80,7 +80,7 @@ const ArchiveConfirmationModal: React.FC<ArchiveConfirmationModalProps> = ({
     >
       <Form form={form} onFinish={handleArchive} layout="vertical">
         <Alert
-          message="Archive Version"
+          title="Archive Version"
           description={
             <div>
               <p>You are about to archive this configuration version. Archived versions:</p>

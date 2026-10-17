@@ -97,7 +97,7 @@ export const AssetHierarchyPicker: React.FC<AssetHierarchyPickerProps> = ({
 
   return (
     <div>
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         <TreeSelect
           value={value}
           onChange={handleChange}
@@ -110,7 +110,7 @@ export const AssetHierarchyPicker: React.FC<AssetHierarchyPickerProps> = ({
           searchValue={searchValue}
           onSearch={setSearchValue}
           style={{ width: '100%' }}
-          dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+          styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }}
           treeDefaultExpandAll={false}
           treeIcon
           treeLine

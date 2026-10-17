@@ -114,14 +114,14 @@ export const showEnhancedErrorNotification = ({
             
             if (result.success) {
               notification.success({
-                message: 'Recovery Successful',
+                title: 'Recovery Successful',
                 description: result.message,
                 duration: 3
               });
               onRecoveryComplete?.(true);
             } else {
               notification.error({
-                message: 'Recovery Failed',
+                title: 'Recovery Failed',
                 description: result.message || result.error,
                 duration: 4
               });
@@ -134,7 +134,7 @@ export const showEnhancedErrorNotification = ({
     } catch (error) {
       setQuickRecoveryProgress(null);
       notification.error({
-        message: 'Recovery Error',
+        title: 'Recovery Error',
         description: `Failed to execute recovery: ${error}`,
         duration: 4
       });
@@ -234,7 +234,7 @@ export const showEnhancedErrorNotification = ({
 
   const renderNotificationDescription = () => {
     return (
-      <Space direction="vertical" style={{ width: '100%' }} size="small">
+      <Space orientation="vertical" style={{ width: '100%' }} size="small">
         <Text>{errorInfo.userMessage}</Text>
         
         {errorInfo.context.operation && (

@@ -88,7 +88,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
   useEffect(() => {
     if (error) {
       notification.error({
-        message: 'Progress Update Failed',
+        title: 'Progress Update Failed',
         description: error,
         duration: 4,
       });
@@ -116,7 +116,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
     try {
       await pauseProcessing(sessionId);
       notification.success({
-        message: 'Import Paused',
+        title: 'Import Paused',
         description: 'Bulk import processing has been paused',
       });
     } catch (error) {
@@ -128,7 +128,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
     try {
       await resumeProcessing(sessionId);
       notification.success({
-        message: 'Import Resumed',
+        title: 'Import Resumed',
         description: 'Bulk import processing has been resumed',
       });
     } catch (error) {
@@ -140,7 +140,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
     try {
       await cancelProcessing(sessionId);
       notification.warning({
-        message: 'Import Cancelled',
+        title: 'Import Cancelled',
         description: 'Bulk import processing has been cancelled',
       });
     } catch (error) {
@@ -151,7 +151,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
   if (!currentProgress) {
     return (
       <Card>
-        <Space direction="vertical" style={{ width: '100%' }} align="center">
+        <Space orientation="vertical" style={{ width: '100%' }} align="center">
           <Text type="secondary">No progress data available</Text>
           <Button onClick={handleManualRefresh} loading={isManualRefreshing}>
             Load Progress
@@ -256,7 +256,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Main Progress Bar */}
         <div>
           <Progress
@@ -266,7 +266,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
               currentProgress.status === 'Completed' ? 'success' :
               currentProgress.status === 'Processing' ? 'active' : 'normal'
             }
-            strokeWidth={12}
+            size={{ height: 12 }}
             format={(percent) => (
               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>
                 {percent}%
@@ -340,7 +340,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         {/* Current Item */}
         {currentProgress.current_item && (
           <Alert
-            message="Currently Processing"
+            title="Currently Processing"
             description={currentProgress.current_item}
             type="info"
             showIcon
@@ -351,7 +351,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         {/* Error Summary */}
         {currentProgress.failed_items > 0 && (
           <Alert
-            message={`${currentProgress.failed_items} items failed to process`}
+            title={`${currentProgress.failed_items} items failed to process`}
             description="Review the error details to understand what went wrong"
             type="warning"
             showIcon
@@ -359,7 +359,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
               <Button size="small" onClick={() => {
                 // TODO: Show error details modal
                 notification.info({
-                  message: 'Error Details',
+                  title: 'Error Details',
                   description: 'Error details view will be implemented in the next phase',
                 });
               }}>
@@ -372,7 +372,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         {/* Completion Status */}
         {currentProgress.status === 'Completed' && (
           <Alert
-            message="Import Completed Successfully"
+            title="Import Completed Successfully"
             description={`Successfully processed ${currentProgress.processed_items - currentProgress.failed_items} items${
               currentProgress.failed_items > 0 ? ` with ${currentProgress.failed_items} failures` : ''
             }`}
@@ -383,7 +383,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
 
         {currentProgress.status === 'Failed' && (
           <Alert
-            message="Import Failed"
+            title="Import Failed"
             description="The bulk import operation encountered critical errors and could not continue"
             type="error"
             showIcon
@@ -392,7 +392,7 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
 
         {currentProgress.status === 'Cancelled' && (
           <Alert
-            message="Import Cancelled"
+            title="Import Cancelled"
             description="The bulk import operation was cancelled by user request"
             type="warning"
             showIcon
@@ -402,30 +402,25 @@ const BulkProgressTracker: React.FC<BulkProgressTrackerProps> = ({
         {/* Timeline for completed operations */}
         {['Completed', 'Failed', 'Cancelled'].includes(currentProgress.status) && currentSession && (
           <Card size="small" title="Import Timeline">
-            <Timeline>
-              <Timeline.Item 
-                color="blue" 
-                dot={<CheckCircleOutlined />}
-              >
-                Session Created - {new Date(currentSession.session.created_at).toLocaleString()}
-              </Timeline.Item>
-              {currentSession.session.updated_at !== currentSession.session.created_at && (
-                <Timeline.Item 
-                  color="orange"
-                  dot={<ClockCircleOutlined />}
-                >
-                  Processing Started - {new Date(currentSession.session.updated_at).toLocaleString()}
-                </Timeline.Item>
-              )}
-              {currentSession.session.completed_at && (
-                <Timeline.Item 
-                  color={currentProgress.status === 'Completed' ? 'green' : 'red'}
-                  dot={currentProgress.status === 'Completed' ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-                >
-                  {currentProgress.status === 'Completed' ? 'Completed' : 'Failed'} - {new Date(currentSession.session.completed_at).toLocaleString()}
-                </Timeline.Item>
-              )}
-            </Timeline>
+            <Timeline
+              items={[
+                {
+                  color: 'blue',
+                  icon: <CheckCircleOutlined />,
+                  content: <>Session Created - {new Date(currentSession.session.created_at).toLocaleString()}</>,
+                },
+                ...(currentSession.session.updated_at !== currentSession.session.created_at ? [{
+                  color: 'orange',
+                  icon: <ClockCircleOutlined />,
+                  content: <>Processing Started - {new Date(currentSession.session.updated_at).toLocaleString()}</>,
+                }] : []),
+                ...(currentSession.session.completed_at ? [{
+                  color: currentProgress.status === 'Completed' ? 'green' : 'red',
+                  icon: currentProgress.status === 'Completed' ? <CheckCircleOutlined /> : <CloseCircleOutlined />,
+                  content: <>{currentProgress.status === 'Completed' ? 'Completed' : 'Failed'} - {new Date(currentSession.session.completed_at).toLocaleString()}</>,
+                }] : []),
+              ]}
+            />
           </Card>
         )}
       </Space>

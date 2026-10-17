@@ -153,7 +153,7 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
     return (
       <div className={className}>
         <Alert
-          message="Search Error"
+          title="Search Error"
           description={error}
           type="error"
           showIcon
@@ -174,7 +174,7 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <Space direction="vertical">
+              <Space orientation="vertical">
                 <Text>No assets found</Text>
                 <Text type="secondary">
                   Try adjusting your search terms or filters
@@ -283,18 +283,18 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
                     </Space>
                   }
                   description={
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       {/* Hierarchy Path */}
                       {result.hierarchy_path.length > 0 && (
                         <div>
                           <FolderOutlined style={{ marginRight: 8, color: '#666' }} />
-                          <Breadcrumb separator=">">
-                            {result.hierarchy_path.map((path, index) => (
-                              <Breadcrumb.Item key={index}>
-                                <Text type="secondary">{path}</Text>
-                              </Breadcrumb.Item>
-                            ))}
-                          </Breadcrumb>
+                          <Breadcrumb
+                            separator=">"
+                            items={result.hierarchy_path.map((path, index) => ({
+                              key: index,
+                              title: <Text type="secondary">{path}</Text>,
+                            }))}
+                          />
                         </div>
                       )}
 
@@ -352,25 +352,37 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
                   <div style={{ marginTop: 16 }}>
                     <Collapse size="small">
                       <Panel header="Metadata Details" key="metadata">
-                        <Descriptions size="small" column={1}>
-                          <Descriptions.Item label="Asset ID">
-                            {result.asset_id}
-                          </Descriptions.Item>
-                          <Descriptions.Item label="Asset Type">
-                            {result.asset_type}
-                          </Descriptions.Item>
-                          <Descriptions.Item label="Relevance Score">
-                            {result.relevance_score.toFixed(2)} ({relevancePercentage}%)
-                          </Descriptions.Item>
-                          <Descriptions.Item label="Full Path">
-                            {result.hierarchy_path.join(' > ') || 'Root'}
-                          </Descriptions.Item>
-                        </Descriptions>
+                        <Descriptions
+                          size="small"
+                          column={1}
+                          items={[
+                            {
+                              key: 'asset-id',
+                              label: 'Asset ID',
+                              children: result.asset_id,
+                            },
+                            {
+                              key: 'asset-type',
+                              label: 'Asset Type',
+                              children: result.asset_type,
+                            },
+                            {
+                              key: 'relevance-score',
+                              label: 'Relevance Score',
+                              children: <>{result.relevance_score.toFixed(2)} ({relevancePercentage}%)</>,
+                            },
+                            {
+                              key: 'full-path',
+                              label: 'Full Path',
+                              children: result.hierarchy_path.join(' > ') || 'Root',
+                            },
+                          ]}
+                        />
 
                         {result.metadata_matches.length > 0 && (
                           <div style={{ marginTop: 16 }}>
                             <Title level={5}>Matched Fields</Title>
-                            <Space direction="vertical" style={{ width: '100%' }}>
+                            <Space orientation="vertical" style={{ width: '100%' }}>
                               {result.metadata_matches.map((match, index) => (
                                 <Card size="small" key={index}>
                                   <Row gutter={16}>

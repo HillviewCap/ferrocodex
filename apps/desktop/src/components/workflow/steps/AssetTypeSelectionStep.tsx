@@ -123,11 +123,11 @@ export const AssetTypeSelectionStep: React.FC<BaseStepProps> = ({
                       border: localData.asset_type === option.value ? '2px solid #1890ff' : '1px solid #d9d9d9',
                       cursor: 'pointer'
                     }}
-                    bodyStyle={{ padding: '24px', textAlign: 'center', height: '100%' }}
+                    styles={{ body: { padding: '24px', textAlign: 'center', height: '100%' } }}
                     onClick={() => handleFieldChange('asset_type', option.value)}
                   >
                     <Radio value={option.value} style={{ display: 'none' }} />
-                    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                       {option.icon}
                       <div>
                         <Title level={4} style={{ margin: '0 0 8px 0' }}>

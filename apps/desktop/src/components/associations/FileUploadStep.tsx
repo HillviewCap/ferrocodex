@@ -305,10 +305,10 @@ const FileUploadStep: React.FC<FileUploadStepProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Instructions */}
         <Alert
-          message="File Upload Instructions"
+          title="File Upload Instructions"
           description={
             <div>
               <p>Upload {fileType ? fileType.toLowerCase() : 'configuration or firmware'} files to associate with <strong>{selectedAsset.name}</strong>.</p>
@@ -394,7 +394,7 @@ const FileUploadStep: React.FC<FileUploadStepProps> = ({
                     </Space>
                   }
                   description={
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Text type="secondary">
                         Size: {(item.file.size / 1024 / 1024).toFixed(2)} MB
                       </Text>

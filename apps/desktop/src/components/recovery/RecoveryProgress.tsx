@@ -81,7 +81,7 @@ export const RecoveryProgress: React.FC<RecoveryProgressProps> = ({
         )
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Progress
           percent={progress.progress}
           status={progress.step === 'error' ? 'exception' : 'active'}
@@ -99,21 +99,21 @@ export const RecoveryProgress: React.FC<RecoveryProgressProps> = ({
               <Statistic
                 title="Config Export"
                 value={formatTime(progress.timing.config_export_ms)}
-                valueStyle={{ fontSize: 14 }}
+                styles={{ content: { fontSize: 14 } }}
               />
             </Col>
             <Col span={8}>
               <Statistic
                 title="Firmware Export"
                 value={formatTime(progress.timing.firmware_export_ms)}
-                valueStyle={{ fontSize: 14 }}
+                styles={{ content: { fontSize: 14 } }}
               />
             </Col>
             <Col span={8}>
               <Statistic
                 title="Total Time"
                 value={formatTime(progress.timing.total_ms)}
-                valueStyle={{ fontSize: 14 }}
+                styles={{ content: { fontSize: 14 } }}
               />
             </Col>
           </Row>

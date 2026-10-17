@@ -197,9 +197,9 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
         </Button>
       ]}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <Alert
-          message="Recovery Package Export"
+          title="Recovery Package Export"
           description="Export a complete recovery package containing both configuration and firmware files. This package can be used to restore the asset to a known working state."
           type="info"
           showIcon
@@ -208,7 +208,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
         <Card size="small">
           <Title level={5}>Package Contents</Title>
           
-          <Space direction="vertical" size="small" style={{ width: '100%', marginTop: 16 }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%', marginTop: 16 }}>
             <div>
               <Space>
                 <FileOutlined style={{ color: '#1890ff' }} />
@@ -250,7 +250,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
                   )
                 ) : (
                   <Alert
-                    message="No firmware linked"
+                    title="No firmware linked"
                     description="This configuration does not have a linked firmware version. Link a firmware version first to create a recovery package."
                     type="warning"
                     showIcon
@@ -327,7 +327,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
               </Checkbox>
               {includeVault && (
                 <Alert
-                  message="Security Notice"
+                  title="Security Notice"
                   description="The vault data will remain encrypted during export. Only users with appropriate permissions can access the vault contents after import."
                   type="warning"
                   showIcon
@@ -340,7 +340,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
 
         {selectedPath && (
           <Alert
-            message="Selected Directory"
+            title="Selected Directory"
             description={selectedPath}
             type="success"
             showIcon

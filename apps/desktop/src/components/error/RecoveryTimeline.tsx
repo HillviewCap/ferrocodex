@@ -129,7 +129,7 @@ const RecoveryTimeline: React.FC<RecoveryTimelineProps> = ({
     return (
       <div style={{ marginTop: 8, padding: 8, backgroundColor: '#fafafa', borderRadius: 4 }}>
         {step.details && (
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             {step.details.attempt_number && (
               <Text type="secondary" style={{ fontSize: '11px' }}>
                 Attempt: {step.details.attempt_number}
@@ -212,22 +212,22 @@ const RecoveryTimeline: React.FC<RecoveryTimelineProps> = ({
         </Space>
       }
     >
-      <Timeline mode={compact ? undefined : 'left'}>
-        {operation.steps.map((step) => (
-          <Timeline.Item
-            key={step.id}
-            color={getStatusColor(step.status)}
-            dot={
-              <Tooltip title={`${step.type} - ${step.status}`}>
-                <Space>
-                  {getTypeIcon(step.type)}
-                  {getStatusIcon(step.status)}
-                </Space>
-              </Tooltip>
-            }
-          >
+      <Timeline
+        mode={compact ? undefined : 'start'}
+        items={operation.steps.map((step) => ({
+          key: step.id,
+          color: getStatusColor(step.status),
+          icon: (
+            <Tooltip title={`${step.type} - ${step.status}`}>
+              <Space>
+                {getTypeIcon(step.type)}
+                {getStatusIcon(step.status)}
+              </Space>
+            </Tooltip>
+          ),
+          content: (
             <div>
-              <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Space orientation="vertical" style={{ width: '100%' }} size="small">
                 <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                   <div>
                     <Text strong style={{ fontSize: compact ? '12px' : '14px' }}>
@@ -295,9 +295,9 @@ const RecoveryTimeline: React.FC<RecoveryTimelineProps> = ({
                 )}
               </Space>
             </div>
-          </Timeline.Item>
-        ))}
-      </Timeline>
+          ),
+        }))}
+      />
     </Card>
   );
 };

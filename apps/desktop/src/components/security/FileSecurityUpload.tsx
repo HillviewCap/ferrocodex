@@ -311,7 +311,7 @@ const FileSecurityUpload: React.FC<FileSecurityUploadProps> = ({
           }
           description={
             <div>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <Space>
                   {getStageIcon()}
                   <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -452,7 +452,7 @@ const FileSecurityUpload: React.FC<FileSecurityUploadProps> = ({
       {/* Error Alert */}
       {overallStatus === 'error' && (
         <Alert
-          message="Upload Issues Detected"
+          title="Upload Issues Detected"
           description="Some files failed security validation. Please review the issues above and retry if necessary."
           type="warning"
           showIcon

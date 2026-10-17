@@ -318,7 +318,7 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
     return (
       <Card title="Asset-File Relationships">
         <Alert
-          message="Error Loading Relationships"
+          title="Error Loading Relationships"
           description={error}
           type="error"
           showIcon
@@ -350,7 +350,7 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
       }
       size={compact ? 'small' : 'default'}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         {/* Settings Panel */}
         {interactive && !compact && (
           <Card size="small" style={{ backgroundColor: '#fafafa' }}>
@@ -414,7 +414,7 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
           <>
             <Divider />
             <Card size="small" title="Legend" style={{ backgroundColor: '#fafafa' }}>
-              <Space direction="vertical" size="small">
+              <Space orientation="vertical" size="small">
                 <Space wrap>
                   <Space size="small">
                     <FolderOutlined style={{ color: '#faad14' }} />

@@ -326,7 +326,7 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
         <div style={{ marginTop: 8 }}>
           {validationState.status === 'success' && (
             <Alert
-              message="Valid asset name"
+              title="Valid asset name"
               type="success"
               showIcon
               style={{ fontSize: '12px' }}
@@ -335,7 +335,7 @@ const SecurityValidationInput: React.FC<SecurityValidationInputProps> = ({
           
           {validationState.status === 'error' && validationState.result.errorMessage && (
             <Alert
-              message="Asset name needs adjustment"
+              title="Asset name needs adjustment"
               description={validationState.result.errorMessage.replace(/uppercase/gi, '').replace(/security/gi, '').trim()}
               type="warning"
               showIcon

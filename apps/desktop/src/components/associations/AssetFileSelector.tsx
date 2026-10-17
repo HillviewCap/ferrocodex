@@ -235,7 +235,7 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
     return (
       <Card>
         <Alert
-          message="Error Loading Assets"
+          title="Error Loading Assets"
           description={error}
           type="error"
           showIcon
@@ -260,9 +260,9 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Alert
-          message="Instructions"
+          title="Instructions"
           description={getInstructions()}
           type="info"
           showIcon
@@ -280,7 +280,7 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
 
         {selectedAsset && (
           <Alert
-            message="Selected Asset"
+            title="Selected Asset"
             description={
               <Space>
                 <DatabaseOutlined />

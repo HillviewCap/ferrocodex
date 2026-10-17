@@ -152,13 +152,13 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
       footer={null}
       width={600}
       closable={!creating}
-      maskClosable={!creating}
+      mask={{ closable: !creating }}
       aria-labelledby="create-branch-modal-title"
       aria-describedby="create-branch-modal-description"
     >
       <div style={{ marginBottom: '24px' }}>
         <Alert
-          message="Create a Branch"
+          title="Create a Branch"
           description="Create a new branch from this version to safely experiment with changes."
           type="info"
           showIcon
@@ -264,7 +264,7 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
         </Form.Item>
 
         <Alert
-          message="Guidelines"
+          title="Guidelines"
           description="Use descriptive kebab-case names for experimental changes. Each branch maintains its own history."
           type="info"
           showIcon

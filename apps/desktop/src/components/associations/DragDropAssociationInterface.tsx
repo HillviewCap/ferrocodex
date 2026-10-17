@@ -327,10 +327,10 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
       }
       style={{ width: '100%' }}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Target Asset Info */}
         <Alert
-          message="Target Asset"
+          title="Target Asset"
           description={
             <Space>
               <Text strong>{targetAsset.name}</Text>
@@ -428,7 +428,7 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
                     </Space>
                   }
                   description={
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Text type="secondary">
                         Size: {(item.file.size / 1024 / 1024).toFixed(2)} MB
                       </Text>
@@ -450,7 +450,7 @@ const DragDropAssociationInterface: React.FC<DragDropAssociationInterfaceProps> 
 
         {/* Instructions */}
         <Alert
-          message="How to Use"
+          title="How to Use"
           description={
             <div>
               <p>• Drag files from your file explorer directly onto the drop zone</p>

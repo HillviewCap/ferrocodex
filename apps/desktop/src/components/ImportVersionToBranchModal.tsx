@@ -153,13 +153,13 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
       footer={null}
       width={720}
       closable={!isImportingVersion}
-      maskClosable={!isImportingVersion}
+      mask={{ closable: !isImportingVersion }}
       aria-labelledby="import-version-modal-title"
       aria-describedby="import-version-modal-description"
     >
       <div style={{ marginBottom: '24px' }}>
         <Alert
-          message="Import New Version"
+          title="Import New Version"
           description="Import a new configuration file version to this branch. This will create a new branch-specific version without affecting the main asset versions."
           type="info"
           showIcon
@@ -289,7 +289,7 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
         </Form.Item>
 
         <Alert
-          message="Version Import Guidelines"
+          title="Version Import Guidelines"
           description={
             <ul style={{ marginBottom: 0, paddingLeft: '20px' }}>
               <li>Each imported version gets a unique branch version number (branch-v1, branch-v2, etc.)</li>

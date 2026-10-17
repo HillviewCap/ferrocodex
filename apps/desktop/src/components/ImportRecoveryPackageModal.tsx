@@ -194,9 +194,9 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
     switch (importStep.step) {
       case 'SelectBundle':
         return (
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="large" style={{ width: '100%' }}>
             <Alert
-              message="Import Recovery Bundle"
+              title="Import Recovery Bundle"
               description="Select a recovery bundle directory that was previously exported. The bundle must contain valid configuration, firmware, and manifest files."
               type="info"
               showIcon
@@ -215,7 +215,7 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
 
       case 'ValidateBundle':
         return (
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="large" style={{ width: '100%' }}>
             <Progress percent={importStep.progress || 0} status="active" />
             <Text>{importStep.message}</Text>
           </Space>
@@ -223,12 +223,12 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
 
       case 'SelectAsset':
         return (
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="large" style={{ width: '100%' }}>
             {manifest && (
               <Card size="small">
                 <Title level={5}>Bundle Contents</Title>
                 
-                <Space direction="vertical" size="small" style={{ width: '100%', marginTop: 16 }}>
+                <Space orientation="vertical" size="small" style={{ width: '100%', marginTop: 16 }}>
                   <div>
                     <Text type="secondary">Exported By:</Text> {manifest.exportedBy}
                   </div>
@@ -343,7 +343,7 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
 
       case 'Importing':
         return (
-          <Space direction="vertical" size="large" style={{ width: '100%', textAlign: 'center' }}>
+          <Space orientation="vertical" size="large" style={{ width: '100%', textAlign: 'center' }}>
             <Progress percent={importStep.progress || 0} status="active" />
             <Text>{importStep.message || 'Importing recovery bundle...'}</Text>
           </Space>
@@ -430,7 +430,7 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
       width={600}
       footer={getFooterButtons()}
       closable={importStep.step !== 'Importing'}
-      maskClosable={false}
+      mask={{ closable: false }}
     >
       {renderStepContent()}
     </Modal>

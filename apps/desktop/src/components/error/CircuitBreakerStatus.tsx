@@ -111,7 +111,7 @@ const CircuitBreakerStatus: React.FC<CircuitBreakerStatusProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} >
+      <Space orientation="vertical" style={{ width: '100%' }} >
         {/* State Overview */}
         <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
@@ -149,28 +149,28 @@ const CircuitBreakerStatus: React.FC<CircuitBreakerStatusProps> = ({
                 <Statistic
                   title="Total Calls"
                   value={metrics.total_calls}
-                  valueStyle={{ fontSize: '16px' }}
+                  styles={{ content: { fontSize: '16px' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="Successful"
                   value={metrics.successful_calls}
-                  valueStyle={{ fontSize: '16px', color: '#52c41a' }}
+                  styles={{ content: { fontSize: '16px', color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="Failed"
                   value={metrics.failed_calls}
-                  valueStyle={{ fontSize: '16px', color: '#ff4d4f' }}
+                  styles={{ content: { fontSize: '16px', color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="Rejected"
                   value={metrics.rejected_calls}
-                  valueStyle={{ fontSize: '16px', color: '#faad14' }}
+                  styles={{ content: { fontSize: '16px', color: '#faad14' } }}
                 />
               </Col>
             </Row>

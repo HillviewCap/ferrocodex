@@ -193,7 +193,7 @@ const ComplianceStatusIndicator: React.FC<ComplianceStatusIndicatorProps> = ({
           </div>
         }
         placement="top"
-        overlayStyle={{ maxWidth: '400px' }}
+        styles={{ root: { maxWidth: '400px' } }}
       >
         {content}
       </Tooltip>

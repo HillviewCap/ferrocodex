@@ -134,7 +134,7 @@ const GoldenVersionIndicator: React.FC<GoldenVersionIndicatorProps> = ({
       >
         <Row gutter={[16, 16]} align="middle">
           <Col flex="auto">
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               {/* Version Info */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ fontSize: '24px' }}>
@@ -221,7 +221,7 @@ const GoldenVersionIndicator: React.FC<GoldenVersionIndicatorProps> = ({
           </Col>
           
           <Col flex="none">
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               {onViewDetails && (
                 <Button
                   type="primary"

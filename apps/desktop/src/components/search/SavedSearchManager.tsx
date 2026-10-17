@@ -69,7 +69,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
   const handleCreatePreset = async (values: { name: string; description?: string }) => {
     if (query.filters.length === 0) {
       notification.warning({
-        message: 'No Filters to Save',
+        title: 'No Filters to Save',
         description: 'Please add some filters before creating a preset.',
       });
       return;
@@ -82,7 +82,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
       });
       
       notification.success({
-        message: 'Preset Created',
+        title: 'Preset Created',
         description: `"${values.name}" has been saved successfully.`,
       });
       
@@ -91,7 +91,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
     } catch (error) {
       console.error('Failed to create preset:', error);
       notification.error({
-        message: 'Creation Failed',
+        title: 'Creation Failed',
         description: error instanceof Error ? error.message : 'Failed to create preset',
       });
     }
@@ -110,7 +110,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
       });
       
       notification.success({
-        message: 'Preset Updated',
+        title: 'Preset Updated',
         description: `"${values.name}" has been updated successfully.`,
       });
       
@@ -119,7 +119,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
     } catch (error) {
       console.error('Failed to update preset:', error);
       notification.error({
-        message: 'Update Failed',
+        title: 'Update Failed',
         description: error instanceof Error ? error.message : 'Failed to update preset',
       });
     }
@@ -129,13 +129,13 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
     try {
       await deletePreset(presetId);
       notification.success({
-        message: 'Preset Deleted',
+        title: 'Preset Deleted',
         description: `"${presetName}" has been deleted.`,
       });
     } catch (error) {
       console.error('Failed to delete preset:', error);
       notification.error({
-        message: 'Delete Failed',
+        title: 'Delete Failed',
         description: error instanceof Error ? error.message : 'Failed to delete preset',
       });
     }
@@ -145,7 +145,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
     applyPreset(preset);
     onSearchSelect?.(preset);
     notification.info({
-      message: 'Preset Applied',
+      title: 'Preset Applied',
       description: `Filters from "${preset.name}" have been applied.`,
     });
   };
@@ -160,7 +160,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
     
     navigator.clipboard.writeText(JSON.stringify(presetData, null, 2));
     notification.success({
-      message: 'Preset Copied',
+      title: 'Preset Copied',
       description: 'Preset data has been copied to clipboard.',
     });
   };
@@ -238,7 +238,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
             </Space>
           }
           description={
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               {preset.description && (
                 <Text type="secondary">{preset.description}</Text>
               )}
@@ -259,7 +259,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
 
   return (
     <div className={className}>
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Header Actions */}
         <Card size="small">
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -286,7 +286,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
         {/* Current Query Info */}
         {query.filters.length > 0 && (
           <Card size="small" title="Current Query">
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <div>
                 <Badge count={query.filters.length} color="blue" style={{ marginRight: 8 }} />
                 <Text>Active filters</Text>
@@ -304,7 +304,7 @@ const SavedSearchManager: React.FC<SavedSearchManagerProps> = ({
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <Space direction="vertical">
+                <Space orientation="vertical">
                   <Text>No saved searches yet</Text>
                   <Text type="secondary">
                     Create filters and save them for quick access

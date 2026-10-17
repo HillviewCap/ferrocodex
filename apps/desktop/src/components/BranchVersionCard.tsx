@@ -122,7 +122,7 @@ const BranchVersionCard: React.FC<BranchVersionCardProps> = ({
           position: 'relative',
           zIndex: 1
         }}
-        bodyStyle={{ padding: '12px 16px' }}
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Row align="middle" gutter={16}>
           <Col flex="none">

@@ -54,7 +54,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
     } catch (error) {
       console.error('Failed to load rotation schedule:', error);
       notification.error({
-        message: 'Load Failed',
+        title: 'Load Failed',
         description: 'Failed to load rotation schedule',
       });
     } finally {
@@ -88,7 +88,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
         });
 
         notification.success({
-          message: 'Schedule Updated',
+          title: 'Schedule Updated',
           description: 'Rotation schedule has been updated successfully',
         });
       } else {
@@ -108,7 +108,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
         setSchedule(newSchedule);
 
         notification.success({
-          message: 'Schedule Created',
+          title: 'Schedule Created',
           description: 'Rotation schedule has been created successfully',
         });
       }
@@ -120,7 +120,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
       await loadSchedule();
     } catch (error) {
       notification.error({
-        message: 'Save Failed',
+        title: 'Save Failed',
         description: error instanceof Error ? error.message : 'Failed to save rotation schedule',
       });
     } finally {
@@ -177,7 +177,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
           disabled={user?.role !== 'Administrator'}
         >
           <Alert
-            message="Password Rotation Policy"
+            title="Password Rotation Policy"
             description="Configure automatic password rotation reminders and compliance tracking for this vault."
             type="info"
             showIcon
@@ -218,7 +218,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
 
           <Divider />
 
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <div>
               <Text type="secondary">Next Rotation Due:</Text>
               <br />
@@ -250,7 +250,7 @@ const RotationScheduleManager: React.FC<RotationScheduleManagerProps> = ({ vault
 
           {user?.role !== 'Administrator' && (
             <Alert
-              message="View Only"
+              title="View Only"
               description="Only administrators can modify rotation schedules."
               type="warning"
               showIcon

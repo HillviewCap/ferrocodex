@@ -252,7 +252,7 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
       
       {exportState.step === 'error' && exportState.error && (
         <Alert
-          message="Export Failed"
+          title="Export Failed"
           description={exportState.error}
           type="error"
           showIcon
@@ -262,7 +262,7 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
 
       {exportState.step === 'completed' && exportState.manifest && (
         <Alert
-          message="Export Completed Successfully"
+          title="Export Completed Successfully"
           description={
             <div>
               <Text>Recovery package exported to: <Text code>{exportDirectory}</Text></Text>
@@ -342,7 +342,7 @@ export const CompleteRecoveryModal: React.FC<RecoveryDialogProps> = ({
 
           {selectedConfigId && selectedFirmwareId && (
             <Alert
-              message={
+              title={
                 isCompatible ? (
                   <Space>
                     <CheckCircleOutlined style={{ color: '#52c41a' }} />

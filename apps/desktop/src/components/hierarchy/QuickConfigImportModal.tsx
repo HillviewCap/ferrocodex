@@ -337,7 +337,7 @@ const QuickConfigImportModal: React.FC<QuickConfigImportModalProps> = ({
       onCancel={onCancel}
       footer={renderFooter()}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Steps
         current={currentStep}

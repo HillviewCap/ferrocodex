@@ -314,7 +314,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
     return (
       <div style={{ padding: '24px' }}>
         <Alert
-          message="Error Loading Metadata"
+          title="Error Loading Metadata"
           description={error}
           type="error"
           showIcon
@@ -354,7 +354,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
-            <Space direction="vertical">
+            <Space orientation="vertical">
               <Text>No metadata configured for this asset</Text>
               <Button 
                 type="primary" 
@@ -374,7 +374,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
 
   return (
     <div style={{ padding: '16px' }}>
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Header */}
         <Row justify="space-between" align="middle">
           <Col>
@@ -417,46 +417,57 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
             <Descriptions
               column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
               size="small"
-              labelStyle={{ fontWeight: 500, color: '#595959' }}
-              contentStyle={{ color: '#262626' }}
-            >
-              {categoryFields.map(field => (
-                <Descriptions.Item 
-                  key={field.name} 
-                  label={field.label}
-                  span={field.type === 'array' ? 2 : 1}
-                >
-                  {formatValue(field.value, field.type)}
-                </Descriptions.Item>
-              ))}
-            </Descriptions>
+              styles={{ label: { fontWeight: 500, color: '#595959' }, content: { color: '#262626' } }}
+              items={categoryFields.map(field => ({
+                key: field.name,
+                label: field.label,
+                span: field.type === 'array' ? 2 : 1,
+                children: formatValue(field.value, field.type),
+              }))}
+            />
           </Card>
         ))}
 
         {/* Metadata Info */}
         <Card size="small" title="Metadata Information" style={{ marginTop: 8 }}>
-          <Descriptions size="small" column={2}>
-            <Descriptions.Item label="Schema Version">
-              <Tag>{metadata.schema_version || metadata.version || 1}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Schema ID">
-              <Text type="secondary">{metadata.schema_id}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="Last Updated">
-              <Space size="small">
-                <CalendarOutlined style={{ color: '#8c8c8c' }} />
-                <Text type="secondary">
-                  {new Date(metadata.updated_at).toLocaleString()}
-                </Text>
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="Updated By">
-              <Space size="small">
-                <UserOutlined style={{ color: '#8c8c8c' }} />
-                <Text type="secondary">User #{metadata.created_by || 'Unknown'}</Text>
-              </Space>
-            </Descriptions.Item>
-          </Descriptions>
+          <Descriptions
+            size="small"
+            column={2}
+            items={[
+              {
+                key: 'schemaVersion',
+                label: 'Schema Version',
+                children: <Tag>{metadata.schema_version || metadata.version || 1}</Tag>,
+              },
+              {
+                key: 'schemaId',
+                label: 'Schema ID',
+                children: <Text type="secondary">{metadata.schema_id}</Text>,
+              },
+              {
+                key: 'lastUpdated',
+                label: 'Last Updated',
+                children: (
+                  <Space size="small">
+                    <CalendarOutlined style={{ color: '#8c8c8c' }} />
+                    <Text type="secondary">
+                      {new Date(metadata.updated_at).toLocaleString()}
+                    </Text>
+                  </Space>
+                ),
+              },
+              {
+                key: 'updatedBy',
+                label: 'Updated By',
+                children: (
+                  <Space size="small">
+                    <UserOutlined style={{ color: '#8c8c8c' }} />
+                    <Text type="secondary">User #{metadata.created_by || 'Unknown'}</Text>
+                  </Space>
+                ),
+              },
+            ]}
+          />
         </Card>
       </Space>
     </div>

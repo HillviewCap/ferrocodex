@@ -122,11 +122,11 @@ const PromoteBranchToSilverModal: React.FC<PromoteBranchToSilverModalProps> = ({
       footer={null}
       width={720}
       closable={!promoting}
-      maskClosable={!promoting}
+      mask={{ closable: !promoting }}
     >
       <div style={{ marginBottom: '24px' }}>
         <Alert
-          message="Promote to Silver Status"
+          title="Promote to Silver Status"
           description="This will create a new configuration version in the main line with Silver status, marking it as a candidate for review. The branch will remain active for continued development."
           type="info"
           showIcon
@@ -174,7 +174,7 @@ const PromoteBranchToSilverModal: React.FC<PromoteBranchToSilverModalProps> = ({
 
         <Card size="small" style={{ marginBottom: '16px', backgroundColor: '#f0f9ff' }}>
           <div style={{ textAlign: 'center' }}>
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <Text type="secondary">Promotion Path:</Text>
               <Space size={16}>
                 <Tag color="blue">Branch</Tag>
@@ -213,7 +213,7 @@ const PromoteBranchToSilverModal: React.FC<PromoteBranchToSilverModalProps> = ({
         </Form.Item>
 
         <Alert
-          message="What happens next?"
+          title="What happens next?"
           description={
             <ul style={{ marginBottom: 0, paddingLeft: '20px' }}>
               <li>A new configuration version will be created in the main line</li>

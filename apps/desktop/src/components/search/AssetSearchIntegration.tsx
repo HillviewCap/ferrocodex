@@ -257,10 +257,10 @@ const AssetSearchIntegration: React.FC<AssetSearchIntegrationProps> = ({
     <Drawer
       title="Advanced Search Filters"
       placement="right"
-      width={500}
+      size={500}
       onClose={() => setFilterDrawerVisible(false)}
       open={filterDrawerVisible}
-      bodyStyle={{ padding: 0 }}
+      styles={{ body: { padding: 0 } }}
       extra={
         <Space>
           <Button

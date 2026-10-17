@@ -105,55 +105,60 @@ const PasswordRotationHistoryViewer: React.FC<PasswordRotationHistoryViewerProps
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          <Timeline mode="left" style={{ marginTop: 24 }}>
-            {history.map((item, index) => (
-              <Timeline.Item
-                key={item.rotation_id}
-                color={getTimelineColor(index)}
-                dot={<HistoryOutlined style={{ fontSize: '16px' }} />}
-              >
+          <Timeline
+            mode="start"
+            style={{ marginTop: 24 }}
+            items={history.map((item, index) => ({
+              key: item.rotation_id,
+              color: getTimelineColor(index),
+              icon: <HistoryOutlined style={{ fontSize: '16px' }} />,
+              content: (
                 <div style={{ marginBottom: 16 }}>
-                  <Space direction="vertical" style={{ width: '100%' }}>
+                  <Space orientation="vertical" style={{ width: '100%' }}>
                     <Space>
                       <CalendarOutlined />
                       <Text strong>{formatDate(item.rotated_at)}</Text>
                       {index === 0 && <Tag color="green">Latest</Tag>}
                     </Space>
                     
-                    <Descriptions size="small" column={1}>
-                      <Descriptions.Item 
-                        label={
-                          <Space>
-                            <UserOutlined />
-                            Rotated By
-                          </Space>
-                        }
-                      >
-                        {getUserName(item.rotated_by)}
-                      </Descriptions.Item>
-                      
-                      <Descriptions.Item 
-                        label={
-                          <Space>
-                            <FileTextOutlined />
-                            Reason
-                          </Space>
-                        }
-                      >
-                        <Text>{item.rotation_reason}</Text>
-                      </Descriptions.Item>
-                      
-                      {item.batch_id && (
-                        <Descriptions.Item label="Batch ID">
-                          <Tag>Batch #{item.batch_id}</Tag>
-                        </Descriptions.Item>
-                      )}
-                    </Descriptions>
+                    <Descriptions
+                      size="small"
+                      column={1}
+                      items={[
+                        {
+                          key: 'rotated-by',
+                          label: (
+                            <Space>
+                              <UserOutlined />
+                              Rotated By
+                            </Space>
+                          ),
+                          children: getUserName(item.rotated_by),
+                        },
+                        {
+                          key: 'reason',
+                          label: (
+                            <Space>
+                              <FileTextOutlined />
+                              Reason
+                            </Space>
+                          ),
+                          children: <Text>{item.rotation_reason}</Text>,
+                        },
+                        ...(item.batch_id
+                          ? [{
+                              key: 'batch-id',
+                              label: 'Batch ID',
+                              children: <Tag>Batch #{item.batch_id}</Tag>,
+                            }]
+                          : []),
+                      ]}
+                    />
                   </Space>
                 </div>
-              </Timeline.Item>
-            ))}
-          </Timeline>
+              ),
+            }))}
+          />
         )}
       </Spin>
     </Modal>

@@ -143,7 +143,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
     if (!findings || findings.length === 0) {
       return (
         <Alert
-          message="No security issues found"
+          title="No security issues found"
           description="The firmware analysis did not detect any security concerns."
           type="success"
           showIcon
@@ -182,7 +182,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
                   dataSource={groupedFindings[severity]}
                   renderItem={(finding, index) => (
                     <List.Item key={index}>
-                      <Space direction="vertical" style={{ width: '100%' }}>
+                      <Space orientation="vertical" style={{ width: '100%' }}>
                         <Text strong>{finding.findingType}</Text>
                         <Text type="secondary">{finding.description}</Text>
                         {finding.offset !== undefined && finding.offset !== null && (
@@ -217,7 +217,7 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
     return (
       <Card>
         <Alert
-          message="No Analysis Available"
+          title="No Analysis Available"
           description="This firmware has not been analyzed yet."
           type="info"
           showIcon
@@ -259,9 +259,9 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
       {/* Show progress if analysis is running */}
       {analysisProgress && analysisProgress.status === 'in_progress' && (
         <Alert
-          message="Analysis in Progress"
+          title="Analysis in Progress"
           description={
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Text>{analysisProgress.message || 'Analyzing firmware...'}</Text>
               {analysisProgress.progress !== undefined && (
                 <Progress percent={analysisProgress.progress} />
@@ -276,49 +276,57 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
       )}
 
       {/* Analysis Status */}
-      <Descriptions bordered column={2} style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="Status" span={2}>
-          <Space>
-            {getStatusIcon(analysis.analysisStatus)}
-            <Tag color={getStatusColor(analysis.analysisStatus)}>
-              {analysis.analysisStatus.toUpperCase()}
-            </Tag>
-          </Space>
-        </Descriptions.Item>
-        
-        {analysis.fileType && (
-          <Descriptions.Item label="File Type">
-            <Tag>{analysis.fileType}</Tag>
-          </Descriptions.Item>
-        )}
-        
-        {analysis.entropyScore !== undefined && analysis.entropyScore !== null && (
-          <Descriptions.Item label="Entropy Score">
-            <Progress 
-              percent={Math.round((analysis.entropyScore / 8) * 100)} 
-              size="small"
-              format={() => analysis.entropyScore!.toFixed(2)}
-            />
-          </Descriptions.Item>
-        )}
-        
-        {analysis.startedAt && (
-          <Descriptions.Item label="Started At">
-            {new Date(analysis.startedAt).toLocaleString()}
-          </Descriptions.Item>
-        )}
-        
-        {analysis.completedAt && (
-          <Descriptions.Item label="Completed At">
-            {new Date(analysis.completedAt).toLocaleString()}
-          </Descriptions.Item>
-        )}
-      </Descriptions>
+      <Descriptions
+        bordered
+        column={2}
+        style={{ marginBottom: 16 }}
+        items={[
+          {
+            key: 'status',
+            label: 'Status',
+            span: 2,
+            children: (
+              <Space>
+                {getStatusIcon(analysis.analysisStatus)}
+                <Tag color={getStatusColor(analysis.analysisStatus)}>
+                  {analysis.analysisStatus.toUpperCase()}
+                </Tag>
+              </Space>
+            ),
+          },
+          ...(analysis.fileType ? [{
+            key: 'fileType',
+            label: 'File Type',
+            children: <Tag>{analysis.fileType}</Tag>,
+          }] : []),
+          ...(analysis.entropyScore !== undefined && analysis.entropyScore !== null ? [{
+            key: 'entropyScore',
+            label: 'Entropy Score',
+            children: (
+              <Progress 
+                percent={Math.round((analysis.entropyScore / 8) * 100)} 
+                size="small"
+                format={() => analysis.entropyScore!.toFixed(2)}
+              />
+            ),
+          }] : []),
+          ...(analysis.startedAt ? [{
+            key: 'startedAt',
+            label: 'Started At',
+            children: new Date(analysis.startedAt).toLocaleString(),
+          }] : []),
+          ...(analysis.completedAt ? [{
+            key: 'completedAt',
+            label: 'Completed At',
+            children: new Date(analysis.completedAt).toLocaleString(),
+          }] : []),
+        ]}
+      />
 
       {/* Error Message */}
       {analysis.errorMessage && (
         <Alert
-          message="Analysis Failed"
+          title="Analysis Failed"
           description={analysis.errorMessage}
           type="error"
           showIcon

@@ -179,7 +179,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
     return (
       <Card>
         <Alert
-          message="Error Loading Versions"
+          title="Error Loading Versions"
           description={versionsError}
           type="error"
           showIcon
@@ -233,7 +233,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
         <Row gutter={16} style={{ marginBottom: '24px' }}>
           <Col span={6}>
             <Card size="small" style={{ textAlign: 'center' }}>
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <TagOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
                   {totalVersions}
@@ -244,7 +244,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
           </Col>
           <Col span={6}>
             <Card size="small" style={{ textAlign: 'center' }}>
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <FileTextOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
                   {latestVersion?.branch_version_number || 'None'}
@@ -255,7 +255,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
           </Col>
           <Col span={6}>
             <Card size="small" style={{ textAlign: 'center' }}>
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <FileOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
                   {formatFileSize(totalSize)}
@@ -266,7 +266,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
           </Col>
           <Col span={6}>
             <Card size="small" style={{ textAlign: 'center' }}>
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <CalendarOutlined style={{ fontSize: '16px', color: '#8c8c8c' }} />
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#262626' }}>
                   {latestVersion ? formatDate(latestVersion.created_at).split(',')[0] : 'Never'}
@@ -281,7 +281,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
 
         {selectedVersions.length > 0 && (
           <Alert
-            message={`${selectedVersions.length} version${selectedVersions.length > 1 ? 's' : ''} selected for comparison`}
+            title={`${selectedVersions.length} version${selectedVersions.length > 1 ? 's' : ''} selected for comparison`}
             description={
               selectedVersions.length === 2 
                 ? 'Click "Compare Selected" to view differences between the selected versions.'
@@ -371,7 +371,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
                 <Row gutter={16}>
                   <Col span={12}>
                     <Card size="small" title="Version 1">
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                         <Space>
                           <Tag color={getVersionColor(selectedVersions[0].branch_version_number)}>
                             {selectedVersions[0].branch_version_number}
@@ -386,7 +386,7 @@ const BranchVersionHistory: React.FC<BranchVersionHistoryProps> = ({
                   </Col>
                   <Col span={12}>
                     <Card size="small" title="Version 2">
-                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                         <Space>
                           <Tag color={getVersionColor(selectedVersions[1].branch_version_number)}>
                             {selectedVersions[1].branch_version_number}

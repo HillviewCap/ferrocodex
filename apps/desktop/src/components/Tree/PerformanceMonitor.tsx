@@ -177,7 +177,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                 value={metrics.renderTime}
                 precision={1}
                 suffix="ms"
-                valueStyle={{ color: getPerformanceStatus().color, fontSize: 16 }}
+                styles={{ content: { color: getPerformanceStatus().color, fontSize: 16 } }}
                 prefix={<ThunderboltOutlined />}
               />
               <Progress
@@ -193,7 +193,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                 value={metrics.frameRate}
                 precision={0}
                 suffix="fps"
-                valueStyle={{ color: getFrameRateStatus().color, fontSize: 16 }}
+                styles={{ content: { color: getFrameRateStatus().color, fontSize: 16 } }}
                 prefix={<TrophyOutlined />}
               />
               <Progress
@@ -209,7 +209,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                 value={metrics.memoryUsage / (1024 * 1024)}
                 precision={1}
                 suffix="MB"
-                valueStyle={{ color: getMemoryStatus().color, fontSize: 16 }}
+                styles={{ content: { color: getMemoryStatus().color, fontSize: 16 } }}
                 prefix={<DatabaseOutlined />}
               />
               <Progress
@@ -223,7 +223,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
               <Statistic
                 title="Last Update"
                 value={metrics.lastMeasurement.toLocaleTimeString()}
-                valueStyle={{ fontSize: 14 }}
+                styles={{ content: { fontSize: 14 } }}
                 prefix={<ClockCircleOutlined />}
               />
             </Col>
@@ -240,7 +240,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                     title="Tree Size"
                     value={treeSize}
                     suffix="nodes"
-                    valueStyle={{ fontSize: 14 }}
+                    styles={{ content: { fontSize: 14 } }}
                   />
                 </Col>
                 <Col span={8}>
@@ -248,7 +248,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                     title="Max Depth"
                     value={maxDepth}
                     suffix="levels"
-                    valueStyle={{ fontSize: 14 }}
+                    styles={{ content: { fontSize: 14 } }}
                   />
                 </Col>
                 <Col span={8}>
@@ -257,7 +257,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                     value={metrics.cacheHitRate * 100}
                     precision={1}
                     suffix="%"
-                    valueStyle={{ fontSize: 14 }}
+                    styles={{ content: { fontSize: 14 } }}
                   />
                 </Col>
               </Row>
@@ -269,7 +269,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
         {recommendations.length > 0 && (
           <Col span={24}>
             <Alert
-              message="Performance Recommendations"
+              title="Performance Recommendations"
               description={
                 <div style={{ marginTop: 8 }}>
                   {recommendations.slice(0, 3).map((rec, index) => (

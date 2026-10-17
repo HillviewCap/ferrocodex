@@ -67,7 +67,7 @@ function App() {
       }}>
         <div style={{ textAlign: 'center', maxWidth: '400px' }}>
           <Alert
-            message="Initialization Error"
+            title="Initialization Error"
             description={error}
             type="error"
             showIcon

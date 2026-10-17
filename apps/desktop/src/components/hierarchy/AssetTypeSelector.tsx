@@ -24,7 +24,7 @@ export const AssetTypeSelector: React.FC<AssetTypeSelectorProps> = ({
     <div>
       <Title level={5} style={{ marginBottom: 16 }}>Asset Type</Title>
       <Radio.Group value={value} onChange={handleChange} disabled={disabled}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Card 
             hoverable={!disabled}
             style={{ 
@@ -32,7 +32,7 @@ export const AssetTypeSelector: React.FC<AssetTypeSelectorProps> = ({
               border: value === 'Folder' ? '2px solid #1890ff' : '1px solid #d9d9d9',
               opacity: disabled ? 0.6 : 1,
             }}
-            bodyStyle={{ padding: 16 }}
+            styles={{ body: { padding: 16 } }}
             onClick={() => !disabled && onChange?.('Folder')}
           >
             <Radio value="Folder" style={{ pointerEvents: 'none' }}>
@@ -62,7 +62,7 @@ export const AssetTypeSelector: React.FC<AssetTypeSelectorProps> = ({
               border: value === 'Device' ? '2px solid #1890ff' : '1px solid #d9d9d9',
               opacity: disabled ? 0.6 : 1,
             }}
-            bodyStyle={{ padding: 16 }}
+            styles={{ body: { padding: 16 } }}
             onClick={() => !disabled && onChange?.('Device')}
           >
             <Radio value="Device" style={{ pointerEvents: 'none' }}>

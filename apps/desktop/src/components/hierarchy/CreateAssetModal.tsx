@@ -220,7 +220,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
 
       case 2:
         return (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
               <Title level={5} style={{ marginBottom: 16 }}>Asset Information</Title>
               <Form.Item
@@ -265,7 +265,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
         return (
           <div>
             <Title level={5} style={{ marginBottom: 16 }}>Review and Confirm</Title>
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
               <div>
                 <Text strong>Asset Type:</Text>
                 <div style={{ marginLeft: 16, marginTop: 4 }}>
@@ -338,7 +338,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
       onCancel={handleCancel}
       width={600}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <Spin spinning={loading}>
         <div style={{ marginBottom: 24 }}>
@@ -347,7 +347,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
             size="small"
             items={steps.map(step => ({
               title: step.title,
-              description: step.description,
+              content: step.description,
             }))}
           />
         </div>

@@ -433,7 +433,7 @@ const StandaloneCredentials: React.FC = () => {
     
     return (
       <Card size="small">
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Text type="secondary">Decrypted Value:</Text>
           <Input.Password
             value={value}
@@ -454,7 +454,7 @@ const StandaloneCredentials: React.FC = () => {
   return (
     <div>
       <Card>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <Row justify="space-between" align="middle">
             <Col>
               <Title level={3}>
@@ -778,7 +778,7 @@ const StandaloneCredentials: React.FC = () => {
         width={600}
       >
         <Alert 
-          message="Category management interface will be implemented in the next iteration" 
+          title="Category management interface will be implemented in the next iteration" 
           type="info" 
           showIcon 
         />
@@ -796,7 +796,7 @@ const StandaloneCredentials: React.FC = () => {
         width={800}
       >
         <Alert 
-          message="Credential history interface will be implemented in the next iteration" 
+          title="Credential history interface will be implemented in the next iteration" 
           type="info" 
           showIcon 
         />

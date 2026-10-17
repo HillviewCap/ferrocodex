@@ -40,7 +40,7 @@ const LoginScreen: React.FC = () => {
           backgroundColor: '#fdf0d5'
         }}
       >
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>
             <img 
               src={ferrocodexLogo} 
@@ -61,12 +61,11 @@ const LoginScreen: React.FC = () => {
 
           {error && (
             <Alert
-              message="Login Failed"
+              title="Login Failed"
               description={error}
               type="error"
               showIcon
-              closable
-              onClose={clearError}
+              closable={{ onClose: clearError }}
             />
           )}
 

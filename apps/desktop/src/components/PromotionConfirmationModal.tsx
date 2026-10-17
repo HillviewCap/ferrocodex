@@ -142,7 +142,7 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
         icon: <TrophyOutlined />
       }}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         {/* Version Information */}
         <Card size="small" title="Version to Promote">
           <Space>
@@ -174,14 +174,14 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
           </Card>
         ) : !eligible ? (
           <Alert
-            message="Not Eligible for Promotion"
+            title="Not Eligible for Promotion"
             description="This version cannot be promoted to Golden. Only versions with 'Approved' status are eligible for Golden promotion."
             type="error"
             showIcon
           />
         ) : (
           <Alert
-            message="Ready for Promotion"
+            title="Ready for Promotion"
             description="This version meets the requirements for Golden promotion."
             type="success"
             showIcon
@@ -191,7 +191,7 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
         {/* Existing Golden Warning */}
         {eligible && existingGolden && (
           <Alert
-            message="Existing Golden Version Will Be Archived"
+            title="Existing Golden Version Will Be Archived"
             description={
               <div>
                 <Paragraph style={{ margin: '8px 0' }}>
@@ -251,12 +251,11 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
         {/* Error Display */}
         {error && (
           <Alert
-            message="Promotion Failed"
+            title="Promotion Failed"
             description={error}
             type="error"
             showIcon
-            closable
-            onClose={() => setError(null)}
+            closable={{ onClose: () => setError(null) }}
           />
         )}
 
@@ -288,7 +287,7 @@ const PromotionConfirmationModal: React.FC<PromotionConfirmationModalProps> = ({
         {/* Warning */}
         {eligible && (
           <Alert
-            message="This action cannot be undone"
+            title="This action cannot be undone"
             description="Once promoted to Golden, this version will become the official master version."
             type="info"
             showIcon

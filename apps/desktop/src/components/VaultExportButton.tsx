@@ -85,7 +85,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
         });
 
         notification.success({
-          message: 'Vault Exported',
+          title: 'Vault Exported',
           description: `Vault has been exported successfully to ${filePath}`
         });
 
@@ -97,12 +97,12 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
       
       if (error && typeof error === 'string' && error.includes('Access denied')) {
         notification.error({
-          message: 'Export Denied',
+          title: 'Export Denied',
           description: 'You do not have permission to export this vault.'
         });
       } else {
         notification.error({
-          message: 'Export Failed',
+          title: 'Export Failed',
           description: 'Failed to export vault. Please try again.'
         });
       }
@@ -142,9 +142,9 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
         footer={null}
         width={600}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           <Alert
-            message="Security Warning"
+            title="Security Warning"
             description={
               <div>
                 <p>You are about to export sensitive vault data. This export will contain:</p>
@@ -177,7 +177,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
 
           {isAdministrator && (
             <Alert
-              message="Administrator Export"
+              title="Administrator Export"
               description="As an administrator, you have full export access to all vaults."
               type="info"
               showIcon

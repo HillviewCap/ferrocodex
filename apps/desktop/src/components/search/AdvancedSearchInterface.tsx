@@ -118,7 +118,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
   const handleSearch = useCallback(async (value: string) => {
     if (!value.trim()) {
       notification.warning({
-        message: 'Search Required',
+        title: 'Search Required',
         description: 'Please enter a search term or apply filters.',
       });
       return;
@@ -131,7 +131,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
     } catch (error) {
       console.error('Search failed:', error);
       notification.error({
-        message: 'Search Failed',
+        title: 'Search Failed',
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
@@ -140,7 +140,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
   const handleAdvancedSearch = useCallback(async () => {
     if (!query.text_query && query.filters.length === 0) {
       notification.warning({
-        message: 'Search Criteria Required',
+        title: 'Search Criteria Required',
         description: 'Please enter a search term or add filters.',
       });
       return;
@@ -152,7 +152,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
     } catch (error) {
       console.error('Advanced search failed:', error);
       notification.error({
-        message: 'Search Failed',
+        title: 'Search Failed',
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
@@ -180,14 +180,14 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
     try {
       const similarAssets = await findSimilarAssets(assetId, 0.7);
       notification.success({
-        message: 'Similar Assets Found',
+        title: 'Similar Assets Found',
         description: `Found ${similarAssets.length} similar assets`,
       });
       setShowResults(true);
     } catch (error) {
       console.error('Find similar failed:', error);
       notification.error({
-        message: 'Find Similar Failed',
+        title: 'Find Similar Failed',
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
@@ -295,7 +295,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
           </Space>
         }
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           {/* Search Input */}
           <Row gutter={[16, 16]}>
             <Col flex="auto">
@@ -376,7 +376,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
           title={`Search Results (${totalResults} found)`}
           open={showResults}
           onClose={() => setShowResults(false)}
-          width={800}
+          size={800}
           placement="right"
         >
           {searchResultsContent}
@@ -388,7 +388,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
         title="Saved Searches"
         open={showSavedSearches}
         onClose={() => setShowSavedSearches(false)}
-        width={600}
+        size={600}
         placement="left"
       >
         <SavedSearchManager />

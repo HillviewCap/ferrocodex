@@ -67,7 +67,7 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
         case 0: // Asset Selection
           if (!wizardState.selectedAsset) {
             notification.error({
-              message: 'Asset Required',
+              title: 'Asset Required',
               description: 'Please select an asset before proceeding.',
             });
             return;
@@ -76,7 +76,7 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
         case 1: // File Upload
           if (wizardState.selectedFiles.length === 0) {
             notification.error({
-              message: 'Files Required',
+              title: 'Files Required',
               description: 'Please upload at least one file before proceeding.',
             });
             return;
@@ -85,7 +85,7 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
         case 2: // Review
           if (wizardState.associations.length === 0) {
             notification.error({
-              message: 'No Associations',
+              title: 'No Associations',
               description: 'No valid associations were created. Please review your files.',
             });
             return;
@@ -97,7 +97,7 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
         // Final step - complete the wizard
         await completeWizard();
         notification.success({
-          message: 'Import Completed',
+          title: 'Import Completed',
           description: `Successfully created ${wizardState.associations.length} file association(s).`,
         });
         handleClose();
@@ -107,7 +107,7 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
     } catch (error) {
       console.error('Error in wizard step:', error);
       notification.error({
-        message: 'Step Failed',
+        title: 'Step Failed',
         description: error instanceof Error ? error.message : 'An unexpected error occurred.',
       });
     }
@@ -203,9 +203,9 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
       open={visible}
       onCancel={handleClose}
       width={800}
-      maskClosable={false}
+      mask={{ closable: false }}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ padding: '20px 0' }}>
         {/* Progress Steps */}
@@ -223,12 +223,11 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
         {/* Error Display */}
         {error && (
           <Alert
-            message="Error"
+            title="Error"
             description={error}
             type="error"
             showIcon
-            closable
-            onClose={clearError}
+            closable={{ onClose: clearError }}
             style={{ marginBottom: 16 }}
           />
         )}

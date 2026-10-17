@@ -152,7 +152,7 @@ const FieldTemplateLibrary: React.FC = () => {
           </Tooltip>
         ]}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
             <Space>
               <div style={{ color: category.color, fontSize: '24px' }}>
@@ -198,7 +198,7 @@ const FieldTemplateLibrary: React.FC = () => {
         </Paragraph>
       </div>
 
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <Row gutter={[16, 16]} align="middle">
           <Col flex="auto">
             <Search
@@ -276,7 +276,7 @@ const FieldTemplateLibrary: React.FC = () => {
         width={600}
       >
         {previewTemplate && (
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
             <div>
               <Text strong>Field Name:</Text> <Text code>{previewTemplate.name}</Text>
             </div>

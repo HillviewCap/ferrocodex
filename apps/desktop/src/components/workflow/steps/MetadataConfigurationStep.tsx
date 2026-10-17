@@ -146,7 +146,7 @@ export const MetadataConfigurationStep: React.FC<BaseStepProps> = ({
 
       {localData.metadata_schema_id && (
         <Alert
-          message="Metadata Configuration"
+          title="Metadata Configuration"
           description="Complete all required fields to proceed. Optional fields can be filled now or updated later after the asset is created."
           type="info"
           icon={<InfoCircleOutlined />}

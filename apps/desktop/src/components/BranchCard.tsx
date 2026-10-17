@@ -246,7 +246,7 @@ const BranchCard: React.FC<BranchCardProps> = React.memo(({
         
         {showActions && (
           <Col flex="none">
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               {onViewDetails && (
                 <Button 
                   type="text" 

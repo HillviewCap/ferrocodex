@@ -79,7 +79,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
   useEffect(() => {
     if (error) {
       notification.error({
-        message: 'Wizard Error',
+        title: 'Wizard Error',
         description: error,
       });
       clearError();
@@ -120,7 +120,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
   const handleFileUpload = async () => {
     if (!selectedFile || !sessionId) {
       notification.warning({
-        message: 'No File Selected',
+        title: 'No File Selected',
         description: 'Please select a CSV file to upload',
       });
       return;
@@ -134,7 +134,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       setCurrentStep(2);
       
       notification.success({
-        message: 'File Uploaded',
+        title: 'File Uploaded',
         description: 'CSV file uploaded successfully',
       });
     } catch (error) {
@@ -170,7 +170,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       handleClose();
       
       notification.success({
-        message: 'Import Started',
+        title: 'Import Started',
         description: 'Bulk import processing has been started',
       });
     } catch (error) {
@@ -191,7 +191,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
 
     if (validationError) {
       notification.error({
-        message: 'Invalid File',
+        title: 'Invalid File',
         description: validationError,
       });
       return false;
@@ -257,7 +257,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
                 label="Template (Optional)"
                 extra="Select a pre-configured template to guide the import process"
               >
-                <Input.Group compact>
+                <Space.Compact style={{ width: '100%' }}>
                   <Form.Item name="templatePath" noStyle>
                     <Input
                       style={{ width: 'calc(100% - 120px)' }}
@@ -270,7 +270,7 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
                   >
                     Browse Templates
                   </Button>
-                </Input.Group>
+                </Space.Compact>
               </Form.Item>
 
               <Divider />
@@ -288,9 +288,9 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       case 1:
         return (
           <Card title="Upload CSV File">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               <Alert
-                message="File Upload Instructions"
+                title="File Upload Instructions"
                 description={
                   <div>
                     <p>Please upload a CSV file containing your import data. The file should include:</p>
@@ -358,9 +358,9 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       case 2:
         return (
           <Card title="Data Validation">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               <Alert
-                message="Validate Import Data"
+                title="Validate Import Data"
                 description="Review your uploaded data and validate it before processing. This step ensures data quality and compatibility."
                 type="info"
                 showIcon
@@ -394,19 +394,19 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       case 3:
         return (
           <Card title="Validation Results">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               {validationResults && (
                 <>
                   {validationResults.is_valid ? (
                     <Alert
-                      message="Validation Successful"
+                      title="Validation Successful"
                       description="All data passed validation checks. You can proceed with the import."
                       type="success"
                       showIcon
                     />
                   ) : (
                     <Alert
-                      message="Validation Issues Found"
+                      title="Validation Issues Found"
                       description="Some issues were found in your data. Review the details below."
                       type="warning"
                       showIcon
@@ -494,16 +494,16 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
       case 4:
         return (
           <Card title="Processing Configuration">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               <Alert
-                message="Configure Import Options"
+                title="Configure Import Options"
                 description="Set up how the import should handle various scenarios during processing."
                 type="info"
                 showIcon
               />
 
               <Card size="small" title="Conflict Resolution">
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   <Checkbox
                     checked={processingOptions.skip_existing}
                     onChange={(e) => setProcessingOptions(prev => ({
@@ -576,27 +576,27 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
     {
       title: 'Session Setup',
       icon: <SettingOutlined />,
-      description: 'Configure import session',
+      content: 'Configure import session',
     },
     {
       title: 'File Upload',
       icon: <UploadOutlined />,
-      description: 'Upload CSV data file',
+      content: 'Upload CSV data file',
     },
     {
       title: 'Validation',
       icon: <CheckCircleOutlined />,
-      description: 'Validate import data',
+      content: 'Validate import data',
     },
     {
       title: 'Review',
       icon: <FileTextOutlined />,
-      description: 'Review validation results',
+      content: 'Review validation results',
     },
     {
       title: 'Configuration',
       icon: <SettingOutlined />,
-      description: 'Configure processing options',
+      content: 'Configure processing options',
     },
   ];
 
@@ -608,9 +608,9 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
         onCancel={handleClose}
         width={900}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           <Steps current={currentStep} items={steps} />
           
           <div style={{ minHeight: '400px' }}>

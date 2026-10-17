@@ -67,7 +67,7 @@ const BulkManagement: React.FC = () => {
   useEffect(() => {
     if (error) {
       notification.error({
-        message: 'Bulk Management Error',
+        title: 'Bulk Management Error',
         description: error,
       });
       clearError();
@@ -89,7 +89,7 @@ const BulkManagement: React.FC = () => {
     try {
       await deleteSession(sessionId);
       notification.success({
-        message: 'Session Deleted',
+        title: 'Session Deleted',
         description: 'Bulk import session has been deleted successfully',
       });
     } catch (error) {
@@ -101,7 +101,7 @@ const BulkManagement: React.FC = () => {
     setSelectedSessionId(sessionId);
     setActiveTab('progress');
     notification.success({
-      message: 'Import Started',
+      title: 'Import Started',
       description: 'Your bulk import has been started successfully',
     });
   };
@@ -125,7 +125,7 @@ const BulkManagement: React.FC = () => {
       dataIndex: 'session_name',
       key: 'session_name',
       render: (text: string, record: BulkImportSession) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{text}</Text>
           <Text type="secondary" style={{ fontSize: '12px' }}>
             {record.import_type} • Created {new Date(record.created_at).toLocaleDateString()}
@@ -149,7 +149,7 @@ const BulkManagement: React.FC = () => {
         const successRate = calculateSuccessRate(record.processed_items, record.failed_items);
         
         return (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Text>{record.processed_items} / {record.total_items} items</Text>
             <Text type="secondary" style={{ fontSize: '12px' }}>
               Success rate: {successRate}%
@@ -193,7 +193,7 @@ const BulkManagement: React.FC = () => {
   ];
 
   const renderOverview = () => (
-    <Space direction="vertical" style={{ width: '100%' }} size="large">
+    <Space orientation="vertical" style={{ width: '100%' }} size="large">
       {/* Quick Stats */}
       {stats && (
         <Row gutter={[16, 16]}>
@@ -212,7 +212,7 @@ const BulkManagement: React.FC = () => {
                 title="Active Sessions"
                 value={stats.active_sessions}
                 prefix={<PlayCircleOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Card>
           </Col>
@@ -222,7 +222,7 @@ const BulkManagement: React.FC = () => {
                 title="Items Processed"
                 value={stats.total_items_processed}
                 prefix={<BarChartOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Card>
           </Col>
@@ -234,9 +234,9 @@ const BulkManagement: React.FC = () => {
                 suffix="%"
                 precision={1}
                 prefix={<BarChartOutlined />}
-                valueStyle={{ 
+                styles={{ content: { 
                   color: stats.success_rate >= 80 ? '#52c41a' : '#faad14' 
-                }}
+                } }}
               />
             </Card>
           </Col>
@@ -314,7 +314,7 @@ const BulkManagement: React.FC = () => {
     }
 
     return (
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <BulkProgressTracker
           sessionId={selectedSessionId}
           onStatusChange={(status) => {
@@ -358,13 +358,12 @@ const BulkManagement: React.FC = () => {
 
         {error && (
           <Alert
-            message="Error"
+            title="Error"
             description={error}
             type="error"
             showIcon
-            closable
+            closable={{ onClose: clearError }}
             style={{ marginBottom: '16px' }}
-            onClose={clearError}
           />
         )}
 

@@ -125,7 +125,7 @@ const VaultPermissionRequest: React.FC<VaultPermissionRequestProps> = ({
       });
 
       notification.success({
-        message: 'Request Submitted',
+        title: 'Request Submitted',
         description: 'Your permission request has been submitted for approval.'
       });
 
@@ -136,7 +136,7 @@ const VaultPermissionRequest: React.FC<VaultPermissionRequestProps> = ({
     } catch (error) {
       console.error('Failed to submit request:', error);
       notification.error({
-        message: 'Error',
+        title: 'Error',
         description: 'Failed to submit permission request'
       });
     }
@@ -245,7 +245,7 @@ const VaultPermissionRequest: React.FC<VaultPermissionRequestProps> = ({
                               Requested on {formatDate(request.created_at)}
                             </Text>
                             <Alert
-                              message="Awaiting administrator approval"
+                              title="Awaiting administrator approval"
                               type="info"
                               showIcon
                               style={{ marginTop: '8px' }}
@@ -381,7 +381,7 @@ const VaultPermissionRequest: React.FC<VaultPermissionRequestProps> = ({
           </Form.Item>
 
           <Alert
-            message="Access Request Process"
+            title="Access Request Process"
             description="Your request will be reviewed by an administrator. You will be notified once a decision has been made."
             type="info"
             showIcon

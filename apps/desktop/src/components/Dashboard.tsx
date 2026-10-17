@@ -302,7 +302,7 @@ const Dashboard: React.FC = () => {
                 <Text type="secondary">Profile management is under development</Text>
               </div>
             ) : selectedMenuItem === 'dashboard' ? (
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <Title level={2} style={{ marginBottom: '8px' }}>
@@ -327,12 +327,12 @@ const Dashboard: React.FC = () => {
                     <Card 
                       hoverable
                       style={{ textAlign: 'center', height: '160px' }}
-                      bodyStyle={{ 
+                      styles={{ body: { 
                         display: 'flex', 
                         flexDirection: 'column', 
                         justifyContent: 'center',
                         height: '100%'
-                      }}
+                      } }}
                       onClick={() => setSelectedMenuItem('assets')}
                     >
                       <DatabaseOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '12px' }} />

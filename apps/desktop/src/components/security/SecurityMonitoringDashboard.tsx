@@ -135,7 +135,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
   if (user?.role !== 'Administrator') {
     return (
       <Alert
-        message="Administrator Access Required"
+        title="Administrator Access Required"
         description="Security monitoring dashboard is only available to administrators."
         type="warning"
         showIcon
@@ -151,7 +151,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
             <Statistic
               title="Security Status"
               value={overallStatus}
-              valueStyle={{ color: getHealthColor(), fontSize: '16px' }}
+              styles={{ content: { color: getHealthColor(), fontSize: '16px' } }}
               prefix={<SecurityScanOutlined />}
             />
           </Col>
@@ -159,7 +159,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
             <Statistic
               title="Active Alerts"
               value={unreadCount}
-              valueStyle={{ color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' }}
+              styles={{ content: { color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' } }}
               prefix={<ExclamationCircleOutlined />}
             />
           </Col>
@@ -169,7 +169,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
               value={healthReport?.validationSuccessRate || 0}
               suffix="%"
               precision={1}
-              valueStyle={{ color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' }}
+              styles={{ content: { color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' } }}
               prefix={<TrophyOutlined />}
             />
           </Col>
@@ -222,7 +222,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
       {/* Critical Alerts Banner */}
       {criticalAlerts.length > 0 && (
         <Alert
-          message={`${criticalAlerts.length} Critical Security Alert${criticalAlerts.length > 1 ? 's' : ''}`}
+          title={`${criticalAlerts.length} Critical Security Alert${criticalAlerts.length > 1 ? 's' : ''}`}
           description="Immediate attention required. Click the alerts button to review."
           type="error"
           showIcon
@@ -243,7 +243,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
               <Statistic
                 title="Overall Security Status"
                 value={overallStatus.toUpperCase()}
-                valueStyle={{ color: getHealthColor() }}
+                styles={{ content: { color: getHealthColor() } }}
                 prefix={<SecurityScanOutlined />}
               />
               <Progress
@@ -276,7 +276,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
                 value={healthReport?.validationSuccessRate || 0}
                 suffix="%"
                 precision={1}
-                valueStyle={{ color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' }}
+                styles={{ content: { color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' } }}
                 prefix={<TrophyOutlined />}
               />
             </Card>
@@ -287,7 +287,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
               <Statistic
                 title="Security Alerts"
                 value={unreadCount}
-                valueStyle={{ color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' }}
+                styles={{ content: { color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' } }}
                 prefix={<ExclamationCircleOutlined />}
               />
               <Badge status={criticalAlerts.length > 0 ? 'error' : 'success'} 
@@ -328,7 +328,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
             <Col xs={24} lg={12}>
               <Card title="Validation Statistics" size="small">
                 {validationStats ? (
-                  <Space direction="vertical" style={{ width: '100%' }}>
+                  <Space orientation="vertical" style={{ width: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Text>Total Validations:</Text>
                       <Text strong>{validationStats.totalValidations}</Text>
@@ -359,7 +359,7 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
           <Col xs={24} lg={16}>
             <Card title="Security Health Report" size="small">
               {healthReport ? (
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Space orientation="vertical" style={{ width: '100%' }} size="middle">
                   <ComplianceStatusIndicator
                     status={{
                       level: healthReport.systemSecurityLevel === 'High' ? 'excellent' :
