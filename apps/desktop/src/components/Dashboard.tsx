@@ -11,17 +11,21 @@ import {
   ImportOutlined,
   QuestionCircleOutlined,
   SafetyCertificateOutlined,
-  AuditOutlined
+  AuditOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
+import useAssetStore from '../store/assets';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { DashboardStats } from '../types/dashboard';
+import { AssetInfo } from '../types/assets';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
 import StandaloneCredentials from './StandaloneCredentials';
 import RetryPreferences from './RetryPreferences';
 import MetadataManagement from './metadata/MetadataManagement';
+import MetadataSearchPage from './search/MetadataSearchPage';
 import { canAccessUserManagement } from '../utils/roleUtils';
 import SecurityMonitoringDashboard from './security/SecurityMonitoringDashboard';
 import SecurityAuditLog from './security/SecurityAuditLog';
@@ -32,6 +36,7 @@ const { Title, Text } = Typography;
 
 const Dashboard: React.FC = () => {
   const { user, logout, token } = useAuthStore();
+  const navigateToHistory = useAssetStore((state) => state.navigateToHistory);
   const [selectedMenuItem, setSelectedMenuItem] = useState('dashboard');
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -63,6 +68,20 @@ const Dashboard: React.FC = () => {
       await logout();
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  // Open an asset picked from metadata search results in the Assets screen (history view)
+  const openAssetFromSearch = async (assetId: number) => {
+    if (!token) return;
+
+    try {
+      const asset = await invoke<AssetInfo>('get_asset_details', { token, assetId });
+      navigateToHistory(asset);
+      setSelectedMenuItem('assets');
+    } catch (error) {
+      console.error('Failed to open asset from search:', error);
+      message.error('Failed to open the selected asset');
     }
   };
 
@@ -121,6 +140,13 @@ const Dashboard: React.FC = () => {
       key: 'bulk-operations',
       icon: <ImportOutlined />,
       label: 'Bulk Operations',
+    });
+
+    // Metadata search is available to every role (read-only lookup of assets by metadata)
+    items.push({
+      key: 'metadata-search',
+      icon: <SearchOutlined />,
+      label: 'Metadata Search',
     });
 
     // Add Metadata menu for administrators only
@@ -273,7 +299,7 @@ const Dashboard: React.FC = () => {
           <Content
             style={{
               background: '#fff',
-              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials' || selectedMenuItem === 'settings' || selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates' || selectedMenuItem === 'metadata-search' || selectedMenuItem === 'security-dashboard' || selectedMenuItem === 'audit-log' || selectedMenuItem === 'bulk-operations') ? '0' : '24px',
+              padding: (selectedMenuItem === 'user-management' || selectedMenuItem === 'assets' || selectedMenuItem === 'standalone-credentials' || selectedMenuItem === 'settings' || selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates' || selectedMenuItem === 'security-dashboard' || selectedMenuItem === 'audit-log' || selectedMenuItem === 'bulk-operations') ? '0' : '24px',
               margin: 0,
               minHeight: 280,
               borderRadius: '8px',
@@ -288,7 +314,9 @@ const Dashboard: React.FC = () => {
               <StandaloneCredentials />
             ) : selectedMenuItem === 'settings' ? (
               <RetryPreferences />
-            ) : (selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates' || selectedMenuItem === 'metadata-search') ? (
+            ) : selectedMenuItem === 'metadata-search' ? (
+              <MetadataSearchPage embedded onAssetSelect={openAssetFromSearch} />
+            ) : (selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates') ? (
               <MetadataManagement />
             ) : selectedMenuItem === 'security-dashboard' && canAccessUserManagement(user) ? (
               <SecurityMonitoringDashboard />

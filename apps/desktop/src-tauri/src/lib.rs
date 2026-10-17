@@ -217,16 +217,16 @@ pub fn run() {
             commands::get_schemas_for_asset_type,
             commands::validate_metadata_values,
             
-            // Epic 5 - Metadata search commands (temporarily disabled)
-            // commands::search_assets_by_metadata,
-            // commands::get_metadata_search_suggestions,
-            // commands::create_metadata_filter_preset,
-            // commands::get_metadata_filter_presets,
-            // commands::delete_filter_preset,
-            // commands::get_search_analytics,
-            // commands::find_similar_assets,
-            // commands::search_assets_in_hierarchy,
-            // commands::get_filterable_metadata_fields,
+            // Epic 5 - Metadata search commands
+            commands::search_assets_by_metadata,
+            commands::get_metadata_search_suggestions,
+            commands::create_metadata_filter_preset,
+            commands::get_metadata_filter_presets,
+            commands::delete_filter_preset,
+            commands::get_search_analytics,
+            commands::find_similar_assets,
+            commands::search_assets_in_hierarchy,
+            commands::get_filterable_metadata_fields,
             
             // Epic 5 - Enhanced metadata API commands
             // commands::list_metadata_schemas,

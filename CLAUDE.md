@@ -34,7 +34,7 @@ There is no linter configured: `npm run lint` resolves to a turbo task that no p
 
 ### Backend (Rust)
 
-- **Entry point**: `src-tauri/src/lib.rs` declares all modules, registers managed state, and lists every command in `generate_handler!` (~167 active). A new command must be added there or the frontend can't call it. The workflow, association, and enhanced tree-navigation commands are currently commented out ("temporarily disabled").
+- **Entry point**: `src-tauri/src/lib.rs` declares all modules, registers managed state, and lists every command in `generate_handler!` (~176 active). A new command must be added there or the frontend can't call it. The workflow, association, and enhanced tree-navigation commands are currently commented out ("temporarily disabled").
 - **Managed state** (`lib.rs`): `DatabaseState = Mutex<Option<Database>>` (it is `None` until the frontend calls `initialize_database`), `SessionManagerState`, `LoginAttemptTrackerState`, and `RateLimiterState`.
 - **Commands** (`src/commands/*_commands.rs`, glob re-exported from `commands/mod.rs`) hold the real request logic. The usual shape is: take `token: String` as the first argument, lock `SessionManagerState` and call `validate_session(&token)`, drop the guard, sanitize inputs with `validation::InputSanitizer`, check roles, lock the DB, call a repository, write an audit event, and return `Result<T, String>`.
 - **`src/handlers/`** is mostly dead code. Only `workflow_commands.rs` (which is disabled) imports from it. Put new logic in commands or domain modules, not handlers.
