@@ -9,6 +9,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
 
 import { AssetCreationWizard } from '../AssetCreationWizard';
 import { useWorkflowStore } from '../../../store/workflow';
@@ -73,8 +74,7 @@ describe('Folder Creation Validation Bug Fix', () => {
 
   beforeEach(() => {
     (useWorkflowStore as any).mockReturnValue(mockWorkflowStore);
-    const { invoke } = require('@tauri-apps/api/core');
-    invoke.mockClear();
+    vi.mocked(invoke).mockClear();
     Object.values(mockWorkflowStore).forEach(mock => {
       if (typeof mock === 'function') mock.mockClear();
     });
@@ -121,7 +121,7 @@ describe('Folder Creation Validation Bug Fix', () => {
       // 2. Location selection is valid (parent_id: null for root is OK for folders)
       // 3. validation_results in workflow data shows is_valid: true
       await waitFor(() => {
-        const nextButton = screen.getByText('Next');
+        const nextButton = screen.getByRole('button', { name: 'Next' });
         expect(nextButton).not.toBeDisabled();
       });
     });
@@ -153,7 +153,7 @@ describe('Folder Creation Validation Bug Fix', () => {
       render(<AssetCreationWizard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByText('Next');
+        const nextButton = screen.getByRole('button', { name: 'Next' });
         expect(nextButton).toBeDisabled();
       });
     });
@@ -186,7 +186,7 @@ describe('Folder Creation Validation Bug Fix', () => {
       render(<AssetCreationWizard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByText('Next');
+        const nextButton = screen.getByRole('button', { name: 'Next' });
         expect(nextButton).not.toBeDisabled();
       });
     });
@@ -222,7 +222,7 @@ describe('Folder Creation Validation Bug Fix', () => {
       render(<AssetCreationWizard />);
 
       await waitFor(() => {
-        const nextButton = screen.getByText('Next');
+        const nextButton = screen.getByRole('button', { name: 'Next' });
         expect(nextButton).toBeDisabled();
       });
     });

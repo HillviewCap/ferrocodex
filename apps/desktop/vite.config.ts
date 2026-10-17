@@ -33,5 +33,7 @@ export default defineConfig(async () => ({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
+    // Ant Design renders slowly under jsdom; the 5s default is too tight for CI runners
+    testTimeout: 15000,
   },
 }));

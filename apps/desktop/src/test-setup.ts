@@ -1,19 +1,22 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Browser API stubs below are plain functions/classes rather than vi.fn() so that
+// tests calling vi.resetAllMocks() can't wipe their implementations.
+
 // Mock window.matchMedia for Ant Design
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: (query: string) => ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
 });
 
 // Mock Tauri API
@@ -27,36 +30,30 @@ Object.defineProperty(window, 'prompt', {
   value: vi.fn(),
 });
 
-// Mock window.getComputedStyle for Ant Design components
+// Return the element's inline style instead of jsdom's real getComputedStyle, which
+// re-evaluates every injected Ant Design CSS rule on each call and is slow enough to
+// time tests out. Inline styles are still visible to toHaveStyle.
+const emptyStyle = document.createElement('div').style;
 Object.defineProperty(window, 'getComputedStyle', {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    getPropertyValue: vi.fn().mockReturnValue(''),
-  })),
+  value: (elt: Element) => (elt as HTMLElement)?.style ?? emptyStyle,
 });
 
-// Mock ResizeObserver for Ant Design
-Object.defineProperty(window, 'ResizeObserver', {
-  writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
-});
+class MockObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
 
-// Mock IntersectionObserver for Ant Design
-Object.defineProperty(window, 'IntersectionObserver', {
-  writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
-});
+// Mock ResizeObserver and IntersectionObserver for Ant Design
+Object.defineProperty(window, 'ResizeObserver', { writable: true, value: MockObserver });
+Object.defineProperty(window, 'IntersectionObserver', { writable: true, value: MockObserver });
 
 // Mock HTMLCanvasElement.getContext for Ant Design Charts
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   writable: true,
-  value: vi.fn(),
+  value: () => null,
 });

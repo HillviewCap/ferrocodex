@@ -37,11 +37,34 @@ describe('ChangeStatusModal', () => {
     return vi.mocked(invoke);
   };
 
+  // mockReset (not just clear) so unconsumed mockResolvedValueOnce values can't leak between tests
   beforeEach(async () => {
     vi.clearAllMocks();
     const invoke = await getMockInvoke();
+    invoke.mockReset();
     invoke.mockResolvedValue(['Approved', 'Archived']);
   });
+
+  const getSubmitButton = () => screen.getByRole('button', { name: 'Update Status' });
+
+  // Pick an option from the status Select. rc-select also renders a hidden
+  // accessibility list with the same text, so click the element inside the real option.
+  const selectStatus = async (status: string) => {
+    const select = await screen.findByRole('combobox');
+    await act(async () => {
+      fireEvent.mouseDown(select);
+    });
+    const option = await waitFor(() => {
+      const match = screen
+        .getAllByText(status)
+        .find(el => el.closest('.ant-select-item-option'));
+      expect(match).toBeDefined();
+      return match!;
+    });
+    await act(async () => {
+      fireEvent.click(option);
+    });
+  };
 
   it('renders modal with version information', async () => {
     await act(async () => {
@@ -134,29 +157,14 @@ describe('ChangeStatusModal', () => {
       render(<ChangeStatusModal {...defaultProps} />);
     });
     
-    await waitFor(() => {
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
-    });
-
-    const select = screen.getByRole('combobox');
-    await act(async () => {
-      fireEvent.mouseDown(select);
-    });
-    
-    await waitFor(() => {
-      const approvedOption = screen.getAllByText('Approved')[0];
-      act(() => {
-        fireEvent.click(approvedOption);
-      });
-    });
+    await selectStatus('Approved');
 
     const reasonInput = screen.getByPlaceholderText('Provide a reason for this status change...');
     await act(async () => {
       fireEvent.change(reasonInput, { target: { value: 'Ready for production' } });
     });
 
-    const submitButtons = screen.getAllByText('Update Status');
-    const submitButton = submitButtons[0];
+    const submitButton = getSubmitButton();
     await act(async () => {
       fireEvent.click(submitButton);
     });
@@ -170,7 +178,9 @@ describe('ChangeStatusModal', () => {
       });
     });
 
-    expect(defaultProps.onSuccess).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(defaultProps.onSuccess).toHaveBeenCalled();
+    });
   });
 
   it('handles submission error', async () => {
@@ -183,24 +193,9 @@ describe('ChangeStatusModal', () => {
       render(<ChangeStatusModal {...defaultProps} />);
     });
     
-    await waitFor(() => {
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
-    });
+    await selectStatus('Approved');
 
-    const select = screen.getByRole('combobox');
-    await act(async () => {
-      fireEvent.mouseDown(select);
-    });
-
-    await waitFor(() => {
-      const approvedOption = screen.getAllByText('Approved')[0];
-      act(() => {
-        fireEvent.click(approvedOption);
-      });
-    });
-
-    const submitButtons = screen.getAllByText('Update Status');
-    const submitButton = submitButtons[0];
+    const submitButton = getSubmitButton();
     await act(async () => {
       fireEvent.click(submitButton);
     });
@@ -279,9 +274,7 @@ describe('ChangeStatusModal', () => {
     });
     
     await waitFor(() => {
-      const submitButtons = screen.getAllByText('Update Status');
-    const submitButton = submitButtons[0];
-      expect(submitButton).toBeDisabled();
+      expect(getSubmitButton()).toBeDisabled();
     });
   });
 
@@ -295,30 +288,16 @@ describe('ChangeStatusModal', () => {
       render(<ChangeStatusModal {...defaultProps} />);
     });
     
-    await waitFor(() => {
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
-    });
+    await selectStatus('Approved');
 
-    const select = screen.getByRole('combobox');
-    await act(async () => {
-      fireEvent.mouseDown(select);
-    });
-
-    await waitFor(() => {
-      const approvedOption = screen.getAllByText('Approved')[0];
-      act(() => {
-        fireEvent.click(approvedOption);
-      });
-    });
-
-    const submitButtons = screen.getAllByText('Update Status');
-    const submitButton = submitButtons[0];
+    const submitButton = getSubmitButton();
     await act(async () => {
       fireEvent.click(submitButton);
     });
 
+    // Ant Design's confirmLoading puts the OK button into its loading state
     await waitFor(() => {
-      expect(submitButton).toHaveAttribute('disabled');
+      expect(submitButton).toHaveClass('ant-btn-loading');
     });
   });
 });

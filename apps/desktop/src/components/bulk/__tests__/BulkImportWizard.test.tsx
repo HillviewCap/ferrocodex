@@ -1,7 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BulkImportWizard from '../BulkImportWizard';
+import useBulkImportStore from '../../../store/bulk';
 
 // Mock the store
 vi.mock('../../../store/bulk', () => ({
@@ -23,7 +24,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Mock child components
 vi.mock('../ImportTemplateManager', () => ({
-  default: () => <div data-testid="template-manager">Template Manager</div>,
+  default: ({ visible }: { visible: boolean }) =>
+    visible ? <div data-testid="template-manager">Template Manager</div> : null,
 }));
 
 describe('BulkImportWizard', () => {
@@ -55,7 +57,7 @@ describe('BulkImportWizard', () => {
     // Try to proceed without entering session name
     await user.click(nextButton);
     
-    expect(screen.getByText('Please enter a session name')).toBeInTheDocument();
+    expect(await screen.findByText('Please enter a session name')).toBeInTheDocument();
   });
 
   test('validates session name length', async () => {
@@ -77,7 +79,7 @@ describe('BulkImportWizard', () => {
     const user = userEvent.setup();
     const mockCreateSession = vi.fn().mockResolvedValue({ id: 1 });
     
-    vi.mocked(require('../../../store/bulk').default).mockReturnValue({
+    vi.mocked(useBulkImportStore).mockReturnValue({
       isLoading: false,
       error: null,
       createSession: mockCreateSession,
@@ -85,7 +87,7 @@ describe('BulkImportWizard', () => {
       validateData: vi.fn(),
       startProcessing: vi.fn(),
       clearError: vi.fn(),
-    });
+    } as any);
 
     render(<BulkImportWizard {...mockProps} />);
     
@@ -95,13 +97,13 @@ describe('BulkImportWizard', () => {
     
     await user.type(sessionNameInput, 'Test Import Session');
     await user.click(importTypeSelect);
-    await user.click(screen.getByText('Assets'));
+    await user.click(await screen.findByTitle('Configurations'));
     await user.click(nextButton);
     
     await waitFor(() => {
       expect(mockCreateSession).toHaveBeenCalledWith({
         session_name: 'Test Import Session',
-        import_type: 'assets',
+        import_type: 'configurations',
         template_path: undefined,
       });
     });
@@ -111,7 +113,7 @@ describe('BulkImportWizard', () => {
     const user = userEvent.setup();
     const mockCreateSession = vi.fn().mockResolvedValue({ id: 1 });
     
-    vi.mocked(require('../../../store/bulk').default).mockReturnValue({
+    vi.mocked(useBulkImportStore).mockReturnValue({
       isLoading: false,
       error: null,
       createSession: mockCreateSession,
@@ -119,7 +121,7 @@ describe('BulkImportWizard', () => {
       validateData: vi.fn(),
       startProcessing: vi.fn(),
       clearError: vi.fn(),
-    });
+    } as any);
 
     render(<BulkImportWizard {...mockProps} />);
     
@@ -139,6 +141,8 @@ describe('BulkImportWizard', () => {
     const user = userEvent.setup();
     render(<BulkImportWizard {...mockProps} />);
     
+    expect(screen.queryByTestId('template-manager')).not.toBeInTheDocument();
+
     const browseButton = screen.getByRole('button', { name: /browse templates/i });
     await user.click(browseButton);
     
@@ -159,7 +163,7 @@ describe('BulkImportWizard', () => {
     const user = userEvent.setup();
     const mockCreateSession = vi.fn().mockResolvedValue({ id: 1 });
     
-    vi.mocked(require('../../../store/bulk').default).mockReturnValue({
+    vi.mocked(useBulkImportStore).mockReturnValue({
       isLoading: false,
       error: null,
       createSession: mockCreateSession,
@@ -167,7 +171,7 @@ describe('BulkImportWizard', () => {
       validateData: vi.fn(),
       startProcessing: vi.fn(),
       clearError: vi.fn(),
-    });
+    } as any);
 
     render(<BulkImportWizard {...mockProps} />);
     
@@ -193,7 +197,7 @@ describe('BulkImportWizard', () => {
     const mockUploadFile = vi.fn().mockResolvedValue({ total_items: 10, valid_items: 10, invalid_items: 0, errors: [] });
     const mockValidateData = vi.fn().mockResolvedValue({ is_valid: true, errors: [], warnings: [], preview_items: [] });
     
-    vi.mocked(require('../../../store/bulk').default).mockReturnValue({
+    vi.mocked(useBulkImportStore).mockReturnValue({
       isLoading: false,
       error: null,
       createSession: mockCreateSession,
@@ -201,7 +205,7 @@ describe('BulkImportWizard', () => {
       validateData: mockValidateData,
       startProcessing: vi.fn(),
       clearError: vi.fn(),
-    });
+    } as any);
 
     render(<BulkImportWizard {...mockProps} />);
     
@@ -214,8 +218,10 @@ describe('BulkImportWizard', () => {
       expect(screen.getByText('Upload CSV File')).toBeInTheDocument();
     });
     
-    // Mock file upload (simplified for testing)
+    const file = new File(['name,asset_type\nAsset1,Device'], 'test.csv', { type: 'text/csv' });
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file);
     await user.click(screen.getByRole('button', { name: /upload & continue/i }));
+    expect(mockUploadFile).toHaveBeenCalledWith(1, 'test.csv');
     
     await waitFor(() => {
       expect(screen.getByText('Data Validation')).toBeInTheDocument();

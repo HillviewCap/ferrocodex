@@ -136,9 +136,17 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    let values;
     try {
-      const values = await form.validateFields();
-      
+      values = await form.validateFields();
+    } catch {
+      return; // The form shows validation errors inline
+    }
+
+    // Show the progress step while uploading; it also renders the error state
+    setCurrentStep(2);
+
+    try {
       await uploadFirmware({
         assetId: assetId,
         vendor: values.vendor || null,
@@ -148,7 +156,6 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
         filePath: selectedFile.path
       });
 
-      setCurrentStep(2);
       message.success('Firmware uploaded successfully!');
       
       // Wait a moment before closing

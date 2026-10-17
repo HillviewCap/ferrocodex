@@ -108,7 +108,8 @@ describe('SecurityClassificationSelector', () => {
     expect(screen.getByText(/This classification level requires administrator approval/)).toBeInTheDocument();
   });
 
-  test('displays classification description when enabled', () => {
+  test('displays classification descriptions in the dropdown options', async () => {
+    const user = userEvent.setup();
     render(
       <SecurityClassificationSelector 
         onChange={mockOnChange}
@@ -120,10 +121,11 @@ describe('SecurityClassificationSelector', () => {
     // Use getAllByText since there may be multiple instances
     const confidentialTexts = screen.getAllByText('Confidential');
     expect(confidentialTexts.length).toBeGreaterThan(0);
-    
-    // Use getAllByText for description too since it appears multiple times
-    const descriptionTexts = screen.getAllByText(/Sensitive information requiring controlled access/);
-    expect(descriptionTexts.length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('combobox'));
+
+    expect(await screen.findByText('Sensitive information requiring controlled access')).toBeInTheDocument();
+    expect(screen.getByText('Highly sensitive information with limited access')).toBeInTheDocument();
   });
 
   test('shows access requirements when enabled', async () => {
@@ -205,7 +207,7 @@ describe('SecurityClassificationSelector', () => {
     expect(selectContainer).toHaveClass('ant-select-lg');
   });
 
-  test('displays selected classification details card', () => {
+  test('displays access requirements for the selected classification', () => {
     render(
       <SecurityClassificationSelector 
         onChange={mockOnChange}
@@ -215,17 +217,14 @@ describe('SecurityClassificationSelector', () => {
       />
     );
 
-    expect(screen.getByText('Selected Classification')).toBeInTheDocument();
     // Use getAllByText since there may be multiple instances
     const restrictedTexts = screen.getAllByText('Restricted');
     expect(restrictedTexts.length).toBeGreaterThan(0);
-    
-    // Use getAllByText for description too since it appears multiple times
-    const descriptionTexts = screen.getAllByText(/Highly sensitive information with limited access/);
-    expect(descriptionTexts.length).toBeGreaterThan(0);
-    
-    // Should show access requirements in the details card
-    const accessReqTexts = screen.getAllByText('Access Requirements:');
-    expect(accessReqTexts.length).toBeGreaterThan(0);
+
+    // The requirements panel renders below the select without opening the dropdown
+    expect(screen.getByText('Access Requirements:')).toBeInTheDocument();
+    expect(screen.getByText('Executive approval')).toBeInTheDocument();
+    expect(screen.getByText('Security clearance')).toBeInTheDocument();
+    expect(screen.getByText('Need-to-know basis')).toBeInTheDocument();
   });
 });

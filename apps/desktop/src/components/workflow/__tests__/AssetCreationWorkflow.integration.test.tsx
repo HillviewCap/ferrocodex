@@ -9,7 +9,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { message } from 'antd';
+import { message, Modal } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
 
 import { AssetCreationWizard } from '../AssetCreationWizard';
 import { useWorkflowStore } from '../../../store/workflow';
@@ -62,15 +63,19 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
   beforeEach(() => {
     (useWorkflowStore as any).mockReturnValue(mockWorkflowStore);
-    const { invoke } = require('@tauri-apps/api/core');
-    invoke.mockClear();
+    vi.mocked(invoke).mockReset();
     Object.values(mockWorkflowStore).forEach(mock => {
-      if (typeof mock === 'function') mock.mockClear();
+      if (typeof mock === 'function') mock.mockReset();
     });
+    mockWorkflowStore.currentWorkflow = null;
+    mockWorkflowStore.error = null;
+    mockWorkflowStore.lastSaveTime = null;
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    // Modal.confirm renders outside the React tree, so RTL cleanup doesn't remove it
+    Modal.destroyAll();
   });
 
   describe('Workflow Initialization', () => {
@@ -139,7 +144,7 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      const nextButton = screen.getByText('Next');
+      const nextButton = screen.getByRole('button', { name: 'Next' });
       await userEvent.click(nextButton);
 
       expect(mockWorkflowStore.nextStep).toHaveBeenCalled();
@@ -151,11 +156,11 @@ describe('AssetCreationWorkflow Integration Tests', () => {
         errors: [{ field: 'asset_name', message: 'Required', code: 'REQUIRED' }],
         warnings: [],
       });
-      mockWorkflowStore.canNavigateNext.mockReturnValue(false);
+      mockWorkflowStore.canNavigateNext.mockReturnValue(true);
 
       render(<AssetCreationWizard />);
 
-      const nextButton = screen.getByText('Next');
+      const nextButton = screen.getByRole('button', { name: 'Next' });
       await userEvent.click(nextButton);
 
       expect(mockWorkflowStore.nextStep).not.toHaveBeenCalled();
@@ -171,7 +176,7 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      const previousButton = screen.getByText('Previous');
+      const previousButton = screen.getByRole('button', { name: 'Previous' });
       await userEvent.click(previousButton);
 
       expect(mockWorkflowStore.previousStep).toHaveBeenCalled();
@@ -262,7 +267,7 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      expect(screen.getByText('Devices must be placed inside a folder for proper organization and security.')).toBeInTheDocument();
+      expect(screen.getByText('Device Placement Required')).toBeInTheDocument();
     });
 
     it('should allow root level placement for folder assets', async () => {
@@ -306,7 +311,19 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      expect(screen.getByText('Complete all required fields to proceed.')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockWorkflowStore.updateStep).toHaveBeenCalledWith(
+          'metadata_configuration',
+          expect.objectContaining({
+            validation_results: expect.objectContaining({
+              is_valid: false,
+              errors: expect.arrayContaining([
+                expect.objectContaining({ field: 'metadata_schema_id', code: 'REQUIRED' }),
+              ]),
+            }),
+          })
+        );
+      });
     });
 
     it('should validate metadata values against schema', async () => {
@@ -364,34 +381,18 @@ describe('AssetCreationWorkflow Integration Tests', () => {
     });
 
     it('should validate naming compliance', async () => {
-      // Mock naming validation with compliance issues
-      const { invoke } = require('@tauri-apps/api/core');
-      invoke.mockResolvedValue({
-        is_valid: false,
-        errors: [{ 
-          field: 'asset_name', 
-          message: 'Name contains prohibited characters', 
-          code: 'PROHIBITED_CHARACTERS' 
-        }],
-        warnings: [],
-      });
+      mockWorkflowStore.currentWorkflow.data.security_classification = 'Internal';
+      mockWorkflowStore.currentWorkflow.data.asset_name = 'Test<Device>';
 
       render(<AssetCreationWizard />);
 
       expect(screen.getByText('Naming Compliance Issue')).toBeInTheDocument();
+      expect(screen.getByText('Remove characters: < > : " / \\ | ? *')).toBeInTheDocument();
     });
 
     it('should show validation passed when all requirements are met', async () => {
       mockWorkflowStore.currentWorkflow.data.security_classification = 'Internal';
       mockWorkflowStore.validateCurrentStep.mockReturnValue({
-        is_valid: true,
-        errors: [],
-        warnings: [],
-      });
-
-      // Mock successful naming validation
-      const { invoke } = require('@tauri-apps/api/core');
-      invoke.mockResolvedValue({
         is_valid: true,
         errors: [],
         warnings: [],
@@ -425,6 +426,7 @@ describe('AssetCreationWorkflow Integration Tests', () => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+      mockWorkflowStore.canNavigateNext.mockReturnValue(true);
     });
 
     it('should complete workflow and create asset', async () => {
@@ -439,7 +441,8 @@ describe('AssetCreationWorkflow Integration Tests', () => {
       const onComplete = vi.fn();
       render(<AssetCreationWizard onComplete={onComplete} />);
 
-      const createButton = screen.getByText('Create Asset');
+      const createButtons = screen.getAllByRole('button', { name: 'Create Asset' });
+      const createButton = createButtons[createButtons.length - 1];
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -458,7 +461,8 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      const createButton = screen.getByText('Create Asset');
+      const createButtons = screen.getAllByRole('button', { name: 'Create Asset' });
+      const createButton = createButtons[createButtons.length - 1];
       await userEvent.click(createButton);
 
       expect(mockWorkflowStore.completeWorkflow).not.toHaveBeenCalled();
@@ -535,10 +539,10 @@ describe('AssetCreationWorkflow Integration Tests', () => {
     it('should show confirmation dialog when cancelling', async () => {
       render(<AssetCreationWizard />);
 
-      const cancelButton = screen.getByText('Cancel');
+      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await userEvent.click(cancelButton);
 
-      expect(screen.getByText('Cancel Asset Creation')).toBeInTheDocument();
+      expect(await screen.findByRole('dialog', { name: 'Cancel Asset Creation' })).toBeInTheDocument();
       expect(screen.getByText('Are you sure you want to cancel? All progress will be lost.')).toBeInTheDocument();
     });
 
@@ -548,10 +552,10 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard onCancel={onCancel} />);
 
-      const cancelButton = screen.getByText('Cancel');
+      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await userEvent.click(cancelButton);
 
-      const confirmButton = screen.getByText('Yes, Cancel');
+      const confirmButton = await screen.findByRole('button', { name: 'Yes, Cancel' });
       await userEvent.click(confirmButton);
 
       await waitFor(() => {
@@ -573,6 +577,16 @@ describe('AssetCreationWorkflow Integration Tests', () => {
     });
 
     it('should handle step navigation errors', async () => {
+      mockWorkflowStore.currentWorkflow = {
+        id: 'test-workflow-1',
+        workflow_type: 'asset_creation',
+        current_step: 'asset_type_selection',
+        user_id: 1,
+        status: 'Active',
+        data: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
       mockWorkflowStore.nextStep.mockRejectedValue(new Error('Navigation failed'));
       mockWorkflowStore.validateCurrentStep.mockReturnValue({
         is_valid: true,
@@ -583,7 +597,7 @@ describe('AssetCreationWorkflow Integration Tests', () => {
 
       render(<AssetCreationWizard />);
 
-      const nextButton = screen.getByText('Next');
+      const nextButton = screen.getByRole('button', { name: 'Next' });
       await userEvent.click(nextButton);
 
       await waitFor(() => {

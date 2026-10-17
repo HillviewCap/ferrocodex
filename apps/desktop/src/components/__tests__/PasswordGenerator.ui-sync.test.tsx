@@ -12,26 +12,11 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 // Mock auth store
+// Tests can set authState.token to simulate a missing session
+const authState = vi.hoisted(() => ({ token: 'mock-token' as string | null }));
 vi.mock('../../store/auth', () => ({
-  default: () => ({
-    token: 'mock-token',
-  }),
+  default: () => authState,
 }));
-
-// Mock matchMedia for Ant Design responsive observer
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(), // Deprecated
-    removeListener: vi.fn(), // Deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
 
 // Mock PasswordStrengthIndicator component
 vi.mock('../PasswordStrengthIndicator', () => ({
@@ -66,6 +51,12 @@ const AppWrapper = ({ children }: { children: React.ReactNode }) => (
   <App>{children}</App>
 );
 
+// Each switch shares an ant-space with its visible label text
+const getSwitch = (label: string) =>
+  screen.getByText(label).closest('.ant-space')!.querySelector<HTMLElement>('[role="switch"]')!;
+
+// Each test mounts a full antd Modal and waits on async generate + analyze round trips,
+// which can exceed the 5s default when the suite runs files in parallel
 describe('PasswordGenerator UI Synchronization Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,6 +76,7 @@ describe('PasswordGenerator UI Synchronization Tests', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    authState.token = 'mock-token';
   });
 
   describe('Modal Opening State Synchronization', () => {
@@ -129,11 +121,11 @@ describe('PasswordGenerator UI Synchronization Tests', () => {
       });
 
       // Check that all toggle switches reflect the default configuration
-      const uppercaseSwitch = screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch');
-      const lowercaseSwitch = screen.getByText('Lowercase (a-z)').previousElementSibling?.querySelector('.ant-switch');
-      const numbersSwitch = screen.getByText('Numbers (0-9)').previousElementSibling?.querySelector('.ant-switch');
-      const specialSwitch = screen.getByText('Special (!@#$...)').previousElementSibling?.querySelector('.ant-switch');
-      const ambiguousSwitch = screen.getByText('Exclude ambiguous characters').previousElementSibling?.querySelector('.ant-switch');
+      const uppercaseSwitch = getSwitch('Uppercase (A-Z)');
+      const lowercaseSwitch = getSwitch('Lowercase (a-z)');
+      const numbersSwitch = getSwitch('Numbers (0-9)');
+      const specialSwitch = getSwitch('Special (!@#$...)');
+      const ambiguousSwitch = getSwitch('Exclude ambiguous characters');
 
       // All switches should be checked according to defaultPasswordRequest
       expect(uppercaseSwitch).toHaveClass('ant-switch-checked'); // true in default
@@ -207,7 +199,7 @@ describe('PasswordGenerator UI Synchronization Tests', () => {
       });
 
       // Verify UI switches match the generation request
-      const uppercaseSwitch = screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch');
+      const uppercaseSwitch = getSwitch('Uppercase (A-Z)');
       expect(uppercaseSwitch).toHaveClass('ant-switch-checked');
     });
 
@@ -247,11 +239,11 @@ describe('PasswordGenerator UI Synchronization Tests', () => {
       });
 
       // Verify all switches are in default state
-      const uppercaseSwitch = screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch');
-      const lowercaseSwitch = screen.getByText('Lowercase (a-z)').previousElementSibling?.querySelector('.ant-switch');
-      const numbersSwitch = screen.getByText('Numbers (0-9)').previousElementSibling?.querySelector('.ant-switch');
-      const specialSwitch = screen.getByText('Special (!@#$...)').previousElementSibling?.querySelector('.ant-switch');
-      const ambiguousSwitch = screen.getByText('Exclude ambiguous characters').previousElementSibling?.querySelector('.ant-switch');
+      const uppercaseSwitch = getSwitch('Uppercase (A-Z)');
+      const lowercaseSwitch = getSwitch('Lowercase (a-z)');
+      const numbersSwitch = getSwitch('Numbers (0-9)');
+      const specialSwitch = getSwitch('Special (!@#$...)');
+      const ambiguousSwitch = getSwitch('Exclude ambiguous characters');
 
       expect(uppercaseSwitch).toHaveClass('ant-switch-checked');
       expect(lowercaseSwitch).toHaveClass('ant-switch-checked');
@@ -377,12 +369,7 @@ describe('PasswordGenerator UI Synchronization Tests', () => {
     });
 
     it('should handle authentication token issues during modal opening', async () => {
-      // Mock no token
-      vi.doMock('../../store/auth', () => ({
-        default: () => ({
-          token: null,
-        }),
-      }));
+      authState.token = null;
 
       render(
         <AppWrapper>

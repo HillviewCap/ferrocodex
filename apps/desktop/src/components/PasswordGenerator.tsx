@@ -265,6 +265,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
               <Tooltip title={showPassword ? "Hide password" : "Show password"}>
                 <Button
                   type="text"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   icon={showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                   onClick={() => setShowPassword(!showPassword)}
                 />
@@ -272,6 +273,7 @@ const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
               <Tooltip title="Copy to clipboard">
                 <Button
                   type="text"
+                  aria-label="Copy to clipboard"
                   icon={<CopyOutlined />}
                   onClick={handleCopyPassword}
                   disabled={!generatedPassword}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 // JSON Logic implementation for conditional rules
 interface ConditionalRule {
@@ -179,6 +179,13 @@ export const ConditionalLogicProvider: React.FC<ConditionalLogicProviderProps> =
     // Sort rules by priority (higher priority first)
     const sortedRules = [...rules].sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
+    // Fields targeted by a 'show' rule are hidden unless one of those rules matches
+    sortedRules.forEach(rule => {
+      rule.actions
+        .filter(action => action.type === 'show')
+        .forEach(action => action.targetFields.forEach(fieldName => newState.hiddenFields.add(fieldName)));
+    });
+
     sortedRules.forEach(rule => {
       try {
         const conditionResult = evaluateJsonLogic(rule.condition, formValues);
@@ -227,11 +234,12 @@ export const ConditionalLogicProvider: React.FC<ConditionalLogicProviderProps> =
     return state.requiredFields.has(fieldName);
   };
 
-  const addRules = (newRules: ConditionalRule[]) => {
+  // Stable identities so consumers can list these in effect dependencies
+  const addRules = useCallback((newRules: ConditionalRule[]) => {
     setRules(prevRules => [...prevRules, ...newRules]);
-  };
+  }, []);
 
-  const clearRules = () => {
+  const clearRules = useCallback(() => {
     setRules([]);
     setState({
       hiddenFields: new Set(),
@@ -239,7 +247,7 @@ export const ConditionalLogicProvider: React.FC<ConditionalLogicProviderProps> =
       requiredFields: new Set(),
       fieldValues: {}
     });
-  };
+  }, []);
 
   const contextValue: ConditionalLogicContextType = {
     state,

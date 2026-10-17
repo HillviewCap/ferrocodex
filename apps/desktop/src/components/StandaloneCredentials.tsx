@@ -478,16 +478,19 @@ const StandaloneCredentials: React.FC = () => {
           <Row gutter={16}>
             <Col span={6}>
               <Card title="Categories" size="small">
-                <Tree
-                  showIcon
-                  defaultExpandAll
-                  treeData={renderCategoryTree()}
-                  onSelect={(selectedKeys) => {
-                    const categoryId = selectedKeys.length > 0 ? parseInt(selectedKeys[0] as string) : null;
-                    setSelectedCategory(categoryId);
-                    searchCredentials({ category_id: categoryId || undefined });
-                  }}
-                />
+                {/* defaultExpandAll only applies on mount, so wait for categories to load */}
+                {categories.length > 0 && (
+                  <Tree
+                    showIcon
+                    defaultExpandAll
+                    treeData={renderCategoryTree()}
+                    onSelect={(selectedKeys) => {
+                      const categoryId = selectedKeys.length > 0 ? parseInt(selectedKeys[0] as string) : null;
+                      setSelectedCategory(categoryId);
+                      searchCredentials({ category_id: categoryId || undefined });
+                    }}
+                  />
+                )}
                 <Divider />
                 <Button 
                   block 

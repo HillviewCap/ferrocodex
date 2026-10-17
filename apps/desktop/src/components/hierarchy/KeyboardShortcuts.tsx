@@ -96,8 +96,9 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
     if (!enabled) return;
 
     // Check if we're in an input field
-    const target = event.target as HTMLElement;
-    if (target && (
+    // The target may be the document itself, which has no closest()
+    const target = event.target;
+    if (target instanceof HTMLElement && (
       target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||
       target.contentEditable === 'true' ||
@@ -172,6 +173,41 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         break;
       }
 
+      // Shift+Arrow for range selection (must precede the plain arrow cases)
+      case event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown'): {
+        event.preventDefault();
+        const flatList = getFlatAssetList();
+        const currentAssetId = selectedAsset?.id || keyboardState.last_focused_asset;
+        const anchorId = keyboardState.selection_anchor;
+        
+        if (!currentAssetId || !anchorId) {
+          // No anchor set, just navigate
+          navigateAsset(event.key === 'ArrowDown' ? 'down' : 'up');
+          return;
+        }
+
+        const currentIndex = flatList.findIndex(asset => asset.id === currentAssetId);
+        const anchorIndex = flatList.findIndex(asset => asset.id === anchorId);
+        
+        if (currentIndex === -1 || anchorIndex === -1) return;
+
+        // Calculate range
+        const nextIndex = event.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
+        if (nextIndex < 0 || nextIndex >= flatList.length) return;
+
+        const rangeStart = Math.min(anchorIndex, nextIndex);
+        const rangeEnd = Math.max(anchorIndex, nextIndex);
+        const rangeAssetIds = flatList.slice(rangeStart, rangeEnd + 1).map(asset => asset.id);
+
+        selectAll(rangeAssetIds, 'manual');
+        
+        // Move focus to next asset
+        const nextAsset = flatList[nextIndex];
+        onAssetSelect?.(nextAsset);
+        setLastFocusedAsset(nextAsset.id);
+        break;
+      }
+
       // Navigate Up (Arrow Up)
       case event.key === 'ArrowUp': {
         event.preventDefault();
@@ -217,41 +253,6 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
           // Toggle selection handled by bulk operations store
           message.info(isSelected(focusedAssetId) ? 'Asset deselected' : 'Asset selected');
         }
-        break;
-      }
-
-      // Shift+Arrow for range selection
-      case event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown'): {
-        event.preventDefault();
-        const flatList = getFlatAssetList();
-        const currentAssetId = selectedAsset?.id || keyboardState.last_focused_asset;
-        const anchorId = keyboardState.selection_anchor;
-        
-        if (!currentAssetId || !anchorId) {
-          // No anchor set, just navigate
-          navigateAsset(event.key === 'ArrowDown' ? 'down' : 'up');
-          return;
-        }
-
-        const currentIndex = flatList.findIndex(asset => asset.id === currentAssetId);
-        const anchorIndex = flatList.findIndex(asset => asset.id === anchorId);
-        
-        if (currentIndex === -1 || anchorIndex === -1) return;
-
-        // Calculate range
-        const nextIndex = event.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
-        if (nextIndex < 0 || nextIndex >= flatList.length) return;
-
-        const rangeStart = Math.min(anchorIndex, nextIndex);
-        const rangeEnd = Math.max(anchorIndex, nextIndex);
-        const rangeAssetIds = flatList.slice(rangeStart, rangeEnd + 1).map(asset => asset.id);
-
-        selectAll(rangeAssetIds, 'manual');
-        
-        // Move focus to next asset
-        const nextAsset = flatList[nextIndex];
-        onAssetSelect?.(nextAsset);
-        setLastFocusedAsset(nextAsset.id);
         break;
       }
 

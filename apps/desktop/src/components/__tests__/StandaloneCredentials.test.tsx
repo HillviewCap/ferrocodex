@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
+import { App } from 'antd';
 import StandaloneCredentials from '../StandaloneCredentials';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
@@ -40,9 +41,28 @@ vi.mock('../PasswordInput', () => ({
   ),
 }));
 
+// The component uses App.useApp() for messages, so render it inside <App> as the real app does
+const renderComponent = () => render(
+  <App>
+    <StandaloneCredentials />
+  </App>
+);
+
+// Role/label queries over the whole page (table, tree, modals) are slow in jsdom,
+// so scope them to the element under test
+const findCreateModal = async () =>
+  (await screen.findByText('Create Standalone Credential')).closest('.ant-modal') as HTMLElement;
+
+// First mounts of the page and the create modal pay Ant Design's style-generation cost
+const SLOW_TEST_TIMEOUT = 20000;
+
+const rowActionButton = (row: HTMLElement, icon: string) =>
+  row.querySelector(`.anticon-${icon}`)?.closest('button') as HTMLElement | null;
+
 describe('StandaloneCredentials', () => {
   const mockInvoke = vi.mocked(invoke);
-  const mockAuthStore = { token: 'test-token' };
+  // createCredential needs the user id for created_by
+  const mockAuthStore = { token: 'test-token', user: { id: 1, username: 'testuser' } };
   
   const mockCategories = [
     {
@@ -56,6 +76,7 @@ describe('StandaloneCredentials', () => {
         created_at: '2024-01-01',
       },
       children: [],
+      credential_count: 1,
     },
     {
       category: {
@@ -79,8 +100,10 @@ describe('StandaloneCredentials', () => {
             created_at: '2024-01-01',
           },
           children: [],
+          credential_count: 0,
         },
       ],
+      credential_count: 1,
     },
   ];
 
@@ -134,6 +157,8 @@ describe('StandaloneCredentials', () => {
           return Promise.resolve({
             credentials: mockCredentials,
             total_count: mockCredentials.length,
+            page: 1,
+            page_size: 50,
           });
         case 'create_standalone_credential':
           return Promise.resolve({
@@ -157,7 +182,7 @@ describe('StandaloneCredentials', () => {
   });
 
   it('renders standalone credentials interface', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     expect(screen.getByText('Vault')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search credentials...')).toBeInTheDocument();
@@ -168,27 +193,22 @@ describe('StandaloneCredentials', () => {
       expect(screen.getByText('Jump Hosts')).toBeInTheDocument();
       expect(screen.getByText('Databases')).toBeInTheDocument();
     });
-  });
+  }, SLOW_TEST_TIMEOUT);
 
   it('displays categories in tree structure', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     await waitFor(() => {
       expect(screen.getByText('Jump Hosts')).toBeInTheDocument();
       expect(screen.getByText('Databases')).toBeInTheDocument();
     });
     
-    // Expand Databases to see subcategory
-    const databasesNode = screen.getByText('Databases');
-    fireEvent.click(databasesNode);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Production')).toBeInTheDocument();
-    });
+    // The tree is expanded by default, so subcategories are visible without clicking
+    expect(screen.getByText('Production')).toBeInTheDocument();
   });
 
   it('displays credentials list', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     await waitFor(() => {
       expect(screen.getByText('Test DB Password')).toBeInTheDocument();
@@ -203,78 +223,83 @@ describe('StandaloneCredentials', () => {
   });
 
   it('opens create credential modal', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     const newCredentialBtn = screen.getByRole('button', { name: /add credential/i });
     fireEvent.click(newCredentialBtn);
     
-    await waitFor(() => {
-      expect(screen.getByText('Create Standalone Credential')).toBeInTheDocument();
-      expect(screen.getByLabelText('Name')).toBeInTheDocument();
-      expect(screen.getByLabelText('Description')).toBeInTheDocument();
-      expect(screen.getByLabelText('Type')).toBeInTheDocument();
-      expect(screen.getByLabelText('Category')).toBeInTheDocument();
-    });
-  });
+    const modal = await findCreateModal();
+    expect(within(modal).getByLabelText('Name')).toBeInTheDocument();
+    expect(within(modal).getByLabelText('Description')).toBeInTheDocument();
+    expect(within(modal).getByLabelText('Type')).toBeInTheDocument();
+    expect(within(modal).getByLabelText('Category')).toBeInTheDocument();
+  }, SLOW_TEST_TIMEOUT);
 
   it('creates a new credential', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     // Open modal
     const newCredentialBtn = screen.getByRole('button', { name: /add credential/i });
     fireEvent.click(newCredentialBtn);
     
-    await waitFor(() => {
-      expect(screen.getByText('Create Standalone Credential')).toBeInTheDocument();
-    });
+    const modal = await findCreateModal();
     
     // Fill form
-    fireEvent.change(screen.getByLabelText('Name'), { 
+    fireEvent.change(within(modal).getByLabelText('Name'), { 
       target: { value: 'New Test Credential' } 
     });
-    fireEvent.change(screen.getByLabelText('Description'), { 
+    fireEvent.change(within(modal).getByLabelText('Description'), { 
       target: { value: 'New test description' } 
     });
+
+    // Type is required; pick Password from the Select
+    fireEvent.mouseDown(within(modal).getByLabelText('Type'));
+    const passwordOption = await waitFor(() => {
+      const option = document.querySelector('.ant-select-item-option[title="Password"]')
+        ?? Array.from(document.querySelectorAll('.ant-select-item-option'))
+          .find(el => el.textContent?.trim() === 'Password');
+      expect(option).toBeTruthy();
+      return option as HTMLElement;
+    });
+    fireEvent.click(passwordOption);
     
     // Use password input
-    const passwordInput = screen.getByTestId('password-input');
+    const passwordInput = within(modal).getByTestId('password-input');
     fireEvent.change(passwordInput, { target: { value: 'test-password' } });
     
-    // Submit form
-    const createBtn = screen.getByRole('button', { name: 'Create' });
-    fireEvent.click(createBtn);
+    // Submit form (the modal uses Ant Design's default OK button)
+    fireEvent.click(within(modal).getByText('OK').closest('button')!);
     
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('create_standalone_credential', {
         token: 'test-token',
-        request: expect.objectContaining({
+        credentialRequest: expect.objectContaining({
           name: 'New Test Credential',
           description: 'New test description',
           credential_type: 'Password',
           value: 'test-password',
+          created_by: 1,
         }),
       });
     });
-  });
+  }, SLOW_TEST_TIMEOUT);
 
   it('filters credentials by search query', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     await waitFor(() => {
       expect(screen.getByText('Test DB Password')).toBeInTheDocument();
     });
     
-    // Search for credentials
+    // Search runs when the filter form is submitted
     const searchInput = screen.getByPlaceholderText('Search credentials...');
     fireEvent.change(searchInput, { target: { value: 'database' } });
-    
-    // Add a small delay for debounce
-    await new Promise(resolve => setTimeout(resolve, 600));
+    fireEvent.click(screen.getByText('Filter').closest('button')!);
     
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('search_credentials', {
         token: 'test-token',
-        request: expect.objectContaining({
+        searchRequest: expect.objectContaining({
           query: 'database',
         }),
       });
@@ -282,7 +307,7 @@ describe('StandaloneCredentials', () => {
   });
 
   it('filters credentials by category', async () => {
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     await waitFor(() => {
       expect(screen.getByText('Jump Hosts')).toBeInTheDocument();
@@ -295,38 +320,41 @@ describe('StandaloneCredentials', () => {
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('search_credentials', {
         token: 'test-token',
-        request: expect.objectContaining({
+        searchRequest: expect.objectContaining({
           category_id: 1,
         }),
       });
     });
   });
 
-  it('displays credential details when clicked', async () => {
-    render(<StandaloneCredentials />);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Test DB Password')).toBeInTheDocument();
-    });
-    
-    // Mock get_standalone_credential response
-    mockInvoke.mockImplementation((command: string, args: any) => {
-      if (command === 'get_standalone_credential' && args.credentialId === 1) {
-        return Promise.resolve(mockCredentials[0]);
+  it('decrypts and reveals a credential value when View is clicked', async () => {
+    const baseImpl = mockInvoke.getMockImplementation()!;
+    mockInvoke.mockImplementation((command: string, args?: any) => {
+      if (command === 'decrypt_standalone_credential' && args?.credentialId === 1) {
+        return Promise.resolve('s3cret-value');
       }
-      return Promise.resolve({});
+      return baseImpl(command, args);
     });
+
+    renderComponent();
     
-    // Click on a credential
-    const credential = screen.getByText('Test DB Password');
-    fireEvent.click(credential);
+    const row = (await screen.findByText('Test DB Password')).closest('tr')!;
+    
+    fireEvent.click(rowActionButton(row, 'eye')!);
     
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith('get_standalone_credential', {
+      expect(mockInvoke).toHaveBeenCalledWith('decrypt_standalone_credential', {
         token: 'test-token',
         credentialId: 1,
       });
     });
+
+    // Once decrypted, a Copy action appears and the value is shown in the row's expanded area
+    await waitFor(() => {
+      expect(rowActionButton(row, 'copy')).toBeInTheDocument();
+    });
+    fireEvent.click(row.querySelector('.ant-table-row-expand-icon')!);
+    expect(await screen.findByDisplayValue('s3cret-value')).toBeInTheDocument();
   });
 
   it('handles empty credentials list', async () => {
@@ -335,6 +363,8 @@ describe('StandaloneCredentials', () => {
         return Promise.resolve({
           credentials: [],
           total_count: 0,
+          page: 1,
+          page_size: 50,
         });
       }
       if (command === 'get_credential_categories') {
@@ -343,7 +373,7 @@ describe('StandaloneCredentials', () => {
       return Promise.resolve({});
     });
     
-    render(<StandaloneCredentials />);
+    renderComponent();
     
     await waitFor(() => {
       expect(screen.getByText(/no credentials found/i)).toBeInTheDocument();

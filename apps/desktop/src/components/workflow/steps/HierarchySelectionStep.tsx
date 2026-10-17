@@ -4,6 +4,7 @@ import { FolderOutlined, HomeOutlined } from '@ant-design/icons';
 import { BaseStepProps, HierarchySelectionData } from '../../../types/workflow';
 import { AssetHierarchyPicker } from '../../hierarchy/AssetHierarchyPicker';
 import { useWorkflowStore } from '../../../store/workflow';
+import { useHierarchyData } from '../../../store/hierarchy';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -14,6 +15,7 @@ export const HierarchySelectionStep: React.FC<BaseStepProps> = ({
   onValidation
 }) => {
   const { updateStep } = useWorkflowStore();
+  const hierarchyData = useHierarchyData();
   const [localData, setLocalData] = useState<Partial<HierarchySelectionData>>({
     parent_id: data.parent_id,
     parent_path: data.parent_path
@@ -106,6 +108,7 @@ export const HierarchySelectionStep: React.FC<BaseStepProps> = ({
 
       <Card style={{ marginBottom: '24px' }}>
         <AssetHierarchyPicker
+          hierarchyData={hierarchyData}
           value={localData.parent_id}
           onChange={handleParentSelect}
           allowRoot={data.asset_type === 'Folder'}

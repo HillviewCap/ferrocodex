@@ -154,7 +154,7 @@ describe('BranchManagement', () => {
 
   const renderWithApp = (component: React.ReactElement) => {
     return render(
-      <App message={mockMessage as any}>
+      <App>
         {component}
       </App>
     );
@@ -162,6 +162,8 @@ describe('BranchManagement', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The component reads message from App.useApp(); route it to the spies
+    vi.spyOn(App, 'useApp').mockReturnValue({ message: mockMessage } as any);
     mockBranchStore.branchVersions = {};
     mockAssetStore.versions = [];
     (invoke as any).mockResolvedValue(testBranches);
@@ -171,7 +173,7 @@ describe('BranchManagement', () => {
     renderWithApp(<BranchManagement asset={testAsset} />);
     
     await waitFor(() => {
-      expect(screen.getByText('Branch Management')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Branch Management/ })).toBeInTheDocument();
       expect(screen.getByText(`Manage configuration branches for ${testAsset.name}`)).toBeInTheDocument();
     });
   });
@@ -191,19 +193,12 @@ describe('BranchManagement', () => {
     renderWithApp(<BranchManagement asset={testAsset} />);
     
     await waitFor(() => {
-      // Find the statistics cards
-      const cards = screen.getAllByRole('article'); // Ant Design cards have role="article"
-      expect(cards).toHaveLength(3);
-      
-      // Check for the statistic values
-      const activeCount = screen.getByText('Active Branches').closest('div')?.parentElement;
-      expect(activeCount).toHaveTextContent('1'); // 1 active branch in test data
-      
-      const totalCount = screen.getByText('Total Branches').closest('div')?.parentElement;
-      expect(totalCount).toHaveTextContent('2'); // 2 total branches in test data
-      
-      const versionCount = screen.getByText('Total Versions').closest('div')?.parentElement;
-      expect(versionCount).toHaveTextContent('3'); // 3 versions from asset
+      // Each statistic is its own card: value followed by label
+      const statCard = (label: string) => screen.getByText(label).closest('.ant-card');
+
+      expect(statCard('Active Branches')).toHaveTextContent(/^1Active Branches$/); // 1 active branch in test data
+      expect(statCard('Total Branches')).toHaveTextContent(/^2Total Branches$/); // 2 total branches in test data
+      expect(statCard('Total Versions')).toHaveTextContent(/^3Total Versions$/); // 3 versions from asset
     });
   });
 
@@ -369,7 +364,7 @@ describe('BranchManagement', () => {
       expect(screen.getByTestId('export-modal')).toBeInTheDocument();
     });
     
-    fireEvent.click(screen.getByText('Export'));
+    fireEvent.click(within(screen.getByTestId('export-modal')).getByText('Export'));
     
     await waitFor(() => {
       expect(mockMessage.success).toHaveBeenCalledWith(
@@ -449,7 +444,7 @@ describe('BranchManagement', () => {
     const treeViewButton = screen.getByText('Tree View');
     fireEvent.click(treeViewButton);
     
-    expect(screen.getByText('This view shows branches organized by their parent configuration version')).toBeInTheDocument();
+    expect(screen.getByText(/This view shows branches organized by their parent configuration version/)).toBeInTheDocument();
     expect(screen.getByLabelText('Branch relationship tree')).toBeInTheDocument();
   });
 

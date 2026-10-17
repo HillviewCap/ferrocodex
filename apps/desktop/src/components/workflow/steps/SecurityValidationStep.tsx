@@ -57,7 +57,8 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
     }
 
     const isValid = errors.length === 0;
-    setLocalData(prev => ({ ...prev, validation_passed: isValid }));
+    // Keep the same object when unchanged; a new one would re-trigger this effect forever
+    setLocalData(prev => prev.validation_passed === isValid ? prev : { ...prev, validation_passed: isValid });
     onValidation?.(isValid, errors);
   };
 

@@ -203,7 +203,12 @@ const FirmwareAnalysis: React.FC<FirmwareAnalysisProps> = ({ firmwareId }) => {
   if (loading) {
     return (
       <Card>
-        <Spin tip="Loading analysis results..." />
+        <div style={{ textAlign: 'center', padding: '32px' }}>
+          <Spin />
+          <div style={{ marginTop: '16px' }}>
+            <Text type="secondary">Loading analysis results...</Text>
+          </div>
+        </div>
       </Card>
     );
   }

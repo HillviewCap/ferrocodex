@@ -264,19 +264,19 @@ describe('useAuthStore', () => {
       const { result } = renderHook(() => useAuthStore());
 
       act(() => {
-        result.current.token = 'expired-token';
-        result.current.user = mockUser;
-        result.current.isAuthenticated = true;
+        useAuthStore.setState({ token: 'expired-token', user: mockUser, isAuthenticated: true });
       });
 
       await act(async () => {
         await result.current.checkSession();
       });
 
+      expect(invoke).toHaveBeenCalledWith('check_session', { token: 'expired-token' });
       expect(result.current.user).toBeNull();
       expect(result.current.token).toBeNull();
       expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.error).toBe(errorMessage);
+      // An expired session is expected, so checkSession deliberately doesn't surface an error
+      expect(result.current.error).toBeNull();
     });
 
     it('should skip session check if no token', async () => {

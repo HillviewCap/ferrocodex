@@ -1,7 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ConfigurationHistoryView from '../ConfigurationHistoryView';
-import { AssetInfo } from '../../types/assets';
+import { AssetInfo, ConfigurationVersionInfo } from '../../types/assets';
+import useAssetStore from '../../store/assets';
+import useBranchStore from '../../store/branches';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -75,11 +77,39 @@ describe('ConfigurationHistoryView', () => {
 
   const mockOnBack = vi.fn();
 
+  const makeVersion = (id: number): ConfigurationVersionInfo => ({
+    id,
+    asset_id: 1,
+    version_number: `v${id}`,
+    file_name: 'config.json',
+    file_size: 1024,
+    content_hash: `hash${id}`,
+    author: 1,
+    author_username: 'john_doe',
+    notes: '',
+    status: 'Draft',
+    created_at: '2023-01-01T12:00:00Z'
+  });
+
+  const mockAssetStore = (overrides: Record<string, unknown> = {}) => {
+    vi.mocked(useAssetStore).mockReturnValue({
+      versions: [],
+      versionsLoading: false,
+      error: null,
+      fetchVersions: vi.fn(),
+      clearError: vi.fn(),
+      ...overrides
+    } as any);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssetStore();
   });
 
   it('renders asset information correctly', () => {
+    // The version count comes from the fetched version list
+    mockAssetStore({ versions: [makeVersion(1), makeVersion(2), makeVersion(3)] });
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
     const testAssetElements = screen.getAllByText('Test Asset');
@@ -111,17 +141,7 @@ describe('ConfigurationHistoryView', () => {
   });
 
   it('shows loading state when versions are loading', () => {
-    const useAssetStore = vi.fn(() => ({
-      versions: [],
-      versionsLoading: true,
-      error: null,
-      fetchVersions: vi.fn(),
-      clearError: vi.fn()
-    }));
-
-    vi.doMock('../../store/assets', () => ({
-      default: useAssetStore
-    }));
+    mockAssetStore({ versionsLoading: true });
 
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
@@ -130,18 +150,6 @@ describe('ConfigurationHistoryView', () => {
   });
 
   it('shows empty state when no versions exist', () => {
-    const useAssetStore = vi.fn(() => ({
-      versions: [],
-      versionsLoading: false,
-      error: null,
-      fetchVersions: vi.fn(),
-      clearError: vi.fn()
-    }));
-
-    vi.doMock('../../store/assets', () => ({
-      default: useAssetStore
-    }));
-
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
     const noVersionHistoryElements = screen.getAllByText('No Version History');
@@ -151,32 +159,7 @@ describe('ConfigurationHistoryView', () => {
   });
 
   it('renders version history list when versions exist', () => {
-    const mockVersions = [
-      {
-        id: 1,
-        asset_id: 1,
-        version_number: 'v1',
-        file_name: 'config.json',
-        file_size: 1024,
-        content_hash: 'abc123',
-        author: 1,
-        author_username: 'john_doe',
-        notes: 'Initial version',
-        created_at: '2023-01-01T12:00:00Z'
-      }
-    ];
-
-    const useAssetStore = vi.fn(() => ({
-      versions: mockVersions,
-      versionsLoading: false,
-      error: null,
-      fetchVersions: vi.fn(),
-      clearError: vi.fn()
-    }));
-
-    vi.doMock('../../store/assets', () => ({
-      default: useAssetStore
-    }));
+    mockAssetStore({ versions: [makeVersion(1)] });
 
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
@@ -208,32 +191,17 @@ describe('ConfigurationHistoryView', () => {
   it('calls fetchVersions on mount', async () => {
     const mockFetchVersions = vi.fn();
     const mockFetchBranches = vi.fn();
-    const mockInvoke = vi.fn().mockResolvedValue(null);
-    
-    // Import and override the mocks
-    const { default: useAssetStore } = await import('../../store/assets');
-    const { default: useBranchStore } = await import('../../store/branches');
-    const { invoke } = await import('@tauri-apps/api/core');
-    
-    (useAssetStore as any).mockReturnValue({
-      versions: [],
-      versionsLoading: false,
-      error: null,
-      fetchVersions: mockFetchVersions,
-      clearError: vi.fn()
-    });
-    
-    (useBranchStore as any).mockReturnValue({
+    mockAssetStore({ fetchVersions: mockFetchVersions });
+
+    vi.mocked(useBranchStore).mockReturnValue({
       branches: [],
       branchVersions: {},
       fetchBranches: mockFetchBranches,
       fetchBranchVersions: vi.fn(),
       clearError: vi.fn()
-    });
-    
-    (invoke as any).mockImplementation(mockInvoke);
+    } as any);
 
-    const { rerender } = render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
+    render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
     // Wait for effects to run
     await vi.waitFor(() => {

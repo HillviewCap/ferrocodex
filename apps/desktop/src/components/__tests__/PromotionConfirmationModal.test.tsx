@@ -345,8 +345,10 @@ describe('PromotionConfirmationModal', () => {
     
     fireEvent.click(screen.getByText('Promote to Golden'));
     
-    // Button should show loading state
-    const promoteButton = screen.getByText('Promote to Golden').closest('button');
-    expect(promoteButton).toHaveClass('ant-btn-loading');
+    // Button should show loading state once form validation resolves
+    await waitFor(() => {
+      const promoteButton = screen.getByText('Promote to Golden').closest('button');
+      expect(promoteButton).toHaveClass('ant-btn-loading');
+    });
   });
 });

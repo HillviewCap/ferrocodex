@@ -25,6 +25,8 @@ vi.mock('./store/app', () => ({
   default: () => ({
     isFirstLaunch: true,
     isDatabaseInitialized: false,
+    eulaAccepted: true,
+    acceptEula: vi.fn(),
     isLoading: false,
     error: null,
     checkFirstLaunch: vi.fn(),

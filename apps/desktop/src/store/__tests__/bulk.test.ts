@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import useBulkImportStore from '../bulk';
 import { 
   validateSessionName, 
   validateImportType, 
@@ -7,11 +9,6 @@ import {
   formatEstimatedTime,
   calculateSuccessRate,
 } from '../../types/bulk';
-
-// Mock Tauri API
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
 
 describe('Bulk Import Utilities', () => {
   describe('validateSessionName', () => {
@@ -125,12 +122,18 @@ describe('Bulk Import Utilities', () => {
 });
 
 describe('Bulk Import Store Integration', () => {
+  const mockInvoke = vi.mocked(invoke);
+
   beforeEach(() => {
     vi.clearAllMocks();
+    useBulkImportStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   test('store should handle session creation flow', async () => {
-    const mockInvoke = vi.mocked(require('@tauri-apps/api/core').invoke);
     mockInvoke.mockResolvedValueOnce({
       id: 1,
       session_name: 'Test Session',
@@ -142,35 +145,60 @@ describe('Bulk Import Store Integration', () => {
       created_at: new Date().toISOString(),
     });
 
-    // This would test the actual store implementation
-    // For now, we're just testing that the mock works
-    const result = await mockInvoke('create_bulk_import_session', {
-      sessionName: 'Test Session',
-      importType: 'assets',
-      templatePath: null,
+    const result = await useBulkImportStore.getState().createSession({
+      session_name: 'Test Session',
+      import_type: 'assets',
     });
 
+    expect(mockInvoke).toHaveBeenCalledWith('create_bulk_import_session', {
+      sessionName: 'Test Session',
+      importType: 'assets',
+      templatePath: undefined,
+    });
     expect(result.session_name).toBe('Test Session');
     expect(result.import_type).toBe('assets');
     expect(result.status).toBe('Created');
+
+    const state = useBulkImportStore.getState();
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0].id).toBe(1);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBeNull();
+  });
+
+  test('store should record an error when session creation fails', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('Session name already exists'));
+
+    await expect(
+      useBulkImportStore.getState().createSession({ session_name: 'Dup', import_type: 'assets' })
+    ).rejects.toThrow('Session name already exists');
+
+    const state = useBulkImportStore.getState();
+    expect(state.error).toBe('Session name already exists');
+    expect(state.isLoading).toBe(false);
+    expect(state.sessions).toHaveLength(0);
   });
 
   test('store should handle file upload flow', async () => {
-    const mockInvoke = vi.mocked(require('@tauri-apps/api/core').invoke);
-    mockInvoke.mockResolvedValueOnce({
-      total_items: 100,
-      valid_items: 95,
-      invalid_items: 5,
-      errors: [
-        { row: 5, field: 'name', value: '', message: 'Name cannot be empty' },
-      ],
-    });
+    mockInvoke
+      .mockResolvedValueOnce({
+        total_items: 100,
+        valid_items: 95,
+        invalid_items: 5,
+        errors: [
+          { row: 5, field: 'name', value: '', message: 'Name cannot be empty' },
+        ],
+      })
+      // uploadFile refreshes session details afterwards
+      .mockResolvedValueOnce(null);
 
-    const result = await mockInvoke('upload_bulk_import_file', {
+    const result = await useBulkImportStore.getState().uploadFile(1, '/path/to/test.csv');
+
+    expect(mockInvoke).toHaveBeenCalledWith('upload_bulk_import_file', {
       sessionId: 1,
       filePath: '/path/to/test.csv',
     });
-
+    expect(mockInvoke).toHaveBeenCalledWith('get_bulk_import_session_details', { sessionId: 1 });
     expect(result.total_items).toBe(100);
     expect(result.valid_items).toBe(95);
     expect(result.invalid_items).toBe(5);
@@ -178,22 +206,22 @@ describe('Bulk Import Store Integration', () => {
   });
 
   test('store should handle validation flow', async () => {
-    const mockInvoke = vi.mocked(require('@tauri-apps/api/core').invoke);
-    mockInvoke.mockResolvedValueOnce({
-      is_valid: true,
-      errors: [],
-      warnings: [
-        { row: 10, field: 'name', value: 'Asset10', message: 'Asset with this name already exists' },
-      ],
-      preview_items: [
-        { row: 1, name: 'Asset1', asset_type: 'Device', description: 'Test asset', parent_name: null, metadata: {} },
-      ],
-    });
+    mockInvoke
+      .mockResolvedValueOnce({
+        is_valid: true,
+        errors: [],
+        warnings: [
+          { row: 10, field: 'name', value: 'Asset10', message: 'Asset with this name already exists' },
+        ],
+        preview_items: [
+          { row: 1, name: 'Asset1', asset_type: 'Device', description: 'Test asset', parent_name: null, metadata: {} },
+        ],
+      })
+      .mockResolvedValueOnce(null);
 
-    const result = await mockInvoke('validate_bulk_import_data', {
-      sessionId: 1,
-    });
+    const result = await useBulkImportStore.getState().validateData(1);
 
+    expect(mockInvoke).toHaveBeenCalledWith('validate_bulk_import_data', { sessionId: 1 });
     expect(result.is_valid).toBe(true);
     expect(result.errors).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
@@ -201,8 +229,8 @@ describe('Bulk Import Store Integration', () => {
   });
 
   test('store should handle progress tracking', async () => {
-    const mockInvoke = vi.mocked(require('@tauri-apps/api/core').invoke);
-    mockInvoke.mockResolvedValueOnce({
+    vi.useFakeTimers();
+    const processing = {
       session_id: 1,
       total_items: 100,
       processed_items: 50,
@@ -211,16 +239,27 @@ describe('Bulk Import Store Integration', () => {
       estimated_completion: '120',
       processing_rate: 2.5,
       status: 'Processing',
-    });
+    };
+    mockInvoke
+      .mockResolvedValueOnce(processing)
+      .mockResolvedValueOnce({ ...processing, processed_items: 100, current_item: null, status: 'Completed' });
 
-    const result = await mockInvoke('get_bulk_import_progress', {
-      sessionId: 1,
-    });
+    const result = await useBulkImportStore.getState().getProgress(1);
 
     expect(result.total_items).toBe(100);
     expect(result.processed_items).toBe(50);
     expect(result.failed_items).toBe(5);
     expect(result.status).toBe('Processing');
     expect(result.processing_rate).toBe(2.5);
+    expect(useBulkImportStore.getState().currentProgress?.processed_items).toBe(50);
+
+    // While processing, the store polls again after 2 seconds
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(useBulkImportStore.getState().currentProgress?.status).toBe('Completed');
+
+    // Polling stops once processing is no longer in progress
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
   });
 });

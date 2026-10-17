@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import StatusHistoryModal from '../StatusHistoryModal';
 import { ConfigurationVersionInfo, StatusChangeRecord } from '../../types/assets';
@@ -277,9 +277,12 @@ describe('StatusHistoryModal', () => {
       expect(testErrorElements.length).toBeGreaterThan(0);
     });
 
-    const closeButton = screen.getByRole('button', { name: /close/i });
+    // The modal has its own close button, so target the one inside the alert
+    const closeButton = within(screen.getByRole('alert')).getByRole('button', { name: /close/i });
     closeButton.click();
 
-    expect(screen.queryByText('Test error')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Test error')).not.toBeInTheDocument();
+    });
   });
 });

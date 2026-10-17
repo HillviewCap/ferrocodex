@@ -41,27 +41,27 @@ vi.mock('../firmware/FirmwareStatusDialog', () => ({
 describe('FirmwareVersionList - Metadata Display', () => {
   const createMockFirmware = (overrides: Partial<FirmwareVersionInfo> = {}): FirmwareVersionInfo => ({
     id: 1,
-    asset_id: 1,
-    author_id: 1,
-    author_username: 'testuser',
+    assetId: 1,
+    authorId: 1,
+    authorUsername: 'testuser',
     vendor: 'TestVendor',
     model: 'TestModel',
     version: '1.0.0',
     notes: 'Test notes',
     status: 'Draft',
-    file_path: '/test/path.bin',
-    file_hash: 'abcdef1234567890',
-    file_size: 1024,
-    created_at: '2025-01-25T10:00:00Z',
+    filePath: '/test/path.bin',
+    fileHash: 'abcdef1234567890',
+    fileSize: 1024,
+    createdAt: '2025-01-25T10:00:00Z',
     ...overrides
   });
 
   it('should handle firmware with null/undefined metadata gracefully', () => {
     const firmwareWithNullData = createMockFirmware({
-      file_size: null as any,
-      file_hash: null as any,
-      created_at: null as any,
-      author_username: null as any
+      fileSize: null as any,
+      fileHash: null as any,
+      createdAt: null as any,
+      authorUsername: null as any
     });
 
     render(<FirmwareVersionList versions={[firmwareWithNullData]} />);
@@ -75,10 +75,10 @@ describe('FirmwareVersionList - Metadata Display', () => {
 
   it('should handle firmware with invalid metadata gracefully', () => {
     const firmwareWithInvalidData = createMockFirmware({
-      file_size: -1,
-      file_hash: '',
-      created_at: 'invalid-date',
-      author_username: '   '
+      fileSize: -1,
+      fileHash: '',
+      createdAt: 'invalid-date',
+      authorUsername: '   '
     });
 
     render(<FirmwareVersionList versions={[firmwareWithInvalidData]} />);
@@ -92,10 +92,10 @@ describe('FirmwareVersionList - Metadata Display', () => {
 
   it('should handle firmware with "unknown" placeholder values from migration', () => {
     const firmwareWithPlaceholders = createMockFirmware({
-      file_size: 0,
-      file_hash: 'unknown',
-      created_at: '2025-01-25T10:00:00Z',
-      author_username: 'testuser'
+      fileSize: 0,
+      fileHash: 'unknown',
+      createdAt: '2025-01-25T10:00:00Z',
+      authorUsername: 'testuser'
     });
 
     render(<FirmwareVersionList versions={[firmwareWithPlaceholders]} />);
@@ -109,10 +109,10 @@ describe('FirmwareVersionList - Metadata Display', () => {
 
   it('should display valid metadata correctly', () => {
     const validFirmware = createMockFirmware({
-      file_size: 2048,
-      file_hash: 'abcdef1234567890abcdef1234567890',
-      created_at: '2025-01-25T10:00:00Z',
-      author_username: 'john.doe'
+      fileSize: 2048,
+      fileHash: 'abcdef1234567890abcdef1234567890',
+      createdAt: '2025-01-25T10:00:00Z',
+      authorUsername: 'john.doe'
     });
 
     render(<FirmwareVersionList versions={[validFirmware]} />);
@@ -126,7 +126,7 @@ describe('FirmwareVersionList - Metadata Display', () => {
 
   it('should handle edge case file sizes', () => {
     const largeFirmware = createMockFirmware({
-      file_size: 1073741824 // 1GB
+      fileSize: 1073741824 // 1GB
     });
 
     render(<FirmwareVersionList versions={[largeFirmware]} />);

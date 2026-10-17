@@ -190,13 +190,14 @@ describe('FormFieldComponent', () => {
   });
 
   it('should handle value changes', () => {
-    render(
+    // Form.Item binds the input to the form store, so the initial value comes from the form
+    renderWithForm(
       <FormFieldComponent
         field={baseField}
         onChange={mockOnChange}
         onBlur={mockOnBlur}
-        value="initial value"
-      />
+      />,
+      { test_field: 'initial value' }
     );
 
     const input = screen.getByRole('textbox');
