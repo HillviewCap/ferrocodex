@@ -644,7 +644,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         use std::path::Path;
 
         // Prevent directory traversal attacks first
-        if export_path.contains("..") || export_path.contains("~") {
+        if crate::validation::InputSanitizer::has_parent_dir_segment(export_path) {
             return Err(anyhow::anyhow!("Invalid export path detected"));
         }
 
@@ -1369,10 +1369,14 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Invalid export path detected"));
 
-        // Test home directory expansion protection
-        let result = repo.export_configuration_version(config.id, "~/malicious.json");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid export path detected"));
+        // `~` is not expanded and appears in legitimate paths, e.g. Windows 8.3 short
+        // names such as C:\Users\RUNNER~1, so it must not be rejected
+        let temp_dir = tempfile::tempdir().unwrap();
+        let short_name_dir = temp_dir.path().join("RUNNER~1");
+        std::fs::create_dir(&short_name_dir).unwrap();
+        let export_path = short_name_dir.join("exported.json");
+        let result = repo.export_configuration_version(config.id, export_path.to_str().unwrap());
+        assert!(result.is_ok(), "{:?}", result);
     }
 
     #[test]

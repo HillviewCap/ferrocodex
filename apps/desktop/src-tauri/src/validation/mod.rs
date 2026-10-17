@@ -243,10 +243,18 @@ impl InputSanitizer {
         false
     }
 
+    /// True if any segment of the path is `..`. Both `/` and `\` count as separators on
+    /// every OS. Matching `..` or `~` as substrings rejected legitimate names such as
+    /// `v1..2.json` or Windows 8.3 short paths (`C:\Users\RUNNER~1\...`); the OS never
+    /// expands `~`, so it is not a traversal risk.
+    pub fn has_parent_dir_segment(path: &str) -> bool {
+        path.split(['/', '\\']).any(|segment| segment == "..")
+    }
+
     /// Validates file paths for security concerns without flagging legitimate OS paths
     pub fn validate_file_path(path: &str) -> Result<(), String> {
         // Check for directory traversal attempts
-        if path.contains("..") || path.contains("~") {
+        if Self::has_parent_dir_segment(path) {
             return Err("Path traversal attempt detected".to_string());
         }
 
@@ -353,11 +361,16 @@ mod tests {
         assert!(InputSanitizer::validate_file_path("/home/user/documents/file.txt").is_ok());
         assert!(InputSanitizer::validate_file_path("D:\\Projects\\config.json").is_ok());
         assert!(InputSanitizer::validate_file_path("file.txt").is_ok());
+        // Windows 8.3 short names and dotted file names aren't traversal
+        assert!(InputSanitizer::validate_file_path("C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\x.json").is_ok());
+        assert!(InputSanitizer::validate_file_path("/home/user/config..v2.json").is_ok());
         
         // Invalid paths - directory traversal
         assert!(InputSanitizer::validate_file_path("../../../etc/passwd").is_err());
         assert!(InputSanitizer::validate_file_path("..\\..\\windows\\system32").is_err());
         assert!(InputSanitizer::validate_file_path("~/../../etc/passwd").is_err());
+        assert!(InputSanitizer::validate_file_path("C:\\exports\\..\\secret.json").is_err());
+        assert!(InputSanitizer::validate_file_path("/exports/..").is_err());
         
         // Invalid paths - dangerous files
         assert!(InputSanitizer::validate_file_path("C:\\Windows\\System32\\boot.ini").is_err());
