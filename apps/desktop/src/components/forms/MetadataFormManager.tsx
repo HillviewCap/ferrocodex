@@ -4,7 +4,6 @@ import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import DynamicMetadataForm from './DynamicMetadataForm';
 import SchemaDesigner from './SchemaDesigner';
 
-const { TabPane } = Tabs;
 
 interface MetadataFormManagerProps {
   assetId?: number;
@@ -53,63 +52,57 @@ const MetadataFormManager: React.FC<MetadataFormManagerProps> = ({
   };
 
   const renderFormTab = () => (
-    <TabPane tab="Metadata Form" key="form" icon={<EditOutlined />}>
-      {selectedSchemaId ? (
-        <DynamicMetadataForm
-          schemaId={selectedSchemaId}
-          assetId={assetId}
-          initialValues={formData}
-          onSubmit={handleFormSubmit}
-          onCancel={handleFormCancel}
-          showTitle={false}
-        />
-      ) : (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <div style={{ marginBottom: 16 }}>
-              No schema selected. Please create or select a metadata schema first.
-            </div>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />}
-              onClick={() => setActiveTab('designer')}
-            >
-              Create Schema
-            </Button>
+    selectedSchemaId ? (
+      <DynamicMetadataForm
+        schemaId={selectedSchemaId}
+        assetId={assetId}
+        initialValues={formData}
+        onSubmit={handleFormSubmit}
+        onCancel={handleFormCancel}
+        showTitle={false}
+      />
+    ) : (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <div style={{ marginBottom: 16 }}>
+            No schema selected. Please create or select a metadata schema first.
           </div>
-        </Card>
-      )}
-    </TabPane>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />}
+            onClick={() => setActiveTab('designer')}
+          >
+            Create Schema
+          </Button>
+        </div>
+      </Card>
+    )
   );
 
   const renderDesignerTab = () => (
-    <TabPane tab="Schema Designer" key="designer" icon={<PlusOutlined />}>
-      <SchemaDesigner
-        onSave={handleSchemaCreate}
-        onCancel={handleFormCancel}
-      />
-    </TabPane>
+    <SchemaDesigner
+      onSave={handleSchemaCreate}
+      onCancel={handleFormCancel}
+    />
   );
 
   const renderPreviewTab = () => (
-    <TabPane tab="Form Preview" key="preview" icon={<EyeOutlined />}>
-      {selectedSchemaId ? (
-        <DynamicMetadataForm
-          schemaId={selectedSchemaId}
-          initialValues={formData}
-          onSubmit={handleFormSubmit}
-          onCancel={handleFormCancel}
-          readonly={true}
-          showTitle={false}
-        />
-      ) : (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <div>No schema to preview. Please create a schema first.</div>
-          </div>
-        </Card>
-      )}
-    </TabPane>
+    selectedSchemaId ? (
+      <DynamicMetadataForm
+        schemaId={selectedSchemaId}
+        initialValues={formData}
+        onSubmit={handleFormSubmit}
+        onCancel={handleFormCancel}
+        readonly={true}
+        showTitle={false}
+      />
+    ) : (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <div>No schema to preview. Please create a schema first.</div>
+        </div>
+      </Card>
+    )
   );
 
   if (mode === 'form' && selectedSchemaId) {
@@ -156,11 +149,12 @@ const MetadataFormManager: React.FC<MetadataFormManagerProps> = ({
           activeKey={activeTab} 
           onChange={setActiveTab}
           style={{ height: 'calc(100vh - 200px)' }}
-        >
-          {renderFormTab()}
-          {renderDesignerTab()}
-          {renderPreviewTab()}
-        </Tabs>
+          items={[
+            { key: 'form', label: 'Metadata Form', icon: <EditOutlined />, children: renderFormTab() },
+            { key: 'designer', label: 'Schema Designer', icon: <PlusOutlined />, children: renderDesignerTab() },
+            { key: 'preview', label: 'Form Preview', icon: <EyeOutlined />, children: renderPreviewTab() },
+          ]}
+        />
       </Card>
     </div>
   );

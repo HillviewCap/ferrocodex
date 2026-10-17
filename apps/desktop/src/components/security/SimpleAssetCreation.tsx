@@ -89,22 +89,22 @@ export const SimpleAssetCreation: React.FC<SimpleAssetCreationProps> = ({
   const steps = [
     {
       title: 'Asset Type',
-      description: 'Choose asset type',
+      content: 'Choose asset type',
       icon: <FolderOutlined />,
     },
     {
       title: 'Location',
-      description: 'Choose parent folder',
+      content: 'Choose parent folder',
       icon: <RightOutlined />,
     },
     {
       title: 'Details',
-      description: 'Enter asset information',
+      content: 'Enter asset information',
       icon: <ToolOutlined />,
     },
     {
       title: 'Confirm',
-      description: 'Review and create',
+      content: 'Review and create',
       icon: <CheckCircleOutlined />,
     },
   ];
@@ -225,7 +225,7 @@ export const SimpleAssetCreation: React.FC<SimpleAssetCreationProps> = ({
         return (
           <Card title="Select Parent Location" size="small">
             <Alert 
-              message="You can select a parent folder or leave empty to create at root level" 
+              title="You can select a parent folder or leave empty to create at root level" 
               type="info" 
               showIcon 
               style={{ marginBottom: 16 }}
@@ -288,7 +288,7 @@ export const SimpleAssetCreation: React.FC<SimpleAssetCreationProps> = ({
       case 3:
         return (
           <Card title="Review Asset Creation" size="small">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
               <div>
                 <Text strong>Asset Type:</Text> {formData.asset_type}
               </div>
@@ -348,7 +348,7 @@ export const SimpleAssetCreation: React.FC<SimpleAssetCreationProps> = ({
       onCancel={onCancel}
       width={700}
       footer={null}
-      maskClosable={false}
+      mask={{ closable: false }}
     >
       <div style={{ padding: '16px 0' }}>
         <Steps current={currentStep} items={steps} style={{ marginBottom: 24 }} />

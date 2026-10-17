@@ -604,7 +604,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
 
       {/* Security Notice */}
       <Alert
-        message="Security Notice"
+        title="Security Notice"
         description="All secrets are encrypted with AES-256 encryption and can only be decrypted by authorized users. Secret values are masked by default and must be explicitly revealed."
         type="info"
         icon={<SafetyOutlined />}
@@ -964,7 +964,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           </Form.Item>
 
           <Alert
-            message="Security Notice"
+            title="Security Notice"
             description="The secret value will be encrypted with AES-256 encryption before being stored in the database. Only authorized users can decrypt and view the actual value."
             type="info"
             style={{ marginBottom: '16px' }}
@@ -1004,7 +1004,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           }
         }}
         footer={null}
-        maskClosable={!updatingPassword}
+        mask={{ closable: !updatingPassword }}
         closable={!updatingPassword}
         width={600}
       >
@@ -1032,7 +1032,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           </Form.Item>
 
           <Alert
-            message="Password Update Security"
+            title="Password Update Security"
             description="The new password will be validated for strength and checked against previously used passwords to prevent reuse. The old password will be retired and moved to history."
             type="info"
             style={{ marginBottom: '16px' }}
@@ -1142,7 +1142,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           </Form.Item>
 
           <Alert
-            message="Security Notice"
+            title="Security Notice"
             description="Only fields that are changed will be updated. Leave the value field empty to keep the current encrypted value unchanged."
             type="info"
             style={{ marginBottom: '16px' }}

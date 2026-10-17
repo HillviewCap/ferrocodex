@@ -35,7 +35,7 @@ const EulaModal: React.FC<EulaModalProps> = ({ visible, onAccept }) => {
       }
       open={visible}
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
       keyboard={false}
       footer={[
         <Button 
@@ -60,7 +60,7 @@ const EulaModal: React.FC<EulaModalProps> = ({ visible, onAccept }) => {
       destroyOnHidden={false}
     >
       <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           <Paragraph style={{ fontSize: '16px', marginBottom: '16px' }}>
             Welcome to the Alpha version of FerroCodex. Please read the following terms carefully before using the software.
           </Paragraph>

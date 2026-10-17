@@ -158,7 +158,7 @@ const RetryProgressIndicator: React.FC<RetryProgressIndicatorProps> = ({
         )
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="small">
+      <Space orientation="vertical" style={{ width: '100%' }} size="small">
         <Progress 
           percent={progressPercent}
           status={progress.status === 'failed' ? 'exception' : progress.status === 'success' ? 'success' : 'active'}
@@ -178,25 +178,25 @@ const RetryProgressIndicator: React.FC<RetryProgressIndicatorProps> = ({
           <>
             <Divider style={{ margin: '8px 0' }} />
             <Title level={5} style={{ margin: 0 }}>Retry History</Title>
-            <Timeline style={{ marginTop: 8 }}>
-              {progress.attempts.map((attempt) => (
-                <Timeline.Item
-                  key={attempt.attempt}
-                  color={getSeverityColor(attempt.error.severity)}
-                  dot={
-                    <Tooltip title={`Severity: ${attempt.error.severity}`}>
-                      <div 
-                        style={{ 
-                          width: 8, 
-                          height: 8, 
-                          borderRadius: '50%', 
-                          backgroundColor: getSeverityColor(attempt.error.severity) 
-                        }} 
-                      />
-                    </Tooltip>
-                  }
-                >
-                  <Space direction="vertical" size={2}>
+            <Timeline
+              style={{ marginTop: 8 }}
+              items={progress.attempts.map((attempt) => ({
+                key: attempt.attempt,
+                color: getSeverityColor(attempt.error.severity),
+                icon: (
+                  <Tooltip title={`Severity: ${attempt.error.severity}`}>
+                    <div
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: getSeverityColor(attempt.error.severity)
+                      }}
+                    />
+                  </Tooltip>
+                ),
+                content: (
+                  <Space orientation="vertical" size={2}>
                     <Text strong style={{ fontSize: '12px' }}>
                       Attempt {attempt.attempt}
                       {attempt.is_final && <Badge count="Final" style={{ marginLeft: 4, fontSize: '10px' }} />}
@@ -209,9 +209,9 @@ const RetryProgressIndicator: React.FC<RetryProgressIndicatorProps> = ({
                       {attempt.delay > 0 && ` • Delayed ${(attempt.delay / 1000).toFixed(1)}s`}
                     </Text>
                   </Space>
-                </Timeline.Item>
-              ))}
-            </Timeline>
+                ),
+              }))}
+            />
           </>
         )}
 

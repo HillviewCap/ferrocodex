@@ -305,10 +305,10 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
         </Space>
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Summary */}
         <Card size="small" style={{ backgroundColor: '#fafafa' }}>
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <Space>
               <Text strong>Target Asset:</Text>
               <Tag color="blue">{wizardState.selectedAsset?.name}</Tag>
@@ -333,7 +333,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
         {/* Validation Alerts */}
         {hasFailures && (
           <Alert
-            message="Validation Failures Detected"
+            title="Validation Failures Detected"
             description="Some files have validation failures. Please review and fix issues before proceeding."
             type="error"
             showIcon
@@ -342,7 +342,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
 
         {hasValidationIssues && !hasFailures && (
           <Alert
-            message="Validation Warnings"
+            title="Validation Warnings"
             description="Some files have validation warnings. Review carefully but you can proceed if acceptable."
             type="warning"
             showIcon
@@ -351,7 +351,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
 
         {selectedCount === 0 && (
           <Alert
-            message="No Associations Selected"
+            title="No Associations Selected"
             description="Please select at least one file association to create."
             type="info"
             showIcon
@@ -371,7 +371,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
 
         {/* Instructions */}
         <Alert
-          message="Review Instructions"
+          title="Review Instructions"
           description={
             <div>
               <p>• Review each file association carefully before proceeding</p>

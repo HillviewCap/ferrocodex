@@ -135,7 +135,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   useEffect(() => {
     if (error) {
       notification.error({
-        message: 'Dashboard Error',
+        title: 'Dashboard Error',
         description: error,
       });
       clearError();
@@ -157,7 +157,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
   const handleManualRefresh = async () => {
     await loadDashboardData();
     notification.success({
-      message: 'Dashboard Refreshed',
+      title: 'Dashboard Refreshed',
       description: 'Data has been updated successfully',
     });
   };
@@ -228,7 +228,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
             value={stats.success_rate}
             suffix="%"
             precision={1}
-            valueStyle={{ color: stats.success_rate >= 80 ? '#3f8600' : '#cf1322' }}
+            styles={{ content: { color: stats.success_rate >= 80 ? '#3f8600' : '#cf1322' } }}
           />
         </Col>
         <Col span={12}>
@@ -386,7 +386,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
               onClick={() => {
                 // Widget-specific settings could be implemented here
                 notification.info({
-                  message: 'Widget Settings',
+                  title: 'Widget Settings',
                   description: `Settings for ${widget.title} will be implemented`,
                 });
               }}
@@ -405,11 +405,11 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
       placement="right"
       open={settingsVisible}
       onClose={() => setSettingsVisible(false)}
-      width={400}
+      size={400}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Card size="small" title="Auto Refresh">
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text>Enable Auto Refresh</Text>
               <Switch
@@ -433,7 +433,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
         </Card>
 
         <Card size="small" title="Widget Visibility">
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             {widgets.map(widget => (
               <div
                 key={widget.id}
@@ -450,12 +450,12 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
         </Card>
 
         <Card size="small" title="Dashboard Layout">
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <Button
               onClick={() => {
                 setWidgets(DEFAULT_WIDGETS);
                 notification.success({
-                  message: 'Layout Reset',
+                  title: 'Layout Reset',
                   description: 'Dashboard layout has been reset to default',
                 });
               }}
@@ -467,7 +467,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
             <Button
               onClick={() => {
                 notification.info({
-                  message: 'Export Layout',
+                  title: 'Export Layout',
                   description: 'Layout export functionality will be implemented',
                 });
               }}
@@ -526,7 +526,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
       <Layout.Content style={{ padding: '24px' }}>
         {error && (
           <Alert
-            message="Dashboard Error"
+            title="Dashboard Error"
             description={error}
             type="error"
             showIcon
@@ -557,7 +557,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
             placement="right"
             open={!!selectedSessionId}
             onClose={() => setSelectedSessionId(null)}
-            width={600}
+            size={600}
           >
             <BulkProgressTracker
               sessionId={selectedSessionId}

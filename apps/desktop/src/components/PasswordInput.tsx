@@ -155,7 +155,7 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
   const hasIssues = isWeakPassword || reuseWarning;
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }}>
+    <Space orientation="vertical" style={{ width: '100%' }}>
       <Input.Password
         value={value}
         onChange={handlePasswordChange}
@@ -191,7 +191,7 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
       {/* Warnings and Errors */}
       {reuseWarning && (
         <Alert
-          message="Password Reuse Detected"
+          title="Password Reuse Detected"
           description={reuseWarning}
           type="warning"
           showIcon
@@ -201,7 +201,7 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
 
       {isWeakPassword && (
         <Alert
-          message="Weak Password"
+          title="Weak Password"
           description={`Password strength is below recommended level (${strength.score}/${minScore}). Consider using the password generator for a stronger password.`}
           type="warning"
           showIcon

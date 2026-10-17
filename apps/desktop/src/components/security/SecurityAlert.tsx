@@ -118,7 +118,7 @@ const SecurityAlert: React.FC<SecurityAlertProps> = ({
 
   return (
     <Alert
-      message={
+      title={
         <Space>
           <Badge status={config.type} text={config.text} />
           <Text strong>{alert.title}</Text>

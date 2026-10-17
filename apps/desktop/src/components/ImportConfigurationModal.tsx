@@ -171,17 +171,17 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
     {
       title: 'Select File',
       icon: <FileOutlined />,
-      description: 'Choose a configuration file'
+      content: 'Choose a configuration file'
     },
     {
       title: 'Asset Details',
       icon: <InboxOutlined />,
-      description: 'Enter asset information'
+      content: 'Enter asset information'
     },
     {
       title: 'Complete',
       icon: <CheckCircleOutlined />,
-      description: 'Import successful'
+      content: 'Import successful'
     }
   ];
 
@@ -193,7 +193,7 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
       footer={null}
       width={720}
       closable={!importing}
-      maskClosable={!importing}
+      mask={{ closable: !importing }}
     >
       <Steps current={currentStep} items={steps} style={{ marginBottom: '24px' }} />
 
@@ -229,7 +229,7 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
           </div>
 
           <Alert
-            message="Supported File Types"
+            title="Supported File Types"
             description="JSON, XML, YAML, TXT, CFG, CONF, INI, CSV, LOG, PROPERTIES, CONFIG, SETTINGS, TOML, BIN, DAT, HEX, RAW, DUMP"
             type="info"
             showIcon
@@ -242,11 +242,16 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
           <Title level={4}>Asset Information</Title>
           
           <Card style={{ marginBottom: '16px' }}>
-            <Descriptions title="Selected File" bordered size="small">
-              <Descriptions.Item label="Name">{selectedFile.name}</Descriptions.Item>
-              <Descriptions.Item label="Size">{formatFileSize(selectedFile.size)}</Descriptions.Item>
-              <Descriptions.Item label="Type">{selectedFile.type}</Descriptions.Item>
-            </Descriptions>
+            <Descriptions
+              title="Selected File"
+              bordered
+              size="small"
+              items={[
+                { key: 'name', label: 'Name', children: selectedFile.name },
+                { key: 'size', label: 'Size', children: formatFileSize(selectedFile.size) },
+                { key: 'type', label: 'Type', children: selectedFile.type },
+              ]}
+            />
           </Card>
 
           <Form 

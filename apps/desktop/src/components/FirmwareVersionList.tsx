@@ -294,7 +294,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
       >
         <Row gutter={[16, 8]}>
           <Col xs={24} sm={16}>
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%' }}>
               <Space align="center" size="middle">
                 <CloudServerOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
                 <div>
@@ -401,7 +401,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
               justifyContent: 'space-between',
               height: '100%'
             }}>
-              <Space direction="vertical" align="end" size="small">
+              <Space orientation="vertical" align="end" size="small">
                 <Tooltip title={formatDate(firmware.createdAt)}>
                   <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <CalendarOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />

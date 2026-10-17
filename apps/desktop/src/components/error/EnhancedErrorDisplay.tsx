@@ -154,10 +154,10 @@ const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
         size="small"
         style={{ marginTop: 16 }}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           {recoveryActions.map((action) => (
             <Card key={action.id} size="small" style={{ backgroundColor: '#fafafa' }}>
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text strong>{action.label}</Text>
                   <Space>
@@ -225,26 +225,33 @@ const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
             ),
             children: (
               <Card size="small" style={{ backgroundColor: '#f6f6f6' }}>
-                <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label="Error ID">{errorInfo.correlationId}</Descriptions.Item>
-                  <Descriptions.Item label="Timestamp">{errorInfo.timestamp}</Descriptions.Item>
-                  <Descriptions.Item label="Severity">{errorInfo.severity}</Descriptions.Item>
-                  <Descriptions.Item label="Domain">{errorInfo.domain}</Descriptions.Item>
-                  <Descriptions.Item label="Recoverable">{errorInfo.isRecoverable ? 'Yes' : 'No'}</Descriptions.Item>
-                  {errorInfo.context.user && (
-                    <Descriptions.Item label="User">
-                      {errorInfo.context.user.id} ({errorInfo.context.user.role})
-                    </Descriptions.Item>
-                  )}
-                  {errorInfo.context.operation && (
-                    <Descriptions.Item label="Operation">
-                      {errorInfo.context.operation.name} in {errorInfo.context.operation.component}
-                    </Descriptions.Item>
-                  )}
-                  {errorInfo.context.session?.sessionId && (
-                    <Descriptions.Item label="Session">{errorInfo.context.session.sessionId}</Descriptions.Item>
-                  )}
-                </Descriptions>
+                <Descriptions
+                  column={1}
+                  size="small"
+                  bordered
+                  items={[
+                    { key: 'errorId', label: 'Error ID', children: errorInfo.correlationId },
+                    { key: 'timestamp', label: 'Timestamp', children: errorInfo.timestamp },
+                    { key: 'severity', label: 'Severity', children: errorInfo.severity },
+                    { key: 'domain', label: 'Domain', children: errorInfo.domain },
+                    { key: 'recoverable', label: 'Recoverable', children: errorInfo.isRecoverable ? 'Yes' : 'No' },
+                    ...(errorInfo.context.user ? [{
+                      key: 'user',
+                      label: 'User',
+                      children: <>{errorInfo.context.user.id} ({errorInfo.context.user.role})</>,
+                    }] : []),
+                    ...(errorInfo.context.operation ? [{
+                      key: 'operation',
+                      label: 'Operation',
+                      children: <>{errorInfo.context.operation.name} in {errorInfo.context.operation.component}</>,
+                    }] : []),
+                    ...(errorInfo.context.session?.sessionId ? [{
+                      key: 'session',
+                      label: 'Session',
+                      children: errorInfo.context.session.sessionId,
+                    }] : []),
+                  ]}
+                />
                 
                 {isAdminUser && (
                   <>
@@ -302,10 +309,10 @@ const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
         ] : [])
       ]}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Main Error Message */}
         <Alert
-          message={errorInfo.userMessage}
+          title={errorInfo.userMessage}
           type={severityDisplay.status}
           showIcon
           icon={severityDisplay.icon}
@@ -315,23 +322,30 @@ const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
         {/* Error Context Information */}
         {(errorInfo.context.operation || errorInfo.context.user) && (
           <Card size="small" title="Context Information">
-            <Descriptions column={2} size="small">
-              {errorInfo.context.operation && (
-                <Descriptions.Item label="Operation" span={2}>
-                  {errorInfo.context.operation.name}
-                </Descriptions.Item>
-              )}
-              {errorInfo.context.operation?.component && (
-                <Descriptions.Item label="Component" span={2}>
-                  {errorInfo.context.operation.component}
-                </Descriptions.Item>
-              )}
-              {errorInfo.context.user && (
-                <Descriptions.Item label="User Role" span={2}>
-                  {errorInfo.context.user.role}
-                </Descriptions.Item>
-              )}
-            </Descriptions>
+            <Descriptions
+              column={2}
+              size="small"
+              items={[
+                ...(errorInfo.context.operation ? [{
+                  key: 'operation',
+                  label: 'Operation',
+                  span: 2,
+                  children: errorInfo.context.operation.name,
+                }] : []),
+                ...(errorInfo.context.operation?.component ? [{
+                  key: 'component',
+                  label: 'Component',
+                  span: 2,
+                  children: errorInfo.context.operation.component,
+                }] : []),
+                ...(errorInfo.context.user ? [{
+                  key: 'userRole',
+                  label: 'User Role',
+                  span: 2,
+                  children: errorInfo.context.user.role,
+                }] : []),
+              ]}
+            />
           </Card>
         )}
 

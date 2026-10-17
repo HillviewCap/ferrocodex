@@ -119,7 +119,7 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
         disabled: loadingTransitions || availableTransitions.length === 0
       }}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <div>
           <Title level={5} style={{ margin: 0, marginBottom: '8px' }}>
             Configuration Version
@@ -141,12 +141,11 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
 
         {error && (
           <Alert
-            message="Error"
+            title="Error"
             description={error}
             type="error"
             showIcon
-            closable
-            onClose={() => setError(null)}
+            closable={{ onClose: () => setError(null) }}
           />
         )}
 
@@ -171,7 +170,7 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
               </div>
             ) : availableTransitions.length === 0 ? (
               <Alert
-                message="No status changes available"
+                title="No status changes available"
                 description="You do not have permission to change the status of this configuration, or no transitions are available from the current status."
                 type="info"
                 showIcon
@@ -210,7 +209,7 @@ const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
         </Form>
 
         <Alert
-          message="Status Change Information"
+          title="Status Change Information"
           description="Status changes are tracked and cannot be undone. Make sure you have the appropriate permissions before proceeding."
           type="info"
           showIcon

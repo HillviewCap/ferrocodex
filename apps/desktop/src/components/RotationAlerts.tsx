@@ -89,7 +89,7 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
               <Statistic
                 title="Overdue"
                 value={metrics.overdue_passwords}
-                valueStyle={{ color: '#cf1322' }}
+                styles={{ content: { color: '#cf1322' } }}
                 prefix={<WarningOutlined />}
               />
             </Card>
@@ -99,7 +99,7 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
               <Statistic
                 title="Due in 7 Days"
                 value={metrics.due_within_7_days}
-                valueStyle={{ color: '#faad14' }}
+                styles={{ content: { color: '#faad14' } }}
                 prefix={<CalendarOutlined />}
               />
             </Card>
@@ -110,14 +110,14 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
                 title="Compliance"
                 value={metrics.compliance_percentage}
                 precision={1}
-                valueStyle={{ color: metrics.compliance_percentage >= 80 ? '#3f8600' : '#cf1322' }}
+                styles={{ content: { color: metrics.compliance_percentage >= 80 ? '#3f8600' : '#cf1322' } }}
                 suffix="%"
               />
               <Progress
                 percent={metrics.compliance_percentage}
                 status={metrics.compliance_percentage >= 80 ? 'success' : 'exception'}
                 showInfo={false}
-                strokeWidth={4}
+                size={{ height: 4 }}
                 style={{ marginTop: 8 }}
               />
             </Card>
@@ -141,11 +141,11 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Space orientation="vertical" style={{ width: '100%' }} size="large">
             {overdueAlerts.length > 0 && (
               <div>
                 <Alert
-                  message={`${overdueAlerts.length} Overdue Passwords`}
+                  title={`${overdueAlerts.length} Overdue Passwords`}
                   description="These passwords are past their rotation date and should be updated immediately."
                   type="error"
                   showIcon
@@ -176,7 +176,7 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
                           </Space>
                         }
                         description={
-                          <Space direction="vertical" size="small">
+                          <Space orientation="vertical" size="small">
                             <Text type="secondary">Asset: {alert.asset_name}</Text>
                             <Text type="secondary">
                               Last Rotated: {alert.last_rotated ? new Date(alert.last_rotated).toLocaleDateString() : 'Never'}
@@ -219,7 +219,7 @@ const RotationAlerts: React.FC<RotationAlertsProps> = ({ daysAhead = 30, onRotat
                           </Space>
                         }
                         description={
-                          <Space direction="vertical" size="small">
+                          <Space orientation="vertical" size="small">
                             <Text type="secondary">Asset: {alert.asset_name}</Text>
                             <Text type="secondary">Due: {new Date(alert.next_rotation_due).toLocaleDateString()}</Text>
                           </Space>

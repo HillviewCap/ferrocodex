@@ -29,7 +29,6 @@ import useAuthStore from '../../store/auth';
 
 const { TextArea } = Input;
 const { Option } = Select;
-const { TabPane } = Tabs;
 
 interface FieldDefinition {
   id: string;
@@ -408,105 +407,116 @@ const SchemaDesigner: React.FC<SchemaDesignerProps> = ({
           </Col>
         </Row>
 
-        <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane tab="Visual Designer" key="designer">
-            <Row gutter={16}>
-              <Col span={16}>
-                <Card 
-                  title="Form Fields"
-                  extra={
-                    <Button 
-                      type="primary" 
-                      icon={<PlusOutlined />} 
-                      onClick={addField}
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: 'designer',
+              label: 'Visual Designer',
+              children: (
+                <Row gutter={16}>
+                  <Col span={16}>
+                    <Card 
+                      title="Form Fields"
+                      extra={
+                        <Button 
+                          type="primary" 
+                          icon={<PlusOutlined />} 
+                          onClick={addField}
+                        >
+                          Add Field
+                        </Button>
+                      }
                     >
-                      Add Field
-                    </Button>
-                  }
-                >
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="fields">
-                      {(provided) => (
-                        <div {...provided.droppableProps} ref={provided.innerRef}>
-                          {fields.map((field, index) => (
-                            <Draggable key={field.id} draggableId={field.id} index={index}>
-                              {(provided) => (
-                                <Card
-                                  size="small"
-                                  style={{ marginBottom: 8 }}
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div {...provided.dragHandleProps}>
-                                      <DragOutlined style={{ color: '#999' }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                      <strong>{field.label}</strong>
-                                      <div style={{ fontSize: 12, color: '#666' }}>
-                                        {field.name} ({field.type})
-                                        {field.required && <span style={{ color: 'red' }}> *</span>}
+                      <DragDropContext onDragEnd={handleDragEnd}>
+                        <Droppable droppableId="fields">
+                          {(provided) => (
+                            <div {...provided.droppableProps} ref={provided.innerRef}>
+                              {fields.map((field, index) => (
+                                <Draggable key={field.id} draggableId={field.id} index={index}>
+                                  {(provided) => (
+                                    <Card
+                                      size="small"
+                                      style={{ marginBottom: 8 }}
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                    >
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div {...provided.dragHandleProps}>
+                                          <DragOutlined style={{ color: '#999' }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                          <strong>{field.label}</strong>
+                                          <div style={{ fontSize: 12, color: '#666' }}>
+                                            {field.name} ({field.type})
+                                            {field.required && <span style={{ color: 'red' }}> *</span>}
+                                          </div>
+                                        </div>
+                                        <Space>
+                                          <Button 
+                                            size="small" 
+                                            onClick={() => editField(field)}
+                                          >
+                                            Edit
+                                          </Button>
+                                          <Popconfirm
+                                            title="Are you sure you want to delete this field?"
+                                            onConfirm={() => deleteField(field.id)}
+                                          >
+                                            <Button 
+                                              size="small" 
+                                              danger 
+                                              icon={<DeleteOutlined />}
+                                            />
+                                          </Popconfirm>
+                                        </Space>
                                       </div>
-                                    </div>
-                                    <Space>
-                                      <Button 
-                                        size="small" 
-                                        onClick={() => editField(field)}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Popconfirm
-                                        title="Are you sure you want to delete this field?"
-                                        onConfirm={() => deleteField(field.id)}
-                                      >
-                                        <Button 
-                                          size="small" 
-                                          danger 
-                                          icon={<DeleteOutlined />}
-                                        />
-                                      </Popconfirm>
-                                    </Space>
-                                  </div>
-                                </Card>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
+                                    </Card>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                  
+                      {fields.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                          No fields added yet. Click "Add Field" to get started.
                         </div>
                       )}
-                    </Droppable>
-                  </DragDropContext>
-                  
-                  {fields.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                      No fields added yet. Click "Add Field" to get started.
-                    </div>
-                  )}
-                </Card>
-              </Col>
+                    </Card>
+                  </Col>
               
-              <Col span={8}>
-                <Card title="Field Types" size="small">
-                  {FIELD_TYPES.map(type => (
-                    <div key={type.value} style={{ marginBottom: 8, padding: 8, border: '1px dashed #d9d9d9', borderRadius: 4 }}>
-                      <div><strong>{type.label}</strong></div>
-                      <div style={{ fontSize: 12, color: '#666' }}>{type.description}</div>
-                    </div>
-                  ))}
-                </Card>
-              </Col>
-            </Row>
-          </TabPane>
-
-          <TabPane tab="JSON Schema" key="json">
-            <TextArea
-              value={jsonSchema}
-              onChange={(e) => setJsonSchema(e.target.value)}
-              rows={20}
-              style={{ fontFamily: 'monospace' }}
-            />
-          </TabPane>
-        </Tabs>
+                  <Col span={8}>
+                    <Card title="Field Types" size="small">
+                      {FIELD_TYPES.map(type => (
+                        <div key={type.value} style={{ marginBottom: 8, padding: 8, border: '1px dashed #d9d9d9', borderRadius: 4 }}>
+                          <div><strong>{type.label}</strong></div>
+                          <div style={{ fontSize: 12, color: '#666' }}>{type.description}</div>
+                        </div>
+                      ))}
+                    </Card>
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'json',
+              label: 'JSON Schema',
+              children: (
+                <TextArea
+                  value={jsonSchema}
+                  onChange={(e) => setJsonSchema(e.target.value)}
+                  rows={20}
+                  style={{ fontFamily: 'monospace' }}
+                />
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* Field Configuration Modal */}

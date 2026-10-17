@@ -183,7 +183,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
       <Row gutter={24}>
         <Col span={12}>
           <Card style={{ height: '100%' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
                 <SecurityScanOutlined style={{ color: '#1890ff', fontSize: '20px', marginRight: '8px' }} />
                 <Title level={5} style={{ margin: 0 }}>Security Classification</Title>
@@ -203,7 +203,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
                 <Title level={5} style={{ margin: 0 }}>Naming Compliance</Title>
               </div>
 
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <Text strong>Asset Name</Text>
                 <div style={{ 
                   padding: '8px 12px',
@@ -215,7 +215,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
                 </div>
                 {!namingValidation.isValid && (
                   <Alert
-                    message={namingValidation.message}
+                    title={namingValidation.message}
                     type="error"
                     showIcon
                     style={{ marginTop: '8px' }}
@@ -228,7 +228,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
 
         <Col span={12}>
           <Card style={{ height: '100%' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
                 {validationStatus.icon}
                 <Title level={5} style={{ margin: '0 0 0 8px' }}>
@@ -237,7 +237,7 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
               </div>
 
               <Alert
-                message={validationStatus.title}
+                title={validationStatus.title}
                 description={validationStatus.message}
                 type={validationStatus.type}
                 showIcon={false}

@@ -204,7 +204,7 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
       </div>
       
       <Alert
-        message="Firmware files are stored encrypted"
+        title="Firmware files are stored encrypted"
         description="All firmware files are encrypted before storage to ensure security. Only authorized users can access them."
         type="info"
         showIcon
@@ -216,7 +216,7 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
   const renderFileDetails = () => (
     <div>
       <Card style={{ marginBottom: '24px' }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <FileOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
             <div style={{ flex: 1 }}>
@@ -319,7 +319,7 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
       ) : uploadProgress?.status === 'error' ? (
         <>
           <Alert
-            message="Upload Failed"
+            title="Upload Failed"
             description={uploadProgress.message || 'An error occurred during upload'}
             type="error"
             showIcon

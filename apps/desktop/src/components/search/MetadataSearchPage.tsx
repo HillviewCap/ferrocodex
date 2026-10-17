@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Row, Col, Card, Drawer, Button, Space, Affix, BackTop } from 'antd';
+import { Layout, Row, Col, Card, Drawer, Button, Space, Affix, FloatButton } from 'antd';
 import { SearchOutlined, FilterOutlined, BarChartOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MetadataSearchBar from './MetadataSearchBar';
@@ -156,10 +156,10 @@ const MetadataSearchPageInner: React.FC<MetadataSearchPageProps> = ({
     <Drawer
       title="Advanced Filters"
       placement="right"
-      width={500}
+      size={500}
       onClose={() => setFilterDrawerVisible(false)}
       open={filterDrawerVisible}
-      bodyStyle={{ padding: 0 }}
+      styles={{ body: { padding: 0 } }}
       extra={
         <Space>
           <Button
@@ -228,7 +228,7 @@ const MetadataSearchPageInner: React.FC<MetadataSearchPageProps> = ({
       {renderFilterDrawer()}
       {renderAnalyticsButton()}
       
-      <BackTop />
+      <FloatButton.BackTop />
     </div>
   );
 };

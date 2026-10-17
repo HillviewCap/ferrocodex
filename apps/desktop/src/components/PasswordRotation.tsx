@@ -95,7 +95,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       await validatePassword(password);
     } catch (error) {
       notification.error({
-        message: 'Generation Failed',
+        title: 'Generation Failed',
         description: 'Failed to generate password',
       });
     }
@@ -131,7 +131,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       });
 
       notification.success({
-        message: 'Rotation Successful',
+        title: 'Rotation Successful',
         description: `Password for "${secret.label}" has been rotated successfully.`,
       });
 
@@ -139,7 +139,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       handleClose();
     } catch (error) {
       notification.error({
-        message: 'Rotation Failed',
+        title: 'Rotation Failed',
         description: error instanceof Error ? error.message : 'Failed to rotate password',
       });
     } finally {
@@ -168,7 +168,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       content: (
         <div>
           <Alert
-            message="Password Rotation"
+            title="Password Rotation"
             description={`You are about to rotate the password for "${secret.label}". This action cannot be undone.`}
             type="info"
             showIcon
@@ -177,7 +177,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
           />
           
           <Form.Item label="Current Password Info">
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Text>Last Changed: {secret.last_changed || 'Unknown'}</Text>
               <Text>Strength Score: {secret.strength_score || 'Not evaluated'}/100</Text>
               <Text>History Entries: {passwordHistory.length}</Text>
@@ -227,9 +227,9 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
 
           {passwordStrength && (
             <Alert
-              message={`Password Strength: ${passwordStrength.score}/100`}
+              title={`Password Strength: ${passwordStrength.score}/100`}
               description={
-                <Space direction="vertical">
+                <Space orientation="vertical">
                   {passwordStrength.feedback.map((msg, idx) => (
                     <Text key={idx}>{msg}</Text>
                   ))}
@@ -243,7 +243,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
 
           {generatedPassword && (
             <Alert
-              message="Generated Password"
+              title="Generated Password"
               description="A secure password has been generated and filled in the password field."
               type="success"
               showIcon
@@ -259,7 +259,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       content: (
         <div>
           <Alert
-            message="Rotation Summary"
+            title="Rotation Summary"
             description="Please review the rotation details before confirming."
             type="warning"
             showIcon
@@ -281,7 +281,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
           </Form.Item>
 
           <Alert
-            message="Important"
+            title="Important"
             description="After rotation, you will need to update this password on the actual device or system."
             type="info"
             showIcon

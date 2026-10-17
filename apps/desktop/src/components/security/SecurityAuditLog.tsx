@@ -295,7 +295,7 @@ const SecurityAuditLog: React.FC<SecurityAuditLogProps> = ({
   if (user?.role !== 'Administrator') {
     return (
       <Alert
-        message="Administrator Access Required"
+        title="Administrator Access Required"
         description="Security audit log is only available to administrators."
         type="warning"
         showIcon
@@ -419,39 +419,62 @@ const SecurityAuditLog: React.FC<SecurityAuditLogProps> = ({
       <Drawer
         title="Audit Event Details"
         placement="right"
-        width={500}
+        size={500}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
       >
         {selectedEvent && (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="Event ID">
-              {selectedEvent.id}
-            </Descriptions.Item>
-            <Descriptions.Item label="Timestamp">
-              {dayjs(selectedEvent.timestamp).format('YYYY-MM-DD HH:mm:ss')}
-            </Descriptions.Item>
-            <Descriptions.Item label="Event Type">
-              <Space>
-                {getEventConfig(selectedEvent.eventType, selectedEvent.result).icon}
-                {selectedEvent.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="User">
-              {selectedEvent.userId ? `User ${selectedEvent.userId}` : 'System'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Result">
-              <Tag color={selectedEvent.result === 'success' ? 'success' : 
-                         selectedEvent.result === 'failure' ? 'error' : 'warning'}>
-                {selectedEvent.result.toUpperCase()}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Details">
-              <Text code style={{ whiteSpace: 'pre-wrap' }}>
-                {selectedEvent.details}
-              </Text>
-            </Descriptions.Item>
-          </Descriptions>
+          <Descriptions
+            column={1}
+            bordered
+            size="small"
+            items={[
+              {
+                key: 'event-id',
+                label: 'Event ID',
+                children: selectedEvent.id,
+              },
+              {
+                key: 'timestamp',
+                label: 'Timestamp',
+                children: dayjs(selectedEvent.timestamp).format('YYYY-MM-DD HH:mm:ss'),
+              },
+              {
+                key: 'event-type',
+                label: 'Event Type',
+                children: (
+                  <Space>
+                    {getEventConfig(selectedEvent.eventType, selectedEvent.result).icon}
+                    {selectedEvent.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </Space>
+                ),
+              },
+              {
+                key: 'user',
+                label: 'User',
+                children: selectedEvent.userId ? `User ${selectedEvent.userId}` : 'System',
+              },
+              {
+                key: 'result',
+                label: 'Result',
+                children: (
+                  <Tag color={selectedEvent.result === 'success' ? 'success' : 
+                             selectedEvent.result === 'failure' ? 'error' : 'warning'}>
+                    {selectedEvent.result.toUpperCase()}
+                  </Tag>
+                ),
+              },
+              {
+                key: 'details',
+                label: 'Details',
+                children: (
+                  <Text code style={{ whiteSpace: 'pre-wrap' }}>
+                    {selectedEvent.details}
+                  </Text>
+                ),
+              },
+            ]}
+          />
         )}
       </Drawer>
 
@@ -462,7 +485,7 @@ const SecurityAuditLog: React.FC<SecurityAuditLogProps> = ({
         onCancel={() => setExportModalVisible(false)}
         footer={null}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Text>Select export format:</Text>
           <Space>
             <Button onClick={() => handleExport('csv')}>

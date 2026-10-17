@@ -41,7 +41,7 @@ const RoleGuard: React.FC<RoleGuardProps> = ({
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
         margin: '24px'
       }}>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <ExclamationCircleOutlined 
             style={{ 
               fontSize: '48px', 
@@ -62,7 +62,7 @@ const RoleGuard: React.FC<RoleGuardProps> = ({
           </Text>
 
           <Alert
-            message="Permission Required"
+            title="Permission Required"
             description={`This feature requires ${allowedRoles.join(' or ')} role access. If you believe this is an error, please contact your administrator.`}
             type="warning"
             showIcon

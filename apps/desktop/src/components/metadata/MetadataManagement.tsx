@@ -6,7 +6,6 @@ import FieldTemplateLibrary from './FieldTemplateLibrary';
 import MetadataSearchPage from '../search/MetadataSearchPage';
 
 const { Title, Paragraph } = Typography;
-const { TabPane } = Tabs;
 
 const MetadataManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState('templates');
@@ -25,43 +24,39 @@ const MetadataManagement: React.FC = () => {
         onChange={setActiveTab}
         style={{ flex: 1, padding: '0 24px' }}
         size="large"
-      >
-        <TabPane
-          tab={
-            <span>
-              <FileTextOutlined />
-              Field Templates
-            </span>
-          }
-          key="templates"
-        >
-          <FieldTemplateLibrary />
-        </TabPane>
-        
-        <TabPane
-          tab={
-            <span>
-              <AppstoreOutlined />
-              Schema Designer
-            </span>
-          }
-          key="designer"
-        >
-          <SchemaDesigner />
-        </TabPane>
-        
-        <TabPane
-          tab={
-            <span>
-              <SearchOutlined />
-              Metadata Search
-            </span>
-          }
-          key="search"
-        >
-          <MetadataSearchPage />
-        </TabPane>
-      </Tabs>
+        items={[
+          {
+            key: 'templates',
+            label: (
+              <span>
+                <FileTextOutlined />
+                Field Templates
+              </span>
+            ),
+            children: <FieldTemplateLibrary />,
+          },
+          {
+            key: 'designer',
+            label: (
+              <span>
+                <AppstoreOutlined />
+                Schema Designer
+              </span>
+            ),
+            children: <SchemaDesigner />,
+          },
+          {
+            key: 'search',
+            label: (
+              <span>
+                <SearchOutlined />
+                Metadata Search
+              </span>
+            ),
+            children: <MetadataSearchPage />,
+          },
+        ]}
+      />
     </div>
   );
 };

@@ -98,22 +98,22 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
   const steps = [
     {
       title: 'Asset Type',
-      description: 'Choose asset type',
+      content: 'Choose asset type',
       icon: <FolderOutlined />,
     },
     {
       title: 'Location',
-      description: 'Choose parent folder',
+      content: 'Choose parent folder',
       icon: <RightOutlined />,
     },
     {
       title: 'Details',
-      description: 'Enter asset information',
+      content: 'Enter asset information',
       icon: <ToolOutlined />,
     },
     {
       title: 'Confirm',
-      description: 'Review and create',
+      content: 'Review and create',
       icon: <CheckCircleOutlined />,
     },
   ];
@@ -279,7 +279,7 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
             } 
             size="small"
           >
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               {/* Asset name validation */}
               <div>
                 <Title level={5}>Asset Name</Title>
@@ -361,7 +361,7 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
       case 4:
         return (
           <Card title="Review Asset Creation" size="small">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
               <div>
                 <Text strong>Asset Type:</Text> {formData.asset_type}
               </div>
@@ -394,7 +394,7 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
 
               {/* Security summary */}
               <Alert
-                message="Security Summary"
+                title="Security Summary"
                 description={
                   <div>
                     <div>✓ Asset name passed security validation</div>
@@ -444,7 +444,7 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
       onCancel={onCancel}
       width={800}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ padding: '16px 0' }}>
         <Steps current={currentStep} items={steps} style={{ marginBottom: 24 }} />

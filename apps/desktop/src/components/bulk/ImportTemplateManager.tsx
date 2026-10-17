@@ -66,7 +66,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
   useEffect(() => {
     if (error) {
       notification.error({
-        message: 'Template Operation Failed',
+        title: 'Template Operation Failed',
         description: error,
       });
       clearError();
@@ -89,7 +89,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
       setCreateModalVisible(false);
       form.resetFields();
       notification.success({
-        message: 'Template Created',
+        title: 'Template Created',
         description: 'Import template created successfully',
       });
     } catch (error) {
@@ -101,7 +101,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
     try {
       await deleteTemplate(templateId);
       notification.success({
-        message: 'Template Deleted',
+        title: 'Template Deleted',
         description: 'Import template deleted successfully',
       });
     } catch (error) {
@@ -125,7 +125,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
       window.URL.revokeObjectURL(url);
 
       notification.success({
-        message: 'Template Downloaded',
+        title: 'Template Downloaded',
         description: 'CSV template downloaded successfully',
       });
     } catch (error) {
@@ -146,7 +146,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
       dataIndex: 'template_name',
       key: 'template_name',
       render: (text: string, record: ImportTemplate) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{text}</Text>
           <Text type="secondary" style={{ fontSize: '12px' }}>
             Created: {new Date(record.created_at).toLocaleDateString()}
@@ -209,7 +209,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
               onClick={() => {
                 // TODO: Implement template editing
                 notification.info({
-                  message: 'Template Editing',
+                  title: 'Template Editing',
                   description: 'Template editing will be implemented in the next phase',
                 });
               }}
@@ -247,7 +247,7 @@ const ImportTemplateManager: React.FC<ImportTemplateManagerProps> = ({
       ]}
     >
       <Card>
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space orientation="vertical" style={{ width: '100%' }} size="large">
           {/* Header with controls */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>

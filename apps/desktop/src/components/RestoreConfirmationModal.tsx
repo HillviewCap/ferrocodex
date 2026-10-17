@@ -80,7 +80,7 @@ const RestoreConfirmationModal: React.FC<RestoreConfirmationModalProps> = ({
     >
       <Form form={form} onFinish={handleRestore} layout="vertical">
         <Alert
-          message="Restore Archived Version"
+          title="Restore Archived Version"
           description={
             <div>
               <p>You are about to restore this archived configuration version. Restoring will:</p>

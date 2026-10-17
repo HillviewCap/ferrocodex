@@ -156,7 +156,7 @@ const MetadataFilterBuilder: React.FC<FilterBuilderProps> = ({
     // Range input for InRange operator
     if (filter.operator === 'InRange') {
       return (
-        <Input.Group compact style={{ display: 'flex' }}>
+        <Space.Compact style={{ display: 'flex' }}>
           <InputNumber
             placeholder="Min"
             style={{ flex: 1 }}
@@ -169,7 +169,7 @@ const MetadataFilterBuilder: React.FC<FilterBuilderProps> = ({
             value={filter.value?.max}
             onChange={(value) => handleFilterChange(index, 'value', { ...filter.value, max: value })}
           />
-        </Input.Group>
+        </Space.Compact>
       );
     }
 
@@ -263,7 +263,7 @@ const MetadataFilterBuilder: React.FC<FilterBuilderProps> = ({
           />
         }
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           {/* Logic operator (except for first filter) */}
           {index > 0 && (
             <div>

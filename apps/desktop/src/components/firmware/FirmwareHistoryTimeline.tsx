@@ -109,56 +109,55 @@ const FirmwareHistoryTimeline: React.FC<FirmwareHistoryTimelineProps> = ({
     }
   };
 
-  const renderTimelineItem = (item: FirmwareStatusHistory, index: number) => {
+  const timelineItem = (item: FirmwareStatusHistory, index: number) => {
     const isLatest = index === 0;
     const color = isLatest ? getStatusColor(item.new_status) : 'gray';
 
-    return (
-      <Timeline.Item 
-        key={item.id}
-        color={color}
-        dot={isLatest ? <Tag color={getStatusColor(item.new_status)}>{getStatusIcon(item.new_status)}</Tag> : undefined}
-      >
-        <Space direction="vertical" size={4} style={{ width: '100%' }}>
-          <Space>
-            <Text strong>
-              {item.old_status} → {item.new_status}
-            </Text>
-            {isLatest && <Tag color="blue">Current</Tag>}
-          </Space>
-
-          <Space size={16}>
-            <Space size={4}>
-              <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {item.changed_by_username || `User ${item.changed_by}`}
+    return {
+      key: item.id,
+      color,
+      icon: isLatest ? <Tag color={getStatusColor(item.new_status)}>{getStatusIcon(item.new_status)}</Tag> : undefined,
+      content: (
+          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+            <Space>
+              <Text strong>
+                {item.old_status} → {item.new_status}
               </Text>
+              {isLatest && <Tag color="blue">Current</Tag>}
             </Space>
-            <Space size={4}>
-              <ClockCircleOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                {formatDate(item.changed_at)}
-              </Text>
-            </Space>
-          </Space>
 
-          {item.reason && (
-            <div style={{ marginTop: '8px', paddingLeft: '20px' }}>
-              <Space size={4} align="start">
-                <FileTextOutlined style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '2px' }} />
-                <Paragraph 
-                  type="secondary" 
-                  style={{ fontSize: '12px', margin: 0, fontStyle: 'italic' }}
-                  ellipsis={{ rows: 2, expandable: true }}
-                >
-                  {item.reason}
-                </Paragraph>
+            <Space size={16}>
+              <Space size={4}>
+                <UserOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {item.changed_by_username || `User ${item.changed_by}`}
+                </Text>
               </Space>
-            </div>
-          )}
-        </Space>
-      </Timeline.Item>
-    );
+              <Space size={4}>
+                <ClockCircleOutlined style={{ fontSize: '12px', color: '#8c8c8c' }} />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {formatDate(item.changed_at)}
+                </Text>
+              </Space>
+            </Space>
+
+            {item.reason && (
+              <div style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                <Space size={4} align="start">
+                  <FileTextOutlined style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '2px' }} />
+                  <Paragraph 
+                    type="secondary" 
+                    style={{ fontSize: '12px', margin: 0, fontStyle: 'italic' }}
+                    ellipsis={{ rows: 2, expandable: true }}
+                  >
+                    {item.reason}
+                  </Paragraph>
+                </Space>
+              </div>
+            )}
+          </Space>
+      ),
+    };
   };
 
   if (loading) {
@@ -190,9 +189,7 @@ const FirmwareHistoryTimeline: React.FC<FirmwareHistoryTimelineProps> = ({
 
   return (
     <div>
-      <Timeline mode="left">
-        {displayedHistory.map((item, index) => renderTimelineItem(item, index))}
-      </Timeline>
+      <Timeline mode="start" items={displayedHistory.map((item, index) => timelineItem(item, index))} />
 
       {hasMore && (
         <div style={{ textAlign: 'center', marginTop: '16px' }}>

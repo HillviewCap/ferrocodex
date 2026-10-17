@@ -229,7 +229,7 @@ const FileIntegrityDisplay: React.FC<FileIntegrityDisplayProps> = ({
 
         {expectedHash && !isVerified && (
           <Alert
-            message="Hash Mismatch"
+            title="Hash Mismatch"
             description={
               <div>
                 <div>Expected: <code>{expectedHash}</code></div>
@@ -266,7 +266,7 @@ const FileIntegrityDisplay: React.FC<FileIntegrityDisplayProps> = ({
 
         {!securityScanPassed && detectedIssues.length > 0 && (
           <Alert
-            message="Security Issues Detected"
+            title="Security Issues Detected"
             description={
               <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
                 {detectedIssues.map((issue, idx) => (

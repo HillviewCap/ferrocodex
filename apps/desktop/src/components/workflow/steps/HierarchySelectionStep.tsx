@@ -98,7 +98,7 @@ export const HierarchySelectionStep: React.FC<BaseStepProps> = ({
 
       {data.asset_type === 'Device' && (
         <Alert
-          message="Device Placement Required"
+          title="Device Placement Required"
           description="Devices must be placed inside a folder for proper organization and security. Please select a parent folder below."
           type="info"
           showIcon

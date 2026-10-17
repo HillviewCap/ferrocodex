@@ -90,35 +90,49 @@ export const ReviewConfirmationStep: React.FC<ReviewConfirmationStepProps> = ({
               </div>
             </div>
 
-            <Descriptions column={1} bordered>
-              <Descriptions.Item label="Name">
-                {data.asset_name}
-              </Descriptions.Item>
-              
-              <Descriptions.Item label="Description">
-                {data.asset_description || <Text type="secondary">No description provided</Text>}
-              </Descriptions.Item>
-              
-              <Descriptions.Item label="Type">
-                <Space>
-                  {data.asset_type === 'Folder' ? <FolderOutlined /> : <DesktopOutlined />}
-                  {data.asset_type}
-                </Space>
-              </Descriptions.Item>
-              
-              <Descriptions.Item label="Location">
-                {getLocationDisplay()}
-              </Descriptions.Item>
-              
-              <Descriptions.Item label="Security Classification">
-                <Space>
-                  <SecurityScanOutlined style={{ color: getSecurityClassificationColor(data.security_classification) }} />
-                  <Tag color={getSecurityClassificationColor(data.security_classification)}>
-                    {data.security_classification || 'Not set'}
-                  </Tag>
-                </Space>
-              </Descriptions.Item>
-            </Descriptions>
+            <Descriptions
+              column={1}
+              bordered
+              items={[
+                {
+                  key: 'name',
+                  label: 'Name',
+                  children: data.asset_name,
+                },
+                {
+                  key: 'description',
+                  label: 'Description',
+                  children: data.asset_description || <Text type="secondary">No description provided</Text>,
+                },
+                {
+                  key: 'type',
+                  label: 'Type',
+                  children: (
+                    <Space>
+                      {data.asset_type === 'Folder' ? <FolderOutlined /> : <DesktopOutlined />}
+                      {data.asset_type}
+                    </Space>
+                  ),
+                },
+                {
+                  key: 'location',
+                  label: 'Location',
+                  children: getLocationDisplay(),
+                },
+                {
+                  key: 'security-classification',
+                  label: 'Security Classification',
+                  children: (
+                    <Space>
+                      <SecurityScanOutlined style={{ color: getSecurityClassificationColor(data.security_classification) }} />
+                      <Tag color={getSecurityClassificationColor(data.security_classification)}>
+                        {data.security_classification || 'Not set'}
+                      </Tag>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </Card>
 
           <Card>
@@ -148,7 +162,7 @@ export const ReviewConfirmationStep: React.FC<ReviewConfirmationStepProps> = ({
               <Title level={5} style={{ margin: 0 }}>Ready to Create</Title>
             </div>
             
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Text type="secondary">
                 All required information has been provided and validated. 
                 The asset will be created with the configuration shown.

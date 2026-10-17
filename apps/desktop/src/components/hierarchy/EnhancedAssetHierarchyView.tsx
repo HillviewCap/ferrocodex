@@ -216,7 +216,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
 
       {enableBulkOperations && (
         <>
-          <Divider type="vertical" />
+          <Divider orientation="vertical" />
           <Space align="center">
             <Text>Bulk Mode:</Text>
             <Switch
@@ -274,9 +274,9 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
           </Space>
         }
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>
-            <Space direction="vertical" size="small">
+            <Space orientation="vertical" size="small">
               <div>
                 <Text strong>Type: </Text>
                 <Text>{selectedAsset.asset_type}</Text>
@@ -303,7 +303,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
             <>
               <Divider />
               <div>
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                   <Text strong>Device Information</Text>
                   
                   <Row gutter={[16, 8]}>
@@ -341,7 +341,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
   if (error) {
     return (
       <Alert
-        message="Error Loading Asset Hierarchy"
+        title="Error Loading Asset Hierarchy"
         description={error}
         type="error"
         action={
@@ -364,14 +364,20 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
           }}
         >
           <div style={{ padding: '16px' }}>
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
               <div>
-                <Breadcrumb>
-                  <Breadcrumb.Item>
-                    <HomeOutlined />
-                    <span style={{ marginLeft: '4px' }}>Assets</span>
-                  </Breadcrumb.Item>
-                </Breadcrumb>
+                <Breadcrumb
+                  items={[
+                    {
+                      title: (
+                        <>
+                          <HomeOutlined />
+                          <span style={{ marginLeft: '4px' }}>Assets</span>
+                        </>
+                      ),
+                    },
+                  ]}
+                />
               </div>
 
               {renderToolbar()}
@@ -393,11 +399,11 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
                 size="small" 
                 title="Asset Hierarchy" 
                 style={{ height: isBulkModeEnabled ? 'calc(100vh - 350px)' : 'calc(100vh - 250px)' }}
-                bodyStyle={{ 
+                styles={{ body: { 
                   padding: '8px', 
                   height: 'calc(100% - 40px)', 
                   overflow: 'auto' 
-                }}
+                } }}
               >
                 {isLoading ? (
                   <div style={{ textAlign: 'center', padding: '40px' }}>

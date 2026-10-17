@@ -227,12 +227,11 @@ const UserManagement: React.FC = () => {
 
       {error && (
         <Alert
-          message="Error"
+          title="Error"
           description={error}
           type="error"
           showIcon
-          closable
-          onClose={clearError}
+          closable={{ onClose: clearError }}
           style={{ marginBottom: '24px' }}
         />
       )}
@@ -320,12 +319,11 @@ const UserManagement: React.FC = () => {
         >
           {createUserError && (
             <Alert
-              message="Error"
+              title="Error"
               description={createUserError}
               type="error"
               showIcon
-              closable
-              onClose={clearCreateUserError}
+              closable={{ onClose: clearCreateUserError }}
               style={{ marginBottom: '16px' }}
             />
           )}

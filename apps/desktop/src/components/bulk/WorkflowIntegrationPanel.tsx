@@ -196,43 +196,46 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
 
   const renderIntegrationStatus = () => (
     <Card size="small" title="Integration Status">
-      <Timeline>
-        <Timeline.Item 
-          color={currentProgress ? 'blue' : 'gray'}
-          dot={<DatabaseOutlined />}
-        >
-          <Space direction="vertical" size={0}>
-            <Text strong>Bulk Import Session</Text>
-            <Text type="secondary">
-              {currentProgress ? `${currentProgress.status} - ${currentProgress.processed_items}/${currentProgress.total_items}` : 'No active session'}
-            </Text>
-          </Space>
-        </Timeline.Item>
-        
-        <Timeline.Item 
-          color='gray' // activeWorkflows not available
-          dot={<ApiOutlined />}
-        >
-          <Space direction="vertical" size={0}>
-            <Text strong>Asset Creation Workflows</Text>
-            <Text type="secondary">
-              {'No active workflows'} // activeWorkflows not available
-            </Text>
-          </Space>
-        </Timeline.Item>
-
-        <Timeline.Item 
-          color={lastSyncTime ? 'green' : 'gray'}
-          dot={<SyncOutlined />}
-        >
-          <Space direction="vertical" size={0}>
-            <Text strong>Workflow Coordination</Text>
-            <Text type="secondary">
-              {lastSyncTime ? `Last sync: ${lastSyncTime.toLocaleTimeString()}` : 'Not synchronized'}
-            </Text>
-          </Space>
-        </Timeline.Item>
-      </Timeline>
+      <Timeline
+        items={[
+          {
+            color: currentProgress ? 'blue' : 'gray',
+            icon: <DatabaseOutlined />,
+            content: (
+              <Space orientation="vertical" size={0}>
+                <Text strong>Bulk Import Session</Text>
+                <Text type="secondary">
+                  {currentProgress ? `${currentProgress.status} - ${currentProgress.processed_items}/${currentProgress.total_items}` : 'No active session'}
+                </Text>
+              </Space>
+            ),
+          },
+          {
+            color: 'gray', // activeWorkflows not available
+            icon: <ApiOutlined />,
+            content: (
+              <Space orientation="vertical" size={0}>
+                <Text strong>Asset Creation Workflows</Text>
+                <Text type="secondary">
+                  {'No active workflows'} // activeWorkflows not available
+                </Text>
+              </Space>
+            ),
+          },
+          {
+            color: lastSyncTime ? 'green' : 'gray',
+            icon: <SyncOutlined />,
+            content: (
+              <Space orientation="vertical" size={0}>
+                <Text strong>Workflow Coordination</Text>
+                <Text type="secondary">
+                  {lastSyncTime ? `Last sync: ${lastSyncTime.toLocaleTimeString()}` : 'Not synchronized'}
+                </Text>
+              </Space>
+            ),
+          },
+        ]}
+      />
     </Card>
   );
 
@@ -245,7 +248,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
 
     return (
       <Card size="small" title="Progress Summary">
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Progress
             percent={progressPercentage}
             size="small"
@@ -261,21 +264,21 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
               <Statistic 
                 title="Total" 
                 value={currentProgress.total_items} 
-                valueStyle={{ fontSize: '14px' }}
+                styles={{ content: { fontSize: '14px' } }}
               />
             </Col>
             <Col span={8}>
               <Statistic 
                 title="Processed" 
                 value={currentProgress.processed_items} 
-                valueStyle={{ fontSize: '14px', color: '#52c41a' }}
+                styles={{ content: { fontSize: '14px', color: '#52c41a' } }}
               />
             </Col>
             <Col span={8}>
               <Statistic 
                 title="Failed" 
                 value={currentProgress.failed_items} 
-                valueStyle={{ fontSize: '14px', color: '#ff4d4f' }}
+                styles={{ content: { fontSize: '14px', color: '#ff4d4f' } }}
               />
             </Col>
           </Row>
@@ -302,7 +305,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
 
     return (
       <Card size="small" title="Integration Controls">
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text>Auto-sync</Text>
             <Switch
@@ -328,7 +331,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
               icon={<FolderOpenOutlined />}
               onClick={() => {
                 notification.info({
-                  message: 'Workflow Dashboard',
+                  title: 'Workflow Dashboard',
                   description: 'Opening detailed workflow dashboard...',
                 });
               }}
@@ -345,7 +348,7 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
   if (compact) {
     return (
       <Card size="small" title="Workflow Integration" style={{ width: '100%' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="small">
+        <Space orientation="vertical" style={{ width: '100%' }} size="small">
           {/* Compact health indicators */}
           <Row gutter={8}>
             <Col span={6}>
@@ -413,11 +416,11 @@ const WorkflowIntegrationPanel: React.FC<WorkflowIntegrationPanelProps> = ({
         )}
       </Space>
     }>
-      <Space direction="vertical" style={{ width: '100%' }} size={16}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={16}>
         {/* Alert for any critical issues */}
         {(bulkError || workflowError) && (
           <Alert
-            message="Integration Issues Detected"
+            title="Integration Issues Detected"
             description={bulkError || workflowError}
             type="error"
             showIcon

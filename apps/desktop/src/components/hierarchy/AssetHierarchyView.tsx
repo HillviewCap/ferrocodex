@@ -327,189 +327,212 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
           </Space>
         }
         style={{ height: '100%' }}
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
-        <Tabs defaultActiveKey="details" style={{ height: '100%' }}>
-          <Tabs.TabPane tab="Details" key="details">
-            <div style={{ padding: '16px' }}>
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          {/* Breadcrumb */}
-          {assetPath.length > 0 && (
-            <div>
-              <Text type="secondary" style={{ fontSize: '12px' }}>Location:</Text>
-              <Breadcrumb style={{ marginTop: 4 }}>
-                <Breadcrumb.Item>
-                  <HomeOutlined />
-                  <span>Root</span>
-                </Breadcrumb.Item>
-                {assetPath.slice(0, -1).map((asset, index) => (
-                  <Breadcrumb.Item key={asset.id}>
-                    <FolderOutlined />
-                    <span>{asset.name}</span>
-                  </Breadcrumb.Item>
-                ))}
-              </Breadcrumb>
-            </div>
-          )}
-
-          {/* Asset Type */}
-          <div>
-            <Text strong>Type: </Text>
-            <Space>
-              {selectedAsset.asset_type === 'Folder' ? (
-                <>
-                  <FolderOutlined style={{ color: '#1890ff' }} />
-                  <Text>Folder</Text>
-                </>
-              ) : (
-                <>
-                  <ToolOutlined style={{ color: '#52c41a' }} />
-                  <Text>Device</Text>
-                </>
+        <Tabs
+          defaultActiveKey="details"
+          style={{ height: '100%' }}
+          items={[
+            {
+              key: 'details',
+              label: 'Details',
+              children: (
+                <div style={{ padding: '16px' }}>
+                  <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+              {/* Breadcrumb */}
+              {assetPath.length > 0 && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>Location:</Text>
+                  <Breadcrumb
+                    style={{ marginTop: 4 }}
+                    items={[
+                      {
+                        title: (
+                          <>
+                            <HomeOutlined />
+                            <span>Root</span>
+                          </>
+                        ),
+                      },
+                      ...assetPath.slice(0, -1).map(asset => ({
+                        key: asset.id,
+                        title: (
+                          <>
+                            <FolderOutlined />
+                            <span>{asset.name}</span>
+                          </>
+                        ),
+                      })),
+                    ]}
+                  />
+                </div>
               )}
-            </Space>
-          </div>
 
-          {/* Description */}
-          {selectedAsset.description && (
-            <div>
-              <Text strong>Description: </Text>
-              <Text>{selectedAsset.description}</Text>
-            </div>
-          )}
-
-          {/* Vault Access */}
-          {isDevice && !vaultLoading && (
-            <div>
-              <Text strong>Identity Vault: </Text>
-              <VaultAccessIndicator 
-                vaultId={vaultInfo?.vault.id || 0}
-                compact={true}
-              />
-            </div>
-          )}
-
-          {/* Asset File Statistics */}
-          {isDevice && assetFileStats && (
-            <div>
-              <Text strong>Files: </Text>
-              <Space>
-                <div>
-                  <DatabaseOutlined style={{ color: '#1890ff', marginRight: 4 }} />
-                  <Text type="secondary">{assetFileStats.configCount} Config{assetFileStats.configCount !== 1 ? 's' : ''}</Text>
-                </div>
-                <div>
-                  <CloudUploadOutlined style={{ color: '#52c41a', marginRight: 4 }} />
-                  <Text type="secondary">{assetFileStats.firmwareCount} Firmware</Text>
-                </div>
-              </Space>
-            </div>
-          )}
-
-          {/* Quick Actions */}
-          {isDevice && (
-            <div>
-              <Text strong>Quick Actions: </Text>
-              <Space wrap style={{ marginTop: 8 }}>
-                <Button 
-                  size="small" 
-                  icon={<DatabaseOutlined />} 
-                  onClick={handleAddConfig}
-                  type="primary"
-                >
-                  Add Configuration
-                </Button>
-                <Button 
-                  size="small" 
-                  icon={<CloudUploadOutlined />} 
-                  onClick={handleUploadFirmware}
-                >
-                  Upload Firmware
-                </Button>
-                <Button 
-                  size="small" 
-                  icon={<KeyOutlined />} 
-                  onClick={handleManageVault}
-                >
-                  Identity Vault
-                </Button>
-                <Button 
-                  size="small" 
-                  icon={<HistoryOutlined />} 
-                  onClick={handleViewHistory}
-                  type="default"
-                >
-                  View History
-                </Button>
-              </Space>
-            </div>
-          )}
-
-          {/* Creation Info */}
-          <Divider style={{ margin: '12px 0' }} />
-          <div>
-            <Space direction="vertical" size="small">
+              {/* Asset Type */}
               <div>
-                <CalendarOutlined style={{ marginRight: 8, color: '#666' }} />
-                <Text type="secondary">Created: {formatDate(selectedAsset.created_at)}</Text>
+                <Text strong>Type: </Text>
+                <Space>
+                  {selectedAsset.asset_type === 'Folder' ? (
+                    <>
+                      <FolderOutlined style={{ color: '#1890ff' }} />
+                      <Text>Folder</Text>
+                    </>
+                  ) : (
+                    <>
+                      <ToolOutlined style={{ color: '#52c41a' }} />
+                      <Text>Device</Text>
+                    </>
+                  )}
+                </Space>
               </div>
-              <div>
-                <UserOutlined style={{ marginRight: 8, color: '#666' }} />
-                <Text type="secondary">Created by: User #{selectedAsset.created_by}</Text>
-              </div>
-            </Space>
-          </div>
 
-          {/* Folder Contents */}
-          {selectedAsset.asset_type === 'Folder' && (
-            <>
+              {/* Description */}
+              {selectedAsset.description && (
+                <div>
+                  <Text strong>Description: </Text>
+                  <Text>{selectedAsset.description}</Text>
+                </div>
+              )}
+
+              {/* Vault Access */}
+              {isDevice && !vaultLoading && (
+                <div>
+                  <Text strong>Identity Vault: </Text>
+                  <VaultAccessIndicator 
+                    vaultId={vaultInfo?.vault.id || 0}
+                    compact={true}
+                  />
+                </div>
+              )}
+
+              {/* Asset File Statistics */}
+              {isDevice && assetFileStats && (
+                <div>
+                  <Text strong>Files: </Text>
+                  <Space>
+                    <div>
+                      <DatabaseOutlined style={{ color: '#1890ff', marginRight: 4 }} />
+                      <Text type="secondary">{assetFileStats.configCount} Config{assetFileStats.configCount !== 1 ? 's' : ''}</Text>
+                    </div>
+                    <div>
+                      <CloudUploadOutlined style={{ color: '#52c41a', marginRight: 4 }} />
+                      <Text type="secondary">{assetFileStats.firmwareCount} Firmware</Text>
+                    </div>
+                  </Space>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              {isDevice && (
+                <div>
+                  <Text strong>Quick Actions: </Text>
+                  <Space wrap style={{ marginTop: 8 }}>
+                    <Button 
+                      size="small" 
+                      icon={<DatabaseOutlined />} 
+                      onClick={handleAddConfig}
+                      type="primary"
+                    >
+                      Add Configuration
+                    </Button>
+                    <Button 
+                      size="small" 
+                      icon={<CloudUploadOutlined />} 
+                      onClick={handleUploadFirmware}
+                    >
+                      Upload Firmware
+                    </Button>
+                    <Button 
+                      size="small" 
+                      icon={<KeyOutlined />} 
+                      onClick={handleManageVault}
+                    >
+                      Identity Vault
+                    </Button>
+                    <Button 
+                      size="small" 
+                      icon={<HistoryOutlined />} 
+                      onClick={handleViewHistory}
+                      type="default"
+                    >
+                      View History
+                    </Button>
+                  </Space>
+                </div>
+              )}
+
+              {/* Creation Info */}
               <Divider style={{ margin: '12px 0' }} />
               <div>
-                <Text strong>Contents: </Text>
-                <Text>{selectedAsset.children.length} items</Text>
-                {selectedAsset.children.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <Space wrap>
-                      {selectedAsset.children.slice(0, 5).map(child => (
-                        <div key={child.id} style={{ fontSize: '12px' }}>
-                          {child.asset_type === 'Folder' ? (
-                            <FolderOutlined style={{ color: '#1890ff', marginRight: 4 }} />
-                          ) : (
-                            <ToolOutlined style={{ color: '#52c41a', marginRight: 4 }} />
-                          )}
-                          <Text type="secondary">{child.name}</Text>
-                        </div>
-                      ))}
-                      {selectedAsset.children.length > 5 && (
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          +{selectedAsset.children.length - 5} more
-                        </Text>
-                      )}
-                    </Space>
+                <Space orientation="vertical" size="small">
+                  <div>
+                    <CalendarOutlined style={{ marginRight: 8, color: '#666' }} />
+                    <Text type="secondary">Created: {formatDate(selectedAsset.created_at)}</Text>
                   </div>
-                )}
+                  <div>
+                    <UserOutlined style={{ marginRight: 8, color: '#666' }} />
+                    <Text type="secondary">Created by: User #{selectedAsset.created_by}</Text>
+                  </div>
+                </Space>
               </div>
-            </>
-          )}
-              </Space>
-            </div>
-          </Tabs.TabPane>
-          
-          {isDevice && (
-            <Tabs.TabPane tab="Metadata" key="metadata">
-              <div style={{ height: '100%', overflow: 'auto' }}>
-                <MetadataDisplay
-                  assetId={selectedAsset.id}
-                  schemaId={1} // TODO: Get schema ID from asset type
-                  onRefresh={() => {
-                    // Optionally refresh other data
-                    console.log('Metadata refreshed');
-                  }}
-                />
-              </div>
-            </Tabs.TabPane>
-          )}
-        </Tabs>
+
+              {/* Folder Contents */}
+              {selectedAsset.asset_type === 'Folder' && (
+                <>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <div>
+                    <Text strong>Contents: </Text>
+                    <Text>{selectedAsset.children.length} items</Text>
+                    {selectedAsset.children.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <Space wrap>
+                          {selectedAsset.children.slice(0, 5).map(child => (
+                            <div key={child.id} style={{ fontSize: '12px' }}>
+                              {child.asset_type === 'Folder' ? (
+                                <FolderOutlined style={{ color: '#1890ff', marginRight: 4 }} />
+                              ) : (
+                                <ToolOutlined style={{ color: '#52c41a', marginRight: 4 }} />
+                              )}
+                              <Text type="secondary">{child.name}</Text>
+                            </div>
+                          ))}
+                          {selectedAsset.children.length > 5 && (
+                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                              +{selectedAsset.children.length - 5} more
+                            </Text>
+                          )}
+                        </Space>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+                  </Space>
+                </div>
+              ),
+            },
+            ...(isDevice
+              ? [
+                  {
+                    key: 'metadata',
+                    label: 'Metadata',
+                    children: (
+                      <div style={{ height: '100%', overflow: 'auto' }}>
+                        <MetadataDisplay
+                          assetId={selectedAsset.id}
+                          schemaId={1} // TODO: Get schema ID from asset type
+                          onRefresh={() => {
+                            // Optionally refresh other data
+                            console.log('Metadata refreshed');
+                          }}
+                        />
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       </Card>
     );
   };
@@ -550,7 +573,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
 
       {error && (
         <Alert
-          message="Error loading hierarchy"
+          title="Error loading hierarchy"
           description={error}
           type="error"
           showIcon
@@ -565,7 +588,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         >
           <Card 
             title="Asset Tree" 
-            bodyStyle={{ padding: 0, height: 'calc(100% - 60px)' }}
+            styles={{ body: { padding: 0, height: 'calc(100% - 60px)' } }}
             style={{ height: '100%', border: 'none' }}
           >
             <Spin spinning={isLoading}>
@@ -631,7 +654,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
           onCancel={() => setVaultModalVisible(false)}
           footer={null}
           width={1000}
-          destroyOnClose
+          destroyOnHidden
         >
           <IdentityVault 
             asset={{

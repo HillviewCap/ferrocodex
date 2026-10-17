@@ -113,7 +113,7 @@ const PasswordHistoryComponent: React.FC<PasswordHistoryProps> = ({
           border: isCurrentPassword(item) ? '1px solid #52c41a' : '1px solid #f0f0f0'
         }}
       >
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
               <Text strong>
@@ -166,10 +166,10 @@ const PasswordHistoryComponent: React.FC<PasswordHistoryProps> = ({
       width={700}
       footer={null}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         {/* Security Notice */}
         <Alert
-          message="Password History Security"
+          title="Password History Security"
           description="Password hashes are stored using bcrypt for reuse detection. Actual passwords are never stored in plain text and cannot be recovered from these hashes."
           type="info"
           showIcon
@@ -214,7 +214,7 @@ const PasswordHistoryComponent: React.FC<PasswordHistoryProps> = ({
             </div>
 
             <Timeline
-              mode="left"
+              mode="start"
               items={timelineItems}
             />
 

@@ -244,7 +244,7 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
       width={550}
       destroyOnHidden
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         {/* Version Information */}
         <div>
           <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Configuration Details</Title>
@@ -296,7 +296,7 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
             <Divider style={{ margin: '12px 0' }} />
             <div>
               <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Export Progress</Title>
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <Row align="middle" gutter={[8, 0]}>
                   <Col flex="none">
                     {getProgressIcon()}
@@ -319,18 +319,17 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
         {/* Error Display */}
         {error && (
           <Alert
-            message="Export Error"
+            title="Export Error"
             description={error}
             type="error"
             showIcon
-            closable
-            onClose={() => setError('')}
+            closable={{ onClose: () => setError('') }}
           />
         )}
 
         {/* Export Information */}
         <Alert
-          message="Export Information"
+          title="Export Information"
           description="The export process includes integrity verification to ensure the configuration file is complete and accurate."
           type="info"
           showIcon
@@ -339,7 +338,7 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
         {/* Success Information */}
         {exportProgress.step === 'completed' && (
           <Alert
-            message="Export Successful"
+            title="Export Successful"
             description="The configuration file has been exported successfully and verified for integrity."
             type="success"
             showIcon

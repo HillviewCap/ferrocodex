@@ -122,7 +122,7 @@ const StatusHistoryModal: React.FC<StatusHistoryModalProps> = ({
       width={700}
       destroyOnHidden
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <div>
           <Title level={5} style={{ margin: 0, marginBottom: '8px' }}>
             Configuration Version
@@ -136,12 +136,11 @@ const StatusHistoryModal: React.FC<StatusHistoryModalProps> = ({
 
         {error && (
           <Alert
-            message="Error loading status history"
+            title="Error loading status history"
             description={error}
             type="error"
             showIcon
-            closable
-            onClose={() => setError(null)}
+            closable={{ onClose: () => setError(null) }}
           />
         )}
 
@@ -159,15 +158,14 @@ const StatusHistoryModal: React.FC<StatusHistoryModalProps> = ({
           />
         ) : (
           <Card style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <Timeline>
-              {history.map((record, index) => (
-                <Timeline.Item
-                  key={record.id}
-                  color={getTimelineColor(record.new_status)}
-                  style={{ paddingBottom: index === history.length - 1 ? '0' : '24px' }}
-                >
+            <Timeline
+              items={history.map((record, index) => ({
+                key: record.id,
+                color: getTimelineColor(record.new_status),
+                style: { paddingBottom: index === history.length - 1 ? '0' : '24px' },
+                content: (
                   <div style={{ marginTop: '-6px' }}>
-                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {record.old_status && (
                           <>
@@ -237,9 +235,9 @@ const StatusHistoryModal: React.FC<StatusHistoryModalProps> = ({
                       )}
                     </Space>
                   </div>
-                </Timeline.Item>
-              ))}
-            </Timeline>
+                ),
+              }))}
+            />
           </Card>
         )}
       </Space>

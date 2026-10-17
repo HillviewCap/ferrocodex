@@ -822,7 +822,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
         <TreeSelect
           style={{ width: '100%' }}
           value={selectedDestination}
-          dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+          styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }}
           placeholder="Select destination folder"
           treeDefaultExpandAll
           onChange={(value) => setSelectedDestination(value)}

@@ -231,7 +231,7 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
   if (!currentWorkflow) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
-        <Spin size="large" tip="Initializing asset creation workflow..." />
+        <Spin size="large" description="Initializing asset creation workflow..." />
       </div>
     );
   }

@@ -227,7 +227,7 @@ export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
           </Space>
         }
         placement="right"
-        width={400}
+        size={400}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -304,7 +304,7 @@ export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
                         </Space>
                       }
                       description={
-                        <Space direction="vertical" size={4}>
+                        <Space orientation="vertical" size={4}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {formatTimestamp(operation.timestamp)}
                           </Text>

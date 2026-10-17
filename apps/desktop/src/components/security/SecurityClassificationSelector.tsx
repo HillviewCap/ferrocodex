@@ -117,7 +117,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
         style={{ width: '100%', minWidth: 200 }}
         size={size}
         notFoundContent="No classifications available"
-        dropdownStyle={{ minWidth: 350 }}
+        styles={{ popup: { root: { minWidth: 350 } } }}
         optionLabelProp="label"
       >
         {Object.values(SecurityClassificationLevel).map(level => {
@@ -154,7 +154,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
       {/* Classification Inheritance Warning */}
       {inheritedClassification && (
         <Alert
-          message={`Inherited Classification: ${SECURITY_CLASSIFICATIONS[inheritedClassification].displayName}`}
+          title={`Inherited Classification: ${SECURITY_CLASSIFICATIONS[inheritedClassification].displayName}`}
           description="This asset inherits its classification from its parent folder. You can only select equal or higher classifications."
           type="info"
           showIcon
@@ -167,7 +167,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
       {selectedLevel && currentUserRole === 'Engineer' && 
        (selectedLevel === SecurityClassificationLevel.RESTRICTED || selectedLevel === SecurityClassificationLevel.SECRET) && (
         <Alert
-          message="Administrator Approval Required"
+          title="Administrator Approval Required"
           description="This classification level requires administrator approval. Your request will be submitted for review."
           type="warning"
           showIcon

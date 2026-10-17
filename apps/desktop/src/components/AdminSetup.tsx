@@ -90,7 +90,7 @@ const AdminSetup: React.FC = () => {
           boxShadow: '0 4px 20px rgba(0,0,0,0.1)' 
         }}
       >
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>
             <Title level={2} style={{ marginBottom: 8 }}>
               Welcome to Ferrocodex
@@ -102,12 +102,11 @@ const AdminSetup: React.FC = () => {
 
           {error && (
             <Alert
-              message="Setup Failed"
+              title="Setup Failed"
               description={error}
               type="error"
               showIcon
-              closable
-              onClose={clearError}
+              closable={{ onClose: clearError }}
             />
           )}
 

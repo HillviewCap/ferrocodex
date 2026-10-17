@@ -388,7 +388,7 @@ const QuickFirmwareUploadModal: React.FC<QuickFirmwareUploadModalProps> = ({
       onCancel={onCancel}
       footer={renderFooter()}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Steps
         current={currentStep}

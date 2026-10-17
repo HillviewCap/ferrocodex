@@ -179,7 +179,7 @@ const RetryPreferencesComponent: React.FC<RetryPreferencesProps> = ({ onSettings
   if (!userSettings) {
     return (
       <Alert
-        message="Unable to Load Settings"
+        title="Unable to Load Settings"
         description="Failed to load user settings. Please try refreshing the page."
         type="error"
         showIcon
@@ -498,7 +498,7 @@ const RetryPreferencesComponent: React.FC<RetryPreferencesProps> = ({ onSettings
             extra={<Tag color="blue">Advanced</Tag>}
           >
             <Alert
-              message="Advanced Settings"
+              title="Advanced Settings"
               description="These settings are for advanced users. Per-operation and circuit breaker configurations allow fine-tuning of retry behavior for specific operations and services."
               type="info"
               style={{ marginBottom: '16px' }}

@@ -233,7 +233,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const handleAddFilter = useCallback(() => {
     if (availableFields.length === 0) {
       notification.warning({
-        message: 'No Fields Available',
+        title: 'No Fields Available',
         description: 'No filterable fields are available. Please ensure you have assets with metadata.',
       });
       return;
@@ -247,7 +247,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const handleSavePreset = useCallback(async () => {
     if (!newPresetName.trim()) {
       notification.warning({
-        message: 'Preset Name Required',
+        title: 'Preset Name Required',
         description: 'Please enter a name for the preset.',
       });
       return;
@@ -255,7 +255,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
     if (query.filters.length === 0) {
       notification.warning({
-        message: 'No Filters to Save',
+        title: 'No Filters to Save',
         description: 'Please add some filters before saving a preset.',
       });
       return;
@@ -268,7 +268,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       });
       
       notification.success({
-        message: 'Preset Saved',
+        title: 'Preset Saved',
         description: `Filter preset "${newPresetName}" has been saved.`,
       });
       
@@ -277,7 +277,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     } catch (error) {
       console.error('Failed to save preset:', error);
       notification.error({
-        message: 'Save Failed',
+        title: 'Save Failed',
         description: error instanceof Error ? error.message : 'Failed to save preset',
       });
     }
@@ -288,7 +288,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
   const savePresetContent = (
     <div style={{ width: 250 }}>
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Input
           placeholder="Preset name"
           value={newPresetName}
@@ -396,7 +396,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         }
         size="small"
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           {/* Filter List */}
           {query.filters.map((filter, index) => (
             <Card key={index} size="small" style={{ marginBottom: 8 }}>
