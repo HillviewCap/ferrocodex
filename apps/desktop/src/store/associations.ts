@@ -228,7 +228,12 @@ export const useAssociationStore = create<AssociationState>()(
             id: assetId,
             name: get().associations.find(a => a.assetId === assetId)?.assetName || '',
             description: '',
-            type: 'Device'
+            assetType: 'Device',
+            sortOrder: 0,
+            createdBy: 0,
+            createdByUsername: '',
+            createdAt: '',
+            versionCount: 0
           } : undefined : undefined,
         };
         

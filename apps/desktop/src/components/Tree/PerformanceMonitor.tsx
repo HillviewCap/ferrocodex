@@ -126,7 +126,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
           | {metrics.frameRate.toFixed(0)}fps
         </Text>
         {recommendations.length > 0 && (
-          <Tag size="small" color={recommendations[0].priority === 'critical' ? 'error' : 'warning'}>
+          <Tag color={recommendations[0].priority === 'critical' ? 'error' : 'warning'}>
             {recommendations.length}
           </Tag>
         )}
@@ -277,7 +277,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {renderRecommendationIcon(rec)}
                         <Text strong>{rec.description}</Text>
-                        <Tag size="small" color={
+                        <Tag color={
                           rec.priority === 'critical' ? 'error' :
                           rec.priority === 'high' ? 'warning' :
                           rec.priority === 'medium' ? 'processing' : 'default'

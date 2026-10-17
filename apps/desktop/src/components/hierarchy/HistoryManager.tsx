@@ -295,11 +295,11 @@ export const HistoryManagerComponent: React.FC<HistoryManagerProps> = ({
                           <Text strong={isLastOperation}>
                             {operation.description}
                           </Text>
-                          <Tag color={getOperationTypeColor(operation.type)} size="small">
+                          <Tag color={getOperationTypeColor(operation.type)}>
                             {operation.type.toUpperCase()}
                           </Tag>
                           {isLastOperation && (
-                            <Tag color="blue" size="small">LAST</Tag>
+                            <Tag color="blue">LAST</Tag>
                           )}
                         </Space>
                       }

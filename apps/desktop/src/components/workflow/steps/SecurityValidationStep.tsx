@@ -192,8 +192,6 @@ export const SecurityValidationStep: React.FC<BaseStepProps> = ({
               <SecurityClassificationSelector
                 value={localData.security_classification}
                 onChange={handleClassificationChange}
-                assetType={data.asset_type}
-                style={{ width: '100%' }}
               />
 
               <Divider />

@@ -59,6 +59,11 @@ interface AssetMetadataFull {
   related_assets: any[];
 }
 
+// `current` with `metadata_values_json` parsed into an object
+type CurrentMetadata = NonNullable<AssetMetadataFull['current']> & {
+  metadata_values: Record<string, any>;
+};
+
 interface MetadataSchema {
   id: number;
   name: string;
@@ -74,7 +79,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
   const { token } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [metadata, setMetadata] = useState<AssetMetadataFull['current'] | null>(null);
+  const [metadata, setMetadata] = useState<CurrentMetadata | null>(null);
   const [schema, setSchema] = useState<MetadataSchema | null>(null);
   const [fields, setFields] = useState<MetadataField[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +109,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
         // Extract the current metadata from the full response
         if (metadataData.current) {
           // Parse the metadata_values_json string
-          let metadataValues = {};
+          let metadataValues: Record<string, any> = {};
           try {
             if (metadataData.current.metadata_values_json) {
               metadataValues = JSON.parse(metadataData.current.metadata_values_json);
@@ -114,11 +119,11 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
           }
           
           // Store metadata with parsed values
-          const metadataWithParsedValues = {
+          const metadataWithParsedValues: CurrentMetadata = {
             ...metadataData.current,
             metadata_values: metadataValues
           };
-          setMetadata(metadataWithParsedValues as any);
+          setMetadata(metadataWithParsedValues);
           
           // Parse schema and extract field definitions
           if (schemaData) {

@@ -199,7 +199,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
     label: (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{suggestion.text}</span>
-        <Tag size="small" color={
+        <Tag color={
           suggestion.suggestion_type === 'FieldName' ? 'blue' :
           suggestion.suggestion_type === 'FieldValue' ? 'green' :
           suggestion.suggestion_type === 'AssetName' ? 'orange' :
@@ -221,7 +221,7 @@ const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = ({
       label: (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{h}</span>
-          <Tag size="small" color="default" icon={<HistoryOutlined />}>
+          <Tag color="default" icon={<HistoryOutlined />}>
             Recent
           </Tag>
         </div>

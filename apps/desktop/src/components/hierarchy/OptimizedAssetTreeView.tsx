@@ -178,19 +178,18 @@ export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
   }, [hierarchyData, expandedKeys, enableVirtualization, performanceSettings.useVirtualization]);
 
   // Event handlers
-  const handleSelect: TreeProps['onSelect'] = useCallback((selectedKeys, info) => {
+  const handleSelect = useCallback<NonNullable<TreeProps<OptimizedTreeDataNode>['onSelect']>>((selectedKeys, info) => {
     const key = selectedKeys[0];
     setSelectedKeys(selectedKeys);
-    
+
     if (key) {
-      const nodeData = info.node as OptimizedTreeDataNode;
-      onAssetSelect?.(nodeData.asset);
+      onAssetSelect?.(info.node.asset);
     } else {
       onAssetSelect?.(null);
     }
   }, [onAssetSelect]);
 
-  const handleExpand: TreeProps['onExpand'] = useCallback((expandedKeys) => {
+  const handleExpand = useCallback<NonNullable<TreeProps['onExpand']>>((expandedKeys) => {
     setExpandedKeys(expandedKeys);
   }, []);
 
@@ -218,7 +217,7 @@ export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
 
   // Render performance metrics in development
   const renderPerformanceInfo = () => {
-    if (process.env.NODE_ENV !== 'development') return null;
+    if (!import.meta.env.DEV) return null;
     
     return (
       <div style={{ 
@@ -261,7 +260,7 @@ export const OptimizedAssetTreeView: React.FC<OptimizedAssetTreeViewProps> = ({
               style={{ padding: '32px' }}
             />
           ) : (
-            <Tree
+            <Tree<OptimizedTreeDataNode>
               ref={treeRef}
               treeData={treeData}
               onSelect={handleSelect}

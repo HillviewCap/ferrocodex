@@ -111,9 +111,7 @@ export const HierarchySelectionStep: React.FC<BaseStepProps> = ({
           hierarchyData={hierarchyData}
           value={localData.parent_id}
           onChange={handleParentSelect}
-          allowRoot={data.asset_type === 'Folder'}
           placeholder="Select a parent folder"
-          style={{ width: '100%' }}
         />
       </Card>
 

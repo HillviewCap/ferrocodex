@@ -21,7 +21,7 @@ npm run tauri:build    # production bundle
 npm run test:run       # vitest once (`npm run test` is watch mode)
 npm run test:run -- src/components/Dashboard.test.tsx   # single file
 npm run test:run -- -t "test name"                        # single test by name
-npx tsc --noEmit       # type-check (no separate typecheck script)
+npm run typecheck      # tsc --noEmit (also run in CI)
 
 # Backend (from root)
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml

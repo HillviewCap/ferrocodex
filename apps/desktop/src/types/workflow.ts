@@ -1,4 +1,5 @@
 import { AssetType } from './assets';
+import { SecurityClassificationLevel } from './security';
 
 // Workflow State Management
 export interface WorkflowState {
@@ -33,7 +34,7 @@ export interface WorkflowData {
   parent_path?: string;
   metadata_schema_id?: number;
   metadata_values?: Record<string, any>;
-  security_classification?: string;
+  security_classification?: SecurityClassificationLevel;
   validation_results?: ValidationResults;
 }
 
@@ -109,7 +110,7 @@ export interface MetadataConfigurationData {
 }
 
 export interface SecurityValidationData {
-  security_classification: string;
+  security_classification: SecurityClassificationLevel;
   naming_compliance: boolean;
   validation_passed: boolean;
 }

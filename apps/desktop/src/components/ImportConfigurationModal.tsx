@@ -84,16 +84,16 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
           });
 
           // Validate file extension
-          const extensionError = validateFileExtension(metadata.name);
-          if (extensionError) {
-            message.error(extensionError);
+          const extensionValidation = validateFileExtension(metadata.name);
+          if (!extensionValidation.isValid) {
+            message.error(extensionValidation.message);
             return;
           }
 
           // Validate file size
-          const sizeError = validateFileSize(metadata.size);
-          if (sizeError) {
-            message.error(sizeError);
+          const sizeValidation = validateFileSize(metadata.size);
+          if (!sizeValidation.isValid) {
+            message.error(sizeValidation.message);
             return;
           }
 

@@ -154,31 +154,25 @@ describe('VirtualizedTree', () => {
   });
 
   it('shows performance metrics in development mode', () => {
-    // Mock development environment
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('DEV', true);
     
     render(<VirtualizedTree {...defaultProps} />);
     
     // Should show performance info in development
     expect(screen.getByText(/Items:/)).toBeInTheDocument();
     
-    // Restore environment
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it('hides performance metrics in production mode', () => {
-    // Mock production environment
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('DEV', false);
     
     render(<VirtualizedTree {...defaultProps} />);
     
     // Should not show performance info in production
     expect(screen.queryByText(/Items:/)).not.toBeInTheDocument();
     
-    // Restore environment
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it('applies correct height to virtualized list', () => {

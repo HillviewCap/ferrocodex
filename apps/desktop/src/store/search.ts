@@ -29,7 +29,8 @@ interface SearchStore extends SearchState, FilterBuilderState {
   
   // Preset actions
   loadPresets: () => Promise<void>;
-  savePreset: (preset: Omit<FilterPreset, 'id' | 'created_by' | 'usage_count' | 'created_at'>) => Promise<void>;
+  // `filters` is always taken from the current query, so callers only supply name/description
+  savePreset: (preset: Omit<FilterPreset, 'id' | 'created_by' | 'usage_count' | 'created_at' | 'filters'>) => Promise<void>;
   deletePreset: (presetId: number) => Promise<void>;
   applyPreset: (preset: FilterPreset) => void;
   
@@ -175,7 +176,7 @@ const useSearchStore = create<SearchStore>()(
         }
       },
       
-      savePreset: async (presetData: Omit<FilterPreset, 'id' | 'created_by' | 'usage_count' | 'created_at'>) => {
+      savePreset: async (presetData: Omit<FilterPreset, 'id' | 'created_by' | 'usage_count' | 'created_at' | 'filters'>) => {
         try {
           const preset = await invoke<FilterPreset>('create_metadata_filter_preset', { 
             preset: {

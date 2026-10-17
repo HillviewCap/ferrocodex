@@ -114,7 +114,7 @@ const FileSecurityUpload: React.FC<FileSecurityUploadProps> = ({
 
   // Start comprehensive file validation
   const startFileValidation = async (fileId: string, file: File) => {
-    const updateStatus = (updates: Partial<FileValidationStatus>) => {
+    const updateStatus = (updates: Partial<FileValidationStatus & { result?: FileIntegrityResult }>) => {
       setUploadFiles(prev => ({
         ...prev,
         [fileId]: { ...prev[fileId], ...updates }

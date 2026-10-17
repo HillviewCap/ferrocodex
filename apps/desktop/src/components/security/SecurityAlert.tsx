@@ -94,7 +94,7 @@ const SecurityAlert: React.FC<SecurityAlertProps> = ({
         }}
       >
         <Space size="small" style={{ flex: 1 }}>
-          <Badge status={config.type} />
+          <Badge color={config.color} />
           <Text strong style={{ fontSize: '12px' }}>
             {alert.title}
           </Text>
@@ -120,7 +120,7 @@ const SecurityAlert: React.FC<SecurityAlertProps> = ({
     <Alert
       title={
         <Space>
-          <Badge status={config.type} text={config.text} />
+          <Badge color={config.color} text={config.text} />
           <Text strong>{alert.title}</Text>
           {alert.assetName && (
             <Text type="secondary" style={{ fontSize: '12px' }}>

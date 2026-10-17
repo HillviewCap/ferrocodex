@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import type { StorageValue } from 'zustand/middleware';
 import { AssetInfo } from '../types/assets';
 
 export interface TreeViewState {
@@ -104,19 +105,44 @@ const initialState: TreeViewState = {
   compactMode: false,
 };
 
-// Custom serializer for Set objects
+// Only persist specific fields
+const partializeTreeState = (state: TreeState) => ({
+  expandedKeys: state.expandedKeys,
+  selectedAssetId: state.selectedAssetId,
+  viewMode: state.viewMode,
+  sortBy: state.sortBy,
+  sortOrder: state.sortOrder,
+  virtualizationEnabled: state.virtualizationEnabled,
+  itemHeight: state.itemHeight,
+  overscanCount: state.overscanCount,
+  sidebarWidth: state.sidebarWidth,
+  showPerformanceMetrics: state.showPerformanceMetrics,
+  compactMode: state.compactMode,
+});
+
+type PersistedTreeState = ReturnType<typeof partializeTreeState>;
+
+// Custom serializer for Set objects. zustand/persist wraps the partialized
+// state in a `{ state, version }` envelope, so the Set lives at `value.state.expandedKeys`.
 const serializer = {
-  serialize: (state: TreeState) => {
+  serialize: (value: StorageValue<PersistedTreeState>): string => {
     return JSON.stringify({
-      ...state,
-      expandedKeys: Array.from(state.expandedKeys || new Set()),
+      ...value,
+      state: {
+        ...value.state,
+        expandedKeys: Array.from(value.state.expandedKeys || new Set<number>()),
+      },
     });
   },
-  deserialize: (str: string) => {
+  deserialize: (str: string): StorageValue<PersistedTreeState> => {
     const parsed = JSON.parse(str);
+    const persisted = parsed.state || {};
     return {
       ...parsed,
-      expandedKeys: new Set(parsed.expandedKeys || []),
+      state: {
+        ...persisted,
+        expandedKeys: new Set<number>(Array.isArray(persisted.expandedKeys) ? persisted.expandedKeys : []),
+      },
     };
   },
 };
@@ -324,27 +350,14 @@ export const useTreeStateStore = create<TreeState>()(
         }),
         {
           name: 'tree-view-state',
-          // Only persist specific fields
-          partialize: (state) => ({
-            expandedKeys: state.expandedKeys,
-            selectedAssetId: state.selectedAssetId,
-            viewMode: state.viewMode,
-            sortBy: state.sortBy,
-            sortOrder: state.sortOrder,
-            virtualizationEnabled: state.virtualizationEnabled,
-            itemHeight: state.itemHeight,
-            overscanCount: state.overscanCount,
-            sidebarWidth: state.sidebarWidth,
-            showPerformanceMetrics: state.showPerformanceMetrics,
-            compactMode: state.compactMode,
-          }),
+          partialize: partializeTreeState,
           storage: {
             getItem: (name) => {
               const item = localStorage.getItem(name);
               return item ? serializer.deserialize(item) : null;
             },
             setItem: (name, value) => {
-              localStorage.setItem(name, serializer.serialize(value as TreeViewState));
+              localStorage.setItem(name, serializer.serialize(value));
             },
             removeItem: (name) => {
               localStorage.removeItem(name);
