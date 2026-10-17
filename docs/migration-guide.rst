@@ -208,7 +208,6 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
 
 * Complete asset hierarchy system with folders and devices
 * Advanced metadata management with custom fields
-* SQLite FTS5 full-text search implementation
 * Cybersecurity-compliant naming enforcement
 * Bulk operations and import/export enhancements
 * Drag-and-drop asset organization
@@ -228,7 +227,6 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
 
    * Adds the asset type (folder/device) and parent columns
    * Adds metadata storage
-   * Creates the FTS5 search tables
 
 3. **Asset Name Compliance**:
 
@@ -247,12 +245,6 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
    * Use bulk move to organize
    * Set up metadata templates
 
-5. **Search Index Building**:
-
-   * Search tables are created automatically
-   * Initial indexing of a large database may take several minutes
-   * Verify search results after the upgrade
-
 **Post-Migration Steps:**
 
 1. **Organize Asset Hierarchy**:
@@ -269,18 +261,16 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
    * Migrate existing data to fields
    * Set validation rules
 
-3. **Verify Search**:
+3. **Verify the Asset Tree**:
 
-   * Test full-text search
-   * Check metadata filtering
-   * Validate performance
-   * Train users on syntax
+   * Filter the tree by name and by type
+   * Confirm all devices appear
 
 4. **User Training**:
 
    * Hierarchy navigation
    * Drag-and-drop operations
-   * Advanced search features
+   * Tree filtering
    * Metadata management
 
 Migrating from v0.3.x to v0.4.x
@@ -522,7 +512,7 @@ Verification Checklist
 **Performance:**
 
 - [ ] Login time acceptable
-- [ ] Search responsive
+- [ ] Asset tree filter responsive
 - [ ] Upload speeds normal
 - [ ] Database queries fast
 

@@ -185,7 +185,7 @@ All asset names must follow the naming pattern:
 
 * Create logical folder structures (by location, function, or type)
 * Use drag-and-drop to reorganize assets
-* Navigate with the tree view or use search
+* Navigate with the tree view or filter it by name
 * Add custom metadata fields for better organization
 
 2. Configuration Management

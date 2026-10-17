@@ -22,7 +22,7 @@ Overview
 Ferrocodex helps industrial organizations manage their equipment configurations. Key features include:
 
 * **Asset Hierarchy**: Organize equipment in a tree of folders and devices, with drag-and-drop and bulk import, export, and rename
-* **Search and Filtering**: SQLite FTS5 full-text search across assets and metadata, with saved searches and filter presets
+* **Filtering and Lookup**: Filter the asset tree by name, description, and type, and search vault credentials by name
 * **Custom Metadata**: Define equipment-specific fields with JSON Schema validation and field templates
 * **Offline-First Design**: Work without network connectivity in air-gapped environments
 * **Configuration Versioning**: Branching, version history, and promotion from working versions to approved ("golden") configurations

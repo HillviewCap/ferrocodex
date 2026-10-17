@@ -41,7 +41,7 @@ Asset Management
 ----------------
 
 .. note::
-   Assets are organized hierarchically with folders and devices, custom metadata fields, search, and a security-oriented naming pattern. See the :doc:`asset-hierarchy-guide` for detailed information.
+   Assets are organized hierarchically with folders and devices, custom metadata fields, tree filtering, and a security-oriented naming pattern. See the :doc:`asset-hierarchy-guide` for detailed information.
 
 Understanding Assets
 ^^^^^^^^^^^^^^^^^^^^
@@ -186,34 +186,16 @@ Define custom fields for your assets:
 * **Location**: Facility, building, floor, room
 * **Maintenance**: Install date, warranty, service schedule
 
-Advanced Search and Filtering
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Filtering the Asset Tree
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Search Capabilities:**
+The search box above the asset tree narrows it to matching assets:
 
-* **Full-Text Search**: SQLite FTS5 indexed search
-* **Metadata Search**: Search across all custom fields
-* **Hierarchical Search**: Search within specific folders
-* **Advanced Filters**: Complex AND/OR/NOT combinations
-* **Search Suggestions**: Auto-complete with history
-* **Similar Asset Discovery**: Find related equipment
+* **Text match**: Part of an asset name or description, case-insensitive
+* **Type filter**: All assets, folders only, or devices only
+* **Context**: Parent folders of each match are expanded automatically
 
-**Search Syntax Examples:**
-
-.. code-block:: text
-
-   Simple search:
-   pump                    # Find all assets with "pump"
-   
-   Field-specific:
-   manufacturer:siemens    # Search by manufacturer
-   
-   Boolean operators:
-   pump AND cooling        # Both terms required
-   pump OR fan            # Either term
-   
-   Wildcards:
-   PLC-*                  # Matches PLC-001, PLC-002, etc.
+Custom metadata values are not searched. See :doc:`asset-hierarchy-guide` for details.
 
 Bulk Operations
 ^^^^^^^^^^^^^^^
@@ -401,7 +383,7 @@ Adding Secrets to the Vault
 
 1. Click **"Add Secret"** button
 2. Select the secret type:
-   
+
    * **Password**: For login credentials
    * **IP Address**: For network information
    * **VPN Key**: For VPN credentials
@@ -422,7 +404,7 @@ Password Management Features
 
 1. When adding a password secret, click **"Generate"**
 2. Customize password requirements:
-   
+
    * Length: 8-64 characters
    * Include uppercase letters
    * Include lowercase letters
@@ -456,7 +438,7 @@ Regular password rotation is important for security. Ferrocodex provides guided 
 1. Select a password in the vault
 2. Click **"Set Rotation Schedule"**
 3. Choose rotation interval:
-   
+
    * 30 days
    * 60 days
    * 90 days
@@ -468,7 +450,7 @@ Regular password rotation is important for security. Ferrocodex provides guided 
 
 1. Click **"Rotate Password"** on any credential
 2. Follow the rotation wizard:
-   
+
    a. Verify current password
    b. Generate or enter new password
    c. Add rotation reason/notes
@@ -505,14 +487,14 @@ Store credentials for non-PLC equipment like jump hosts, databases, and network 
 1. Navigate to **"Standalone Credentials"** from main menu
 2. Click **"Add Credential"**
 3. Select or create a category:
-   
+
    * Jump Hosts
    * Databases
    * Network Equipment
    * Custom categories
 
 4. Enter credential details:
-   
+
    * Name
    * Username
    * Password
@@ -531,10 +513,9 @@ Store credentials for non-PLC equipment like jump hosts, databases, and network 
 
 **Searching Credentials:**
 
-* Full-text search across all fields
+* Search by credential name or description
 * Filter by category
 * Filter by credential type
-* Recent access shortcuts
 
 Vault Access Control
 ^^^^^^^^^^^^^^^^^^^^
@@ -589,7 +570,7 @@ Secure Export and Import
 1. Select recovery bundle to import
 2. Preview included vault data
 3. Choose import options:
-   
+
    * Merge with existing
    * Replace existing
    * Skip conflicts
@@ -610,7 +591,7 @@ Compliance and Auditing
 
 1. Access from Identity Vault main page
 2. View rotation status:
-   
+
    * Compliant (green)
    * Due Soon (yellow)
    * Overdue (red)
@@ -658,7 +639,7 @@ Best Practices for Vault Management
 **Common Workflows:**
 
 1. **New Asset Setup**:
-   
+
    * Create asset
    * Create identity vault
    * Add all known credentials
@@ -666,14 +647,14 @@ Best Practices for Vault Management
    * Grant team access
 
 2. **Contractor Access**:
-   
+
    * Create user account
    * Grant time-limited vault access
    * Monitor access logs
    * Access auto-expires
 
 3. **Security Incident**:
-   
+
    * Emergency rotate affected passwords
    * Document incident in notes
    * Review audit logs
@@ -703,14 +684,14 @@ Uploading Firmware
 2. Click the **"Firmware"** tab
 3. Click **"Upload Firmware"**
 4. Select firmware file(s):
-   
+
    * Binary files (.bin, .hex, .fw)
    * Compressed archives (.zip, .tar.gz)
    * Vendor-specific formats
    * Any firmware file type
 
 5. Enter firmware details:
-   
+
    * **Version**: Firmware version number
    * **Release Date**: When firmware was released
    * **Release Notes**: Changes and improvements
@@ -747,19 +728,19 @@ Firmware Analysis
 When firmware is uploaded, Ferrocodex can perform:
 
 1. **File Integrity Check**:
-   
+
    * Calculate checksums
    * Verify file structure
    * Detect corruption
 
 2. **Metadata Extraction**:
-   
+
    * Embedded version info
    * Build timestamps
    * Compiler information
 
 3. **Security Scanning**:
-   
+
    * Known vulnerability checks
    * Suspicious patterns
    * Compliance validation
@@ -797,13 +778,13 @@ Linking Firmware to Configurations
 **Creating Associations:**
 
 1. From configuration view:
-   
+
    * Click **"Link Firmware"**
    * Select firmware version
    * Document relationship
 
 2. From firmware view:
-   
+
    * Click **"Link to Config"**
    * Choose configuration
    * Add linking notes
@@ -862,28 +843,11 @@ Best Practices for Firmware
 4. Rollback planning
 5. Team training
 
-Search and Filter
------------------
+Finding Assets and Credentials
+------------------------------
 
-Global Search
-^^^^^^^^^^^^^
-
-Use the search bar in the top navigation to find:
-
-* Assets by name, type, or location
-* Configurations by filename
-* Users (administrators only)
-* Audit entries
-
-Advanced Filters
-^^^^^^^^^^^^^^^^
-
-On list pages, use filters to narrow results:
-
-* **Date Range**: Filter by creation/modification date
-* **Type**: Filter by asset or file type
-* **User**: Filter by who created/modified
-* **Tags**: Filter by custom tags
+* **Assets**: Use the search box above the asset tree to filter by name or description, and the type filter to show only folders or only devices
+* **Credentials**: Use the search box on the Vault page to find standalone credentials by name or description, and filter by category or type
 
 Audit Trail
 -----------

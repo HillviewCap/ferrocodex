@@ -20,7 +20,6 @@ As a Ferrocodex administrator, you are responsible for:
 * **System Configuration**: Managing settings, security policies, and preferences
 * **Asset Hierarchy Management**: Overseeing organizational structures and naming compliance
 * **Metadata Schema Administration**: Defining and managing custom field templates
-* **Search Performance**: Monitoring search index health and performance
 * **Audit Oversight**: Monitoring system activity and investigating incidents
 * **Data Management**: Overseeing backups, exports, and data retention
 * **Compliance**: Ensuring the system meets organizational and regulatory requirements
@@ -399,7 +398,6 @@ Metadata Schema Management
 
    * Create test assets
    * Validate field behavior
-   * Check search indexing
    * Verify validation rules
 
 2. **Rollout**:
@@ -415,64 +413,6 @@ Metadata Schema Management
    * Track field usage
    * Update validation rules
    * Archive obsolete fields
-
-Search Performance Management
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-**Search Index Administration:**
-
-1. **Index Monitoring**:
-
-   * Navigate to **Settings** → **Search Performance**
-   * View metrics:
-
-     - Index size and fragmentation
-     - Query response times
-     - Cache hit rates
-     - Slow query log
-
-2. **Optimization Tasks**:
-
-   * **Rebuild Index**: Full reconstruction
-   * **Optimize Index**: Defragmentation
-   * **Clear Cache**: Reset search cache
-   * **Analyze Queries**: Performance profiling
-
-3. **Configuration**:
-
-   * Set cache size limits
-   * Configure background optimization
-   * Adjust relevance scoring
-   * Manage stopwords
-
-**Performance Tuning:**
-
-.. code-block:: text
-
-   Recommended Settings for Different Scales:
-
-   Small (< 1,000 assets):
-   - Cache: 100MB
-   - Background optimization: Weekly
-   - Full-text index: All fields
-
-   Medium (1,000 - 10,000 assets):
-   - Cache: 500MB
-   - Background optimization: Daily
-   - Full-text index: Selected fields
-
-   Large (> 10,000 assets):
-   - Cache: 1GB+
-   - Background optimization: Continuous
-   - Full-text index: Optimized fields only
-
-**Search Analytics:**
-
-* Popular search terms
-* Failed searches (no results)
-* User search patterns
-* Performance trends
-* Optimization recommendations
 
 Asset Security Classification
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -518,7 +458,7 @@ Hierarchy Management Best Practices
 
    * Archive inactive branches
    * Limit folder contents (< 500 items)
-   * Use search for navigation
+   * Use the tree filter for navigation
    * Regular structure review
 
 3. **Access Control**:
@@ -893,7 +833,6 @@ Daily Tasks
 - [ ] Monitor system alerts
 - [ ] Verify backup completion
 - [ ] Review critical audit entries
-- [ ] Check search performance metrics
 - [ ] Review asset naming violations
 
 Weekly Tasks
@@ -914,7 +853,6 @@ Monthly Tasks
 - [ ] User account cleanup
 - [ ] System performance review
 - [ ] Security training updates
-- [ ] Optimize search indexes
 - [ ] Review metadata schema usage
 - [ ] Audit asset hierarchy structure
 

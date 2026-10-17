@@ -138,38 +138,6 @@ Slow Application Start
 * Ensure 10% free disk space
 * Restart application
 
-Slow Search Results
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-**Search Performance:**
-
-With SQLite FTS5, searches should complete in under 200ms. If experiencing slowness:
-
-*Solutions:*
-
-1. **Rebuild Search Index**:
-
-   * Navigate to Settings → Search Performance
-   * Click "Rebuild Index"
-   * Wait for completion (5-10 minutes)
-
-2. **Optimize Search Queries**:
-
-   * Use specific field searches: ``manufacturer:siemens``
-   * Avoid wildcards at start: ``*pump`` (slow) vs ``pump*`` (fast)
-   * Use filters to narrow scope
-
-3. **Check Index Health**:
-
-   * Settings → Search Performance → Index Health
-   * Look for fragmentation warnings
-   * Run "Optimize Index" if needed
-
-4. **Clear Search Cache**:
-
-   * Settings → Search Performance → Clear Cache
-   * Helps with stale results
-
 Slow Tree Navigation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -178,7 +146,7 @@ Slow Tree Navigation
 *Solutions:*
 
 1. **Collapse Unused Branches**: Reduce rendered nodes
-2. **Use Search Instead**: Navigate directly to assets
+2. **Use the Tree Filter**: Type part of the asset name to narrow the tree
 3. **Archive Old Assets**: Move inactive assets to archive
 4. **Check Asset Count**: Limit folders to < 500 items
 5. **Search Within Categories**: Narrow the tree to the relevant folder
@@ -272,31 +240,17 @@ Metadata Field Issues
 3. Verify field name uniqueness
 4. Review JSON schema if applicable
 
-Search Not Finding Assets
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Tree Filter Not Finding Assets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Issue: Search returns no results**
+**Issue: The asset tree filter shows no matches**
 
-*Search Tips:*
+*Tips:*
 
-1. **Check Syntax**:
-
-   * Simple: ``pump``
-   * Field-specific: ``location:west``
-   * Boolean: ``pump AND cooling``
-
-2. **Rebuild Index** (Admin):
-
-   * Settings → Search Performance
-   * Click "Rebuild Index"
-
-3. **Check Permissions**:
-
-   * Only assets you can access are searchable
-
-4. **Clear Cache**:
-
-   * Settings → Search Performance → Clear Cache
+1. **Check the Term**: The filter matches any part of the asset name or description, case-insensitively
+2. **Check the Type Filter**: Set it to "All" if it is limited to folders or devices
+3. **Metadata Is Not Searched**: Custom metadata values do not match the filter; use the name or description
+4. **Clear and Retry**: Use the clear button and type the term again
 
 Configuration Management
 ------------------------
