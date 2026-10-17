@@ -1049,33 +1049,44 @@ pub async fn update_standalone_credential(
         }
     };
 
+    drop(session_manager_guard);
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+    let vault_repo = SqliteVaultRepository::new(db.get_connection());
 
-            let sanitized_request = UpdateStandaloneCredentialRequest {
-                id: update_request.id,
-                name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
-                description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
-                category_id: update_request.category_id,
-                value: update_request.value.map(|v| InputSanitizer::sanitize_string(&v)),
-                author_id: session.user_id,
-            };
+    let credential = vault_repo.get_standalone_credential(update_request.id)
+        .map_err(|e| format!("Failed to load credential: {}", e))?
+        .ok_or("Credential not found")?
+        .credential;
 
-            match vault_repo.update_standalone_credential(sanitized_request) {
-                Ok(_) => {
-                    info!("Updated standalone credential {} by {}", update_request.id, session.username);
-                    Ok("Credential updated successfully".to_string())
-                }
-                Err(e) => {
-                    error!("Failed to update standalone credential: {}", e);
-                    Err(format!("Failed to update credential: {}", e))
-                }
-            }
+    // Only administrators or the credential's creator may edit it
+    if session.role != UserRole::Administrator && credential.created_by != session.user_id {
+        warn!("User {} denied updating standalone credential {} owned by user {}",
+              session.username, update_request.id, credential.created_by);
+        return Err("Only administrators or the credential's creator can edit it".to_string());
+    }
+
+    let sanitized_request = UpdateStandaloneCredentialRequest {
+        id: update_request.id,
+        name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
+        description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
+        category_id: update_request.category_id,
+        value: update_request.value.map(|v| InputSanitizer::sanitize_string(&v)),
+        author_id: session.user_id,
+    };
+
+    match vault_repo.update_standalone_credential(sanitized_request) {
+        Ok(_) => {
+            info!("Updated standalone credential {} by {}", update_request.id, session.username);
+            Ok("Credential updated successfully".to_string())
         }
-        None => Err("Database not initialized".to_string()),
+        Err(e) => {
+            error!("Failed to update standalone credential: {}", e);
+            Err(format!("Failed to update credential: {}", e))
+        }
     }
 }
 
@@ -2009,6 +2020,29 @@ mod tests {
             .unwrap()
     }
 
+    fn credential_name(app: &tauri::App<MockRuntime>, credential_id: i64) -> String {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteVaultRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_standalone_credential(credential_id)
+            .unwrap()
+            .unwrap()
+            .credential
+            .name
+    }
+
+    fn rename_request(credential_id: i64) -> UpdateStandaloneCredentialRequest {
+        UpdateStandaloneCredentialRequest {
+            id: credential_id,
+            name: Some("Renamed".to_string()),
+            description: None,
+            category_id: None,
+            value: None,
+            // Ignored: the command sets the author from the session
+            author_id: 0,
+        }
+    }
+
     #[tokio::test]
     async fn test_owner_can_delete_credential_and_it_is_audited() {
         let (app, credential_id, [_, owner_token, _]) = setup_test_app();
@@ -2043,5 +2077,44 @@ mod tests {
         assert!(result.is_err());
         assert!(credential_exists(&app, credential_id));
         assert!(deletion_audit_events(&app).is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_owner_can_update_credential() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let result = update_standalone_credential(owner_token, rename_request(credential_id), app.state(), app.state()).await;
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(credential_name(&app, credential_id), "Renamed");
+    }
+
+    #[tokio::test]
+    async fn test_admin_can_update_another_users_credential() {
+        let (app, credential_id, [admin_token, _, _]) = setup_test_app();
+
+        let result = update_standalone_credential(admin_token, rename_request(credential_id), app.state(), app.state()).await;
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(credential_name(&app, credential_id), "Renamed");
+    }
+
+    #[tokio::test]
+    async fn test_non_owner_engineer_cannot_update_credential() {
+        let (app, credential_id, [_, _, other_token]) = setup_test_app();
+
+        let result = update_standalone_credential(other_token, rename_request(credential_id), app.state(), app.state()).await;
+
+        assert!(result.is_err());
+        assert_eq!(credential_name(&app, credential_id), "PLC Login");
+    }
+
+    #[tokio::test]
+    async fn test_updating_missing_credential_fails() {
+        let (app, credential_id, [admin_token, _, _]) = setup_test_app();
+
+        let result = update_standalone_credential(admin_token, rename_request(credential_id + 1), app.state(), app.state()).await;
+
+        assert_eq!(result, Err("Credential not found".to_string()));
     }
 }
