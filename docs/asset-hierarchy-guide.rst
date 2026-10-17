@@ -1,7 +1,7 @@
 Asset Hierarchy Management Guide
 =================================
 
-The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides comprehensive hierarchical organization capabilities for industrial assets, enabling intuitive folder-based structures with advanced metadata management and search functionality.
+The Asset Hierarchy Management system in Ferrocodex organizes industrial assets in folder-based structures with custom metadata and search.
 
 .. contents:: Table of Contents
    :local:
@@ -10,14 +10,14 @@ The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides comprehensiv
 Overview
 --------
 
-The Asset Hierarchy Management system transforms how you organize and manage industrial equipment by providing:
+The Asset Hierarchy Management system provides:
 
 * **Hierarchical Organization**: Create unlimited nested folder structures
 * **Two Asset Types**: Folders (containers) and Devices (equipment)
-* **Drag-and-Drop Management**: Intuitive reorganization of assets
-* **Advanced Search**: Full-text search with sub-200ms performance
+* **Drag-and-Drop Management**: Reorganization of assets
+* **Search**: Full-text search across names and metadata
 * **Custom Metadata**: Flexible field definitions with validation
-* **Cybersecurity Compliance**: Secure naming conventions and validation
+* **Naming Validation**: Enforced naming pattern and input validation
 * **Bulk Operations**: Efficient management of multiple assets
 
 Understanding Asset Types
@@ -86,7 +86,7 @@ Hierarchical Navigation
 Tree View Interface
 ^^^^^^^^^^^^^^^^^^^
 
-The tree navigation provides intuitive browsing of your asset hierarchy:
+The tree navigation provides browsing of your asset hierarchy:
 
 .. figure:: _static/images/asset-tree-view.png
    :alt: Asset hierarchy tree navigation
@@ -112,7 +112,7 @@ The tree navigation provides intuitive browsing of your asset hierarchy:
 Drag-and-Drop Organization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Reorganize assets easily with drag-and-drop:
+Reorganize assets with drag-and-drop:
 
 1. **Select Asset**: Click to select source asset
 2. **Drag**: Hold and drag to target location
@@ -302,17 +302,17 @@ Ensure data quality with validation:
 * External system checks
 * Business rule enforcement
 
-Advanced Search & Filtering
----------------------------
+Search and Filtering
+--------------------
 
 Full-Text Search
 ^^^^^^^^^^^^^^^^
 
-The search system uses SQLite FTS5 for powerful text searching:
+The search system uses SQLite FTS5 for text searching:
 
 **Search Features:**
 
-* **Instant Results**: Sub-200ms response time
+* **Fast Results**: Indexed full-text search
 * **Fuzzy Matching**: Tolerates typos
 * **Relevance Ranking**: Best matches first
 * **Highlighting**: Matched terms highlighted
@@ -404,17 +404,17 @@ Find assets with similar characteristics:
 4. Set similarity threshold
 5. View matched assets
 
-Cybersecurity-Compliant Naming
--------------------------------
+Asset Naming Rules
+------------------
 
 Naming Requirements
 ^^^^^^^^^^^^^^^^^^^
 
-All asset names must follow security best practices:
+All asset names must match the naming pattern:
 
 **Pattern Requirements:**
 
-.. code-block:: regex
+.. code-block:: text
 
    ^[A-Z0-9][A-Z0-9_-]{2,49}$
 
@@ -494,7 +494,7 @@ Import multiple assets from external sources:
 
 1. Prepare CSV file with headers:
    
-   .. code-block:: csv
+   .. code-block:: text
    
       Name,Type,Manufacturer,Model,Location,IP_Address
       PLC-001,Device,Siemens,S7-1500,Line 1,192.168.1.10
@@ -610,111 +610,13 @@ Select multiple assets for bulk operations:
 * **Ctrl+A**: Select all visible
 * **Selection Box**: Drag to select area
 
-Workflow Management
--------------------
-
-Multi-Step Workflows
-^^^^^^^^^^^^^^^^^^^^
-
-Create structured workflows for complex operations:
-
-**Workflow Components:**
-
-* **Steps**: Sequential tasks
-* **Conditions**: Branching logic
-* **Validations**: Data checks
-* **Approvals**: Review gates
-* **Notifications**: Status updates
-
-**Example Workflow - New Equipment Setup:**
-
-1. **Asset Creation**
-   
-   * Create device asset
-   * Apply metadata template
-   * Set security classification
-
-2. **Configuration**
-   
-   * Upload initial configuration
-   * Link firmware version
-   * Set baseline
-
-3. **Identity Vault**
-   
-   * Create vault entry
-   * Add credentials
-   * Set rotation schedule
-
-4. **Documentation**
-   
-   * Upload manuals
-   * Add maintenance procedures
-   * Link to vendor resources
-
-5. **Validation**
-   
-   * Verify all required fields
-   * Check security compliance
-   * Confirm network settings
-
-6. **Approval**
-   
-   * Submit for review
-   * Administrator approval
-   * Activate asset
-
-Draft Management
-^^^^^^^^^^^^^^^^
-
-Save incomplete work as drafts:
-
-**Draft Features:**
-
-* **Auto-save**: Every 30 seconds
-* **Manual Save**: Explicit draft creation
-* **Resume Later**: Continue from any device
-* **Version History**: Track draft changes
-* **Sharing**: Collaborate on drafts
-
-**Working with Drafts:**
-
-1. Start creating/editing asset
-2. Click **"Save as Draft"**
-3. Add draft notes (optional)
-4. Resume from **"My Drafts"** section
-5. Publish when complete
-
-Progress Tracking
-^^^^^^^^^^^^^^^^^
-
-Monitor workflow progress:
-
-**Progress Indicators:**
-
-* **Step Counter**: "Step 3 of 7"
-* **Progress Bar**: Visual completion
-* **Time Estimates**: Expected duration
-* **Status Tags**: Pending, In Progress, Complete
-* **Blockers**: Issues preventing progress
-
-**Progress Dashboard:**
-
-View all active workflows:
-
-* Filter by status
-* Sort by priority
-* View assignees
-* Check due dates
-* Export reports
-
 Performance Optimization
 ------------------------
 
 Search Performance
 ^^^^^^^^^^^^^^^^^^
 
-Optimizations for sub-200ms search:
+Optimizations for search performance:
 
 **Database Optimizations:**
 
@@ -836,7 +738,7 @@ Search Optimization
 **Search Tips:**
 
 1. Use specific terms
-2. Leverage field-specific search
+2. Use field-specific search
 3. Save common searches
 4. Use filters to narrow results
 5. Learn search syntax
@@ -902,7 +804,7 @@ Common Issues
 * **Solution**: Check permissions for target folder
 
 * **Issue**: Drag not working
-* **Solution**: Ensure JavaScript enabled, try keyboard shortcuts
+* **Solution**: Restart the application, or use the keyboard shortcuts
 
 Performance Issues
 ^^^^^^^^^^^^^^^^^^
@@ -912,8 +814,7 @@ Performance Issues
 1. Check asset count (Settings → Statistics)
 2. Archive unused assets
 3. Collapse large branches
-4. Clear browser cache
-5. Check network latency
+4. Restart the application
 
 **Search Performance:**
 
@@ -921,7 +822,7 @@ Performance Issues
 2. Optimize database (Admin → Maintenance)
 3. Review custom metadata fields
 4. Check system resources
-5. Contact support if persists
+5. Report the problem on the GitHub issue tracker if it persists
 
 Import/Export Problems
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -945,6 +846,6 @@ Import/Export Problems
 Conclusion
 ----------
 
-The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides powerful organizational capabilities for managing industrial equipment at scale. By leveraging hierarchical structures, custom metadata, advanced search, and bulk operations, you can efficiently organize and manage thousands of assets while maintaining security and compliance requirements.
+The Asset Hierarchy Management system organizes industrial equipment at scale. Hierarchical structures, custom metadata, search, and bulk operations let you manage thousands of assets while maintaining security and compliance requirements.
 
 For additional assistance, consult the :doc:`user-guide` or :doc:`troubleshooting` sections, or contact your system administrator.

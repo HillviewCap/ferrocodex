@@ -1,7 +1,7 @@
 User Guide
 ==========
 
-This comprehensive guide covers all features and functionality in Ferrocodex.
+This guide covers all features and functionality in Ferrocodex.
 
 .. contents:: Table of Contents
    :local:
@@ -41,12 +41,12 @@ Asset Management
 ----------------
 
 .. note::
-   **New in v0.5.0**: Hierarchical asset organization with folders and devices, custom metadata fields, advanced search capabilities, and cybersecurity-compliant naming. See the comprehensive :doc:`asset-hierarchy-guide` for detailed information.
+   Assets are organized hierarchically with folders and devices, custom metadata fields, search, and a security-oriented naming pattern. See the :doc:`asset-hierarchy-guide` for detailed information.
 
 Understanding Assets
 ^^^^^^^^^^^^^^^^^^^^
 
-Ferrocodex v0.5.0 introduces two types of assets for better organization:
+Ferrocodex has two types of assets:
 
 **Folder Assets** (Organizational Containers):
 
@@ -68,7 +68,7 @@ Ferrocodex v0.5.0 introduces two types of assets for better organization:
 Hierarchical Organization
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Assets are now organized in a tree structure:
+Assets are organized in a tree structure:
 
 .. figure:: _static/images/asset-hierarchy-tree.png
    :alt: Asset hierarchy tree view
@@ -120,11 +120,11 @@ Creating Assets
 Asset Naming Requirements
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**v0.5.0 Security-Compliant Naming Pattern:**
+**Naming Pattern:**
 
-All asset names must follow cybersecurity best practices:
+All asset names must match the following pattern:
 
-.. code-block:: regex
+.. code-block:: text
 
    ^[A-Z0-9][A-Z0-9_-]{2,49}$
 
@@ -159,7 +159,7 @@ All asset names must follow cybersecurity best practices:
 Custom Metadata Management
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**v0.5.0 Feature**: Define custom fields for your assets:
+Define custom fields for your assets:
 
 1. Select an asset or create new
 2. Click **"Manage Metadata"**
@@ -189,9 +189,9 @@ Custom Metadata Management
 Advanced Search and Filtering
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**v0.5.0 Search Capabilities:**
+**Search Capabilities:**
 
-* **Full-Text Search**: SQLite FTS5 with sub-200ms performance
+* **Full-Text Search**: SQLite FTS5 indexed search
 * **Metadata Search**: Search across all custom fields
 * **Hierarchical Search**: Search within specific folders
 * **Advanced Filters**: Complex AND/OR/NOT combinations
@@ -218,7 +218,7 @@ Advanced Search and Filtering
 Bulk Operations
 ^^^^^^^^^^^^^^^
 
-**v0.5.0 Bulk Features:**
+**Bulk Features:**
 
 * **Multi-Select**: Ctrl/Cmd+Click for multiple assets
 * **Bulk Move**: Drag multiple assets to new folder
@@ -264,7 +264,7 @@ Uploading Configurations
 Supported File Types
 ^^^^^^^^^^^^^^^^^^^^
 
-Ferrocodex accepts **all file types** without restriction. This alpha build is designed to support the widest variety of industrial equipment configurations for testing purposes.
+Ferrocodex accepts **all file types** without restriction, so that configurations from any industrial equipment can be stored.
 
 Common file types include:
 
@@ -278,7 +278,7 @@ Common file types include:
 * Any other file format used by your industrial equipment
 
 .. note::
-   The alpha build intentionally accepts all file types to ensure compatibility with various SCADA and industrial control systems during testing.
+   Accepting all file types keeps Ferrocodex compatible with the proprietary formats used by SCADA and industrial control systems.
 
 Viewing Configurations
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -379,7 +379,7 @@ The Identity Vault is a secure container that stores:
 * **VPN Keys**: Virtual private network credentials
 * **License Files**: Software licensing information
 
-All vault contents are encrypted using AES-256 encryption and include complete version history and audit trails.
+All vault secrets are encrypted with AES-256-GCM and include complete version history and audit trails.
 
 Creating an Identity Vault
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -449,7 +449,7 @@ Password Management Features
 Password Rotation
 ^^^^^^^^^^^^^^^^^
 
-Regular password rotation is crucial for security. Ferrocodex provides guided rotation workflows.
+Regular password rotation is important for security. Ferrocodex provides guided rotation.
 
 **Setting Rotation Schedules:**
 
@@ -894,7 +894,7 @@ Viewing Audit Logs
 The audit system tracks all system activities:
 
 1. Navigate to **Audit Log** from sidebar
-2. View comprehensive activity list:
+2. View the activity list:
 
    * User actions
    * Configuration changes
@@ -953,8 +953,7 @@ Password Requirements
 Session Management
 ^^^^^^^^^^^^^^^^^^
 
-* Sessions expire after inactivity
-* Concurrent session limits
+* Sessions expire 24 hours after login
 * Manual logout recommended
 * Session activity in audit log
 

@@ -1,7 +1,7 @@
 Administrator Guide
 ===================
 
-This guide covers administrative functions and best practices for managing Ferrocodex in your organization, including new v0.5.0 features for asset hierarchy management, metadata schemas, and enhanced security compliance.
+This guide covers administrative functions and recommended practices for managing Ferrocodex in your organization, including asset hierarchy management, metadata schemas, and security compliance.
 
 .. contents:: Table of Contents
    :local:
@@ -18,9 +18,9 @@ As a Ferrocodex administrator, you are responsible for:
 * **User Management**: Creating accounts, resetting passwords, managing roles
 * **Access Control**: Granting and revoking permissions, including vault access
 * **System Configuration**: Managing settings, security policies, and preferences
-* **Asset Hierarchy Management** (v0.5.0): Overseeing organizational structures and naming compliance
-* **Metadata Schema Administration** (v0.5.0): Defining and managing custom field templates
-* **Search Performance** (v0.5.0): Optimizing search indexes and monitoring performance
+* **Asset Hierarchy Management**: Overseeing organizational structures and naming compliance
+* **Metadata Schema Administration**: Defining and managing custom field templates
+* **Search Performance**: Monitoring search index health and performance
 * **Audit Oversight**: Monitoring system activity and investigating incidents
 * **Data Management**: Overseeing backups, exports, and data retention
 * **Compliance**: Ensuring the system meets organizational and regulatory requirements
@@ -50,7 +50,7 @@ Creating User Accounts
 1. Navigate to **Settings** → **User Management**
 2. Click **"Create User"** button
 3. Fill in required information:
-   
+
    * **Username**: Unique identifier (cannot be changed)
    * **Full Name**: User's display name
    * **Email**: For notifications and password resets
@@ -58,7 +58,7 @@ Creating User Accounts
    * **Initial Password**: Set temporary password
 
 4. Configure optional settings:
-   
+
    * Force password change on first login
    * Set account expiration date
    * Add user notes or department
@@ -79,28 +79,28 @@ Managing Existing Users
 **User Account Actions:**
 
 1. **Edit User Details**:
-   
+
    * Update display name or email
    * Change role (with caution)
    * Modify account settings
    * Add administrative notes
 
 2. **Reset Password**:
-   
+
    * Generate new temporary password
    * Force change on next login
    * Notify user via email
    * Document reason in audit log
 
 3. **Lock/Unlock Account**:
-   
+
    * Temporarily disable access
    * Preserves user data and permissions
    * Useful for leave of absence
    * Automatic unlock option
 
 4. **Delete Account**:
-   
+
    * Permanent removal (use cautiously)
    * Audit history retained
    * Cannot be undone
@@ -118,29 +118,29 @@ User Role Management
      - Administrator
      - Engineer
    * - Create/Edit Assets
-     - ✓
-     - ✓
+     - Yes
+     - Yes
    * - Upload Configurations
-     - ✓
-     - ✓
+     - Yes
+     - Yes
    * - Manage Branches
-     - ✓
-     - ✓
+     - Yes
+     - Yes
    * - Access Identity Vaults
-     - ✓
+     - Yes
      - With Permission
    * - Create Users
-     - ✓
-     - ✗
+     - Yes
+     - No
    * - View All Audit Logs
-     - ✓
+     - Yes
      - Own Only
    * - System Settings
-     - ✓
-     - ✗
+     - Yes
+     - No
    * - Grant Vault Permissions
-     - ✓
-     - ✗
+     - Yes
+     - No
 
 **Changing User Roles:**
 
@@ -169,20 +169,20 @@ Managing Vault Permissions
 2. Select the user requiring access
 3. Click **"Manage Vault Permissions"**
 4. Search for specific vaults:
-   
+
    * By asset name
    * By vault creation date
    * By current permissions
 
 5. Grant appropriate permissions:
-   
+
    * **Read**: View vault contents only
    * **Write**: Add/modify secrets
    * **Export**: Include in recovery bundles
    * **Share**: Grant permissions to others
 
 6. Set access duration:
-   
+
    * Permanent access
    * Time-limited (with expiration)
    * Recurring (for contractors)
@@ -202,21 +202,21 @@ Vault Access Requests
 
 1. Check **Settings** → **Access Requests**
 2. Review pending requests showing:
-   
+
    * Requesting user
    * Target vault
    * Requested permissions
    * Business justification
 
 3. Evaluate request:
-   
+
    * Verify business need
    * Check user's role
    * Consider security implications
    * Review similar requests
 
 4. Take action:
-   
+
    * **Approve**: Grant requested access
    * **Modify**: Grant partial permissions
    * **Deny**: Reject with reason
@@ -236,21 +236,21 @@ Vault Security Oversight
 **Monitoring Vault Usage:**
 
 1. **Access Reports**:
-   
+
    * Who accessed which vaults
    * Frequency of access
    * Failed access attempts
    * Permission changes
 
 2. **Rotation Compliance**:
-   
+
    * View rotation dashboard
    * Identify overdue rotations
    * Track compliance percentages
    * Generate audit reports
 
 3. **Security Alerts**:
-   
+
    * Multiple failed access attempts
    * Unusual access patterns
    * Emergency rotations
@@ -270,20 +270,20 @@ Password Policy Management
 
 1. Navigate to **Settings** → **Security** → **Password Policy**
 2. Set requirements:
-   
+
    * Minimum length (8-64 characters)
    * Character requirements:
-     
+
      - Uppercase letters
      - Lowercase letters
      - Numbers
      - Special characters
-   
+
    * History depth (prevent reuse)
    * Maximum age (force rotation)
 
 3. Configure by asset type:
-   
+
    * Critical assets: Strictest policy
    * Standard assets: Balanced security
    * Test assets: Relaxed requirements
@@ -295,41 +295,41 @@ Password Policy Management
 * Grace period for updates
 * Exemption management
 
-Asset Hierarchy Administration (v0.5.0)
+Asset Hierarchy Administration
 ----------------------------------------
 
 Asset Naming Security
 ^^^^^^^^^^^^^^^^^^^^^
 
-**Cybersecurity-Compliant Naming Enforcement:**
+**Naming Enforcement:**
 
-Ferrocodex v0.5.0 enforces strict naming conventions for security:
+Ferrocodex enforces a strict naming pattern for assets:
 
-.. code-block:: regex
+.. code-block:: text
 
    ^[A-Z0-9][A-Z0-9_-]{2,49}$
 
 **Administrator Controls:**
 
 1. **Naming Policy Configuration**:
-   
+
    * Navigate to **Settings** → **Asset Security**
    * Configure naming rules:
-     
+
      - Enforce uppercase only
      - Block reserved names (CON, PRN, AUX, etc.)
      - Set minimum/maximum length
      - Custom regex patterns
 
 2. **Validation Rules**:
-   
+
    * Real-time validation during creation
    * Bulk rename validation
    * Import sanitization
    * Audit non-compliant names
 
 3. **Reserved Name Management**:
-   
+
    * View blocked Windows names
    * Add organization-specific restrictions
    * Configure exceptions (with logging)
@@ -351,7 +351,7 @@ Metadata Schema Management
 1. Navigate to **Settings** → **Metadata Schemas**
 2. Click **"Create Schema Template"**
 3. Define schema structure:
-   
+
    * Field definitions
    * Validation rules
    * Default values
@@ -359,7 +359,7 @@ Metadata Schema Management
    * Conditional logic
 
 4. Set schema properties:
-   
+
    * **Name**: Template identifier
    * **Asset Types**: Applicable to folders/devices
    * **Mandatory**: Force on asset creation
@@ -396,21 +396,21 @@ Metadata Schema Management
 **Schema Deployment:**
 
 1. **Testing**:
-   
+
    * Create test assets
    * Validate field behavior
    * Check search indexing
    * Verify validation rules
 
 2. **Rollout**:
-   
+
    * Apply to asset types
    * Migrate existing data
    * Set as default template
    * Monitor adoption
 
 3. **Maintenance**:
-   
+
    * Version control schemas
    * Track field usage
    * Update validation rules
@@ -422,24 +422,24 @@ Search Performance Management
 **Search Index Administration:**
 
 1. **Index Monitoring**:
-   
+
    * Navigate to **Settings** → **Search Performance**
    * View metrics:
-     
+
      - Index size and fragmentation
      - Query response times
      - Cache hit rates
      - Slow query log
 
 2. **Optimization Tasks**:
-   
+
    * **Rebuild Index**: Full reconstruction
    * **Optimize Index**: Defragmentation
    * **Clear Cache**: Reset search cache
    * **Analyze Queries**: Performance profiling
 
 3. **Configuration**:
-   
+
    * Set cache size limits
    * Configure background optimization
    * Adjust relevance scoring
@@ -450,17 +450,17 @@ Search Performance Management
 .. code-block:: text
 
    Recommended Settings for Different Scales:
-   
+
    Small (< 1,000 assets):
    - Cache: 100MB
    - Background optimization: Weekly
    - Full-text index: All fields
-   
+
    Medium (1,000 - 10,000 assets):
    - Cache: 500MB
    - Background optimization: Daily
    - Full-text index: Selected fields
-   
+
    Large (> 10,000 assets):
    - Cache: 1GB+
    - Background optimization: Continuous
@@ -480,7 +480,7 @@ Asset Security Classification
 **Managing Security Tags:**
 
 1. **Classification Levels**:
-   
+
    * Public
    * Internal
    * Confidential
@@ -488,7 +488,7 @@ Asset Security Classification
    * Top Secret
 
 2. **Classification Impact**:
-   
+
    * Search result filtering
    * Export restrictions
    * Audit detail level
@@ -496,7 +496,7 @@ Asset Security Classification
    * Compliance reporting
 
 3. **Bulk Classification**:
-   
+
    * Select multiple assets
    * Apply classification
    * Cascade to children
@@ -508,21 +508,21 @@ Hierarchy Management Best Practices
 **Organizational Structure Guidelines:**
 
 1. **Design Principles**:
-   
+
    * Logical grouping (function/location)
    * Consistent depth (5-7 levels max)
    * Clear naming conventions
    * Avoid circular references
 
 2. **Performance Considerations**:
-   
+
    * Archive inactive branches
    * Limit folder contents (< 500 items)
    * Use search for navigation
    * Regular structure review
 
 3. **Access Control**:
-   
+
    * Inherit permissions from parent
    * Override at specific levels
    * Document exceptions
@@ -536,33 +536,24 @@ Security Settings
 
 **Session Management:**
 
-1. **Session Timeout**:
-   
-   * Default: 30 minutes
-   * Range: 5 minutes to 8 hours
-   * Consider security vs. usability
-   * Different for admin accounts
+1. **Session Lifetime**:
 
-2. **Concurrent Sessions**:
-   
-   * Limit per user
-   * Force single session
-   * Device restrictions
-   * Geographic limitations
+   * Sessions expire 24 hours after login
+   * Logging out invalidates the session immediately
+   * Users should log out when leaving a workstation
 
-3. **Login Security**:
-   
-   * Failed attempt lockout
-   * Lockout duration
-   * CAPTCHA after failures
-   * IP allowlisting
+2. **Login Security**:
 
-**Master Password Protection:**
+   * Five failed login attempts lock the account
+   * The lockout lasts 15 minutes
+   * Failed attempts are recorded in the audit log
 
-* Cannot be recovered if lost
-* Consider key escrow procedures
-* Document in security policies
-* Test recovery procedures
+**Administrator Credential Protection:**
+
+* Passwords are stored as bcrypt hashes and cannot be recovered
+* Encryption keys for configuration content, firmware files, and vault secrets are derived from user credentials
+* Document credential handling in security policies
+* Test the backup and restore procedure regularly
 
 System Maintenance
 ^^^^^^^^^^^^^^^^^^
@@ -570,21 +561,21 @@ System Maintenance
 **Database Management:**
 
 1. **Size Monitoring**:
-   
+
    * Check Settings → System → Storage
    * Monitor growth trends
    * Plan for capacity
    * Set size alerts
 
 2. **Performance Optimization**:
-   
+
    * Database compaction
    * Index optimization
    * Archive old data
    * Regular maintenance windows
 
 3. **Cleanup Tasks**:
-   
+
    * Old audit logs
    * Orphaned files
    * Temporary data
@@ -596,18 +587,17 @@ Import/Export Configuration
 **System-Wide Exports:**
 
 1. **Full System Backup**:
-   
+
    * All assets and configurations
-   * **Asset hierarchies** (v0.5.0)
-   * **Custom metadata schemas** (v0.5.0)
-   * **Search indexes** (v0.5.0)
+   * Asset hierarchies
+   * Custom metadata schemas
    * User accounts (without passwords)
    * Audit logs
    * System settings
    * Optionally vault data
 
 2. **Selective Exports**:
-   
+
    * Date range filtering
    * Specific asset types
    * User activity only
@@ -616,21 +606,21 @@ Import/Export Configuration
 **Import Procedures:**
 
 1. **Preparation**:
-   
+
    * Verify source compatibility
    * Check available space
    * Notify users of downtime
    * Backup current data
 
 2. **Import Process**:
-   
+
    * Validate import file
    * Preview contents
    * Handle conflicts
    * Verify completion
 
 3. **Post-Import**:
-   
+
    * Verify data integrity
    * Check user access
    * Test critical functions
@@ -642,7 +632,7 @@ Audit Log Management
 Viewing Audit Logs
 ^^^^^^^^^^^^^^^^^^
 
-**Comprehensive Access:**
+**Access:**
 
 Administrators can view all system activity:
 
@@ -675,7 +665,7 @@ Audit Log Analysis
 **Security Investigations:**
 
 1. **Incident Response**:
-   
+
    * Identify timeline
    * Determine scope
    * Track user actions
@@ -683,7 +673,7 @@ Audit Log Analysis
    * Document findings
 
 2. **Pattern Recognition**:
-   
+
    * Unusual access times
    * Repeated failures
    * Permission abuse
@@ -703,21 +693,21 @@ Audit Log Retention
 **Retention Policies:**
 
 1. **Storage Considerations**:
-   
+
    * Regulatory requirements
    * Storage capacity
    * Performance impact
    * Legal hold needs
 
 2. **Archive Procedures**:
-   
+
    * Export before deletion
    * Secure archive storage
    * Maintain searchability
    * Document locations
 
 3. **Compliance Requirements**:
-   
+
    * Industry regulations
    * Internal policies
    * Audit trail integrity
@@ -732,28 +722,28 @@ Compliance Dashboard
 **Key Metrics:**
 
 1. **Password Compliance**:
-   
+
    * Rotation adherence
    * Policy compliance
    * Weak passwords
    * Overdue changes
 
 2. **Access Control**:
-   
+
    * Active permissions
    * Unused access
    * Time-limited expiry
    * Segregation violations
 
-3. **Asset Compliance** (v0.5.0):
-   
+3. **Asset Compliance**:
+
    * Naming convention adherence
    * Metadata completeness
    * Security classification coverage
    * Hierarchy organization standards
 
 4. **System Security**:
-   
+
    * Failed login trends
    * Security incidents
    * Policy violations
@@ -765,21 +755,21 @@ Report Generation
 **Available Reports:**
 
 1. **User Reports**:
-   
+
    * User activity summary
    * Permission matrix
    * Login history
    * Role distribution
 
 2. **Security Reports**:
-   
+
    * Vault access logs
    * Password age analysis
    * Compliance status
    * Incident summary
 
 3. **System Reports**:
-   
+
    * Configuration changes
    * Asset inventory
    * Storage utilization
@@ -798,23 +788,22 @@ Regulatory Compliance
 **Supporting Compliance:**
 
 1. **Documentation**:
-   
+
    * Policy enforcement
    * Audit trail integrity
    * Access controls
    * Change management
 
 2. **Evidence Collection**:
-   
+
    * Export capabilities
    * Report generation
    * Log preservation
    * Timestamp accuracy
 
 3. **Compliance Features**:
-   
+
    * Role segregation
-   * Approval workflows
    * Immutable logs
    * Encryption standards
 
@@ -825,21 +814,21 @@ Administrative Security
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **Account Protection**:
-   
+
    * Use strong, unique passwords
    * Enable all security features
    * Regular password rotation
    * Limit admin accounts
 
 2. **Operational Security**:
-   
+
    * Document all changes
    * Follow change procedures
    * Peer review for critical changes
    * Regular security training
 
 3. **Monitoring**:
-   
+
    * Daily log reviews
    * Alert configuration
    * Trend analysis
@@ -849,21 +838,21 @@ Training and Documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **User Training**:
-   
+
    * Role-based training programs
    * Security awareness
    * Feature updates
    * Best practices
 
 2. **Documentation**:
-   
+
    * Maintain procedures
    * Update policies
    * Record decisions
    * Knowledge transfer
 
 3. **Continuous Improvement**:
-   
+
    * User feedback
    * Security assessments
    * Process refinement
@@ -873,21 +862,21 @@ Emergency Procedures
 ^^^^^^^^^^^^^^^^^^^^
 
 1. **Account Compromise**:
-   
+
    * Immediate lockout
    * Password reset
    * Permission review
    * Incident documentation
 
 2. **Data Recovery**:
-   
+
    * Backup restoration
    * Point-in-time recovery
    * Verification procedures
    * User communication
 
 3. **System Issues**:
-   
+
    * Escalation procedures
    * Vendor contact
    * Workaround documentation
@@ -904,8 +893,8 @@ Daily Tasks
 - [ ] Monitor system alerts
 - [ ] Verify backup completion
 - [ ] Review critical audit entries
-- [ ] Check search performance metrics (v0.5.0)
-- [ ] Review asset naming violations (v0.5.0)
+- [ ] Check search performance metrics
+- [ ] Review asset naming violations
 
 Weekly Tasks
 ^^^^^^^^^^^^
@@ -925,9 +914,9 @@ Monthly Tasks
 - [ ] User account cleanup
 - [ ] System performance review
 - [ ] Security training updates
-- [ ] Optimize search indexes (v0.5.0)
-- [ ] Review metadata schema usage (v0.5.0)
-- [ ] Audit asset hierarchy structure (v0.5.0)
+- [ ] Optimize search indexes
+- [ ] Review metadata schema usage
+- [ ] Audit asset hierarchy structure
 
 Quarterly Tasks
 ^^^^^^^^^^^^^^^
@@ -939,4 +928,4 @@ Quarterly Tasks
 - [ ] Compliance assessment
 - [ ] Technology roadmap review
 
-Remember: As an administrator, you are the guardian of your organization's critical configuration data. Your diligence in following these procedures ensures the security, integrity, and availability of the Ferrocodex system.
+Following these procedures helps maintain the security, integrity, and availability of your organization's configuration data.

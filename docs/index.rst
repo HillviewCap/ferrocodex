@@ -1,7 +1,7 @@
-Welcome to Ferrocodex Documentation
-===================================
+Ferrocodex Documentation
+========================
 
-Ferrocodex is a secure operational technology (OT) configuration management platform designed for industrial environments. It provides offline-first configuration management for industrial equipment with enterprise-grade security features and comprehensive asset hierarchy management.
+Ferrocodex is an offline-first configuration management application for operational technology (OT) environments. It manages configuration files, firmware, and credentials for industrial equipment, stores all data locally, and does not require a network connection.
 
 .. toctree::
    :maxdepth: 2
@@ -16,33 +16,29 @@ Ferrocodex is a secure operational technology (OT) configuration management plat
    troubleshooting
    migration-guide
 
-What's New in v0.5.0
---------------------
-
-**Asset Hierarchy Management System** - Complete transformation of asset organization:
-
-* **Hierarchical Organization**: Folder-based structure with unlimited nesting for intuitive asset management
-* **Advanced Search**: SQLite FTS5 full-text search with sub-200ms performance across all metadata
-* **Custom Metadata**: Flexible field definitions with templates, validation rules, and JSON schema support
-* **Cybersecurity Compliance**: Enforced naming conventions following security best practices
-* **Bulk Operations**: Import/export, batch updates, and multi-asset management capabilities
-* **Drag-and-Drop Interface**: Intuitive reorganization with visual tree navigation
-* **Keyboard Navigation**: Full keyboard support for power users and accessibility
-
 Overview
 --------
 
-Ferrocodex helps industrial organizations manage their equipment configurations securely and efficiently. Key features include:
+Ferrocodex helps industrial organizations manage their equipment configurations. Key features include:
 
-* **Asset Hierarchy Management** (v0.5.0): Organize assets in hierarchical structures with folders and devices
-* **Advanced Search & Filtering** (v0.5.0): Full-text search with complex filtering and metadata queries
-* **Custom Metadata System** (v0.5.0): Define equipment-specific fields with validation and templates
-* **Offline-First Design**: Work without internet connectivity in air-gapped environments
-* **Version Control**: Track all configuration changes with built-in branching and auditing
-* **Identity Vault**: Secure credential management with password rotation and compliance tracking
-* **Role-Based Access**: Administrator and Engineer roles with granular permissions
-* **Enterprise Security**: AES-256 encryption, secure authentication, and comprehensive audit trails
-* **Cross-Platform**: Available for Windows, macOS, and Linux
+* **Asset Hierarchy**: Organize equipment in a tree of folders and devices, with drag-and-drop and bulk import, export, and rename
+* **Search and Filtering**: SQLite FTS5 full-text search across assets and metadata, with saved searches and filter presets
+* **Custom Metadata**: Define equipment-specific fields with JSON Schema validation and field templates
+* **Offline-First Design**: Work without network connectivity in air-gapped environments
+* **Configuration Versioning**: Branching, version history, and promotion from working versions to approved ("golden") configurations
+* **Firmware Management**: Firmware files stored alongside their configurations, with analysis and integrity checks
+* **Identity Vault**: Encrypted credential storage with password rotation, history, and per-user access permissions
+* **Role-Based Access**: Administrator and Engineer roles, session management, and login rate limiting
+* **Encryption at Rest**: Configuration content, firmware files, and vault secrets are encrypted with AES-256-GCM
+* **Audit Trail**: Every configuration change and data access is recorded
+* **Cross-Platform**: Native builds for Windows, macOS, and Linux
+
+Changelog
+---------
+
+Release notes for each version are published on the
+`GitHub releases page <https://github.com/HillviewCap/ferrocodex/releases>`_.
+For upgrade instructions between versions, see the :doc:`migration-guide`.
 
 Who Should Use Ferrocodex?
 --------------------------
@@ -58,13 +54,16 @@ Quick Links
 * :doc:`getting-started` - Install and set up Ferrocodex
 * :doc:`user-guide` - Learn how to use all features
 * :doc:`admin-guide` - Administrator functions and management
-* :doc:`security` - Understand security best practices
+* :doc:`security` - Understand security features and practices
 * :doc:`troubleshooting` - Solve common issues
 
 Support
 -------
 
-For support during the alpha phase, please contact your Ferrocodex representative or submit issues through the designated support channel.
+* This documentation
+* `GitHub issue tracker <https://github.com/HillviewCap/ferrocodex/issues>`_ for bug reports and feature requests
+
+Please do not open public issues for security vulnerabilities; email security@ferrocodex.com instead.
 
 Indices and tables
 ==================

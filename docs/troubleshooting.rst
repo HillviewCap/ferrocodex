@@ -1,7 +1,7 @@
 Troubleshooting
 ===============
 
-This guide helps you resolve common issues with Ferrocodex. If you can't find a solution here, contact your support representative.
+This guide helps you resolve common issues with Ferrocodex. If you can't find a solution here, report the problem on the `GitHub issue tracker <https://github.com/HillviewCap/ferrocodex/issues>`_.
 
 .. contents:: Table of Contents
    :local:
@@ -69,7 +69,7 @@ Linux Installation
 .. code-block:: bash
 
    sudo apt update
-   sudo apt install libwebkit2gtk-4.0-37 libgtk-3-0
+   sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0
 
 Login and Authentication
 ------------------------
@@ -97,16 +97,15 @@ Cannot Login
 Forgotten Password
 ^^^^^^^^^^^^^^^^^^
 
-**User Password:**
+**Engineer Password:**
 
 1. Contact your administrator
-2. Admin can reset your password
-3. You'll need to change it on next login
+2. The administrator can deactivate the account and create a new one for you
 
-**Master Password (First Launch):**
+**Administrator Password:**
 
 .. warning::
-   The master password cannot be recovered. If lost, you must reinstall and lose all data.
+   Passwords are stored as bcrypt hashes and cannot be recovered. Encryption keys for configuration content, firmware files, and vault secrets are derived from user credentials, so data stored by an account whose password is lost cannot be decrypted. Keep a secure record of the administrator credentials.
 
 Session Timeout
 ^^^^^^^^^^^^^^^
@@ -115,10 +114,9 @@ Session Timeout
 
 *Solution:*
 
-1. Check Settings → Security → Session Timeout
-2. Default is 30 minutes of inactivity
-3. Administrator can adjust timeout
-4. Activity extends session automatically
+1. Sessions expire 24 hours after login
+2. Logging out ends the session immediately
+3. Log in again to continue working
 
 Performance Issues
 ------------------
@@ -140,39 +138,39 @@ Slow Application Start
 * Ensure 10% free disk space
 * Restart application
 
-Slow Search Results (Enhanced in v0.5.0)
+Slow Search Results
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**v0.5.0 Search Performance:**
+**Search Performance:**
 
 With SQLite FTS5, searches should complete in under 200ms. If experiencing slowness:
 
 *Solutions:*
 
 1. **Rebuild Search Index**:
-   
+
    * Navigate to Settings → Search Performance
    * Click "Rebuild Index"
    * Wait for completion (5-10 minutes)
 
 2. **Optimize Search Queries**:
-   
+
    * Use specific field searches: ``manufacturer:siemens``
    * Avoid wildcards at start: ``*pump`` (slow) vs ``pump*`` (fast)
    * Use filters to narrow scope
 
 3. **Check Index Health**:
-   
+
    * Settings → Search Performance → Index Health
    * Look for fragmentation warnings
    * Run "Optimize Index" if needed
 
 4. **Clear Search Cache**:
-   
+
    * Settings → Search Performance → Clear Cache
    * Helps with stale results
 
-Slow Tree Navigation (v0.5.0)
+Slow Tree Navigation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Issue: Asset hierarchy tree is slow**
@@ -183,7 +181,7 @@ Slow Tree Navigation (v0.5.0)
 2. **Use Search Instead**: Navigate directly to assets
 3. **Archive Old Assets**: Move inactive assets to archive
 4. **Check Asset Count**: Limit folders to < 500 items
-4. Search within specific categories
+5. **Search Within Categories**: Narrow the tree to the relevant folder
 
 Database Performance
 ^^^^^^^^^^^^^^^^^^^^
@@ -197,7 +195,7 @@ Database Performance
 3. Compact database (Settings → Maintenance)
 4. Ensure adequate disk space
 
-Asset Hierarchy Issues (v0.5.0)
+Asset Hierarchy Issues
 --------------------------------
 
 Asset Naming Errors
@@ -205,9 +203,9 @@ Asset Naming Errors
 
 **Issue: "Invalid asset name" error**
 
-*v0.5.0 Requirements:*
+*Requirements:*
 
-Asset names must follow the pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
+Asset names must match the pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
 
 *Solutions:*
 
@@ -218,9 +216,9 @@ Asset names must follow the pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
 
 *Examples:*
 
-* ❌ ``plc-west-01`` → ✅ ``PLC-WEST-01``
-* ❌ ``PLC WEST 01`` → ✅ ``PLC-WEST-01``
-* ❌ ``_sensor`` → ✅ ``SENSOR-01``
+* ``plc-west-01`` → ``PLC-WEST-01``
+* ``PLC WEST 01`` → ``PLC-WEST-01``
+* ``_sensor`` → ``SENSOR-01``
 
 Cannot Create Asset
 ^^^^^^^^^^^^^^^^^^^
@@ -248,7 +246,7 @@ Drag-and-Drop Not Working
 
 *Solutions:*
 
-1. **Check Browser**: Use Chrome, Firefox, or Edge
+1. **Restart the Application**: Reload the asset tree
 2. **Permissions**: Verify edit rights on assets
 3. **Target Folder**: Ensure target allows children
 4. **Circular Reference**: Cannot move folder into itself
@@ -279,25 +277,25 @@ Search Not Finding Assets
 
 **Issue: Search returns no results**
 
-*v0.5.0 Search Tips:*
+*Search Tips:*
 
 1. **Check Syntax**:
-   
+
    * Simple: ``pump``
    * Field-specific: ``location:west``
    * Boolean: ``pump AND cooling``
 
 2. **Rebuild Index** (Admin):
-   
+
    * Settings → Search Performance
    * Click "Rebuild Index"
 
-3. **Check Permissions**: 
-   
+3. **Check Permissions**:
+
    * Only assets you can access are searchable
 
 4. **Clear Cache**:
-   
+
    * Settings → Search Performance → Clear Cache
 
 Configuration Management
@@ -311,13 +309,13 @@ Upload Failures
 *Common Causes:*
 
 1. **File too large**: Check size limits
-2. **Invalid characters**: in filename (v0.5.0 stricter)
+2. **Invalid characters**: in filename
 3. **Permissions**: Insufficient user rights
 4. **Disk space**: Storage full
 
 *Solutions:*
 
-* Ensure filename follows security rules (v0.5.0)
+* Ensure filename follows security rules
 * Remove special characters
 * Check available disk space
 * Verify user has Engineer/Admin role
@@ -330,17 +328,16 @@ Cannot Download Configuration
 
 *Checklist:*
 
-1. Check browser download settings
+1. Check that the export location is writable
 2. Verify file still exists
 3. Check user permissions
-4. Try different browser
+4. Restart the application and try again
 
 **Issue: Downloaded file is corrupted**
 
 *Solutions:*
 
-* Clear browser cache
-* Try download again
+* Try the export again
 * Check original upload integrity
 * Verify from different user account
 
@@ -372,11 +369,10 @@ UI Elements Missing
 
 **Common Fixes:**
 
-1. Refresh page (F5)
-2. Clear browser cache
-3. Check zoom level (Ctrl/Cmd + 0)
-4. Update graphics drivers
-5. Try different display resolution
+1. Restart the application
+2. Check zoom level (Ctrl/Cmd + 0)
+3. Update graphics drivers
+4. Try different display resolution
 
 Text Too Small/Large
 ^^^^^^^^^^^^^^^^^^^^
@@ -461,14 +457,12 @@ Cannot Create Vault
 
 * Database space limitations
 * Concurrent modification conflict
-* Browser compatibility issues
 
 *Solutions:*
 
 1. Check available disk space
 2. Close and reopen asset view
-3. Try different browser
-4. Contact administrator if persists
+3. Contact administrator if persists
 
 Password Generation Problems
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -477,10 +471,9 @@ Password Generation Problems
 
 *Solutions:*
 
-1. Check browser JavaScript is enabled
-2. Clear browser cache
-3. Try manual password entry
-4. Verify password policy settings
+1. Restart the application
+2. Try manual password entry
+3. Verify password policy settings
 
 **Issue: Generated password rejected**
 
@@ -505,16 +498,15 @@ Vault Access Denied
 *Solutions:*
 
 1. Verify you have vault permissions:
-   
+
    * Ask administrator for access
    * Check permission expiration
    * Review audit log for changes
 
 2. If recently granted access:
-   
+
    * Log out and back in
-   * Clear browser cache
-   * Wait 5 minutes for sync
+   * Check the audit log for the permission grant
 
 **Issue: Cannot see vault contents**
 
@@ -532,19 +524,19 @@ Password Rotation Failures
 *Common Problems:*
 
 1. **Current password incorrect**:
-   
+
    * Verify caps lock
    * Check password history
    * Try copy/paste
 
 2. **New password invalid**:
-   
+
    * Check complexity requirements
    * Avoid password reuse
    * Try generated password
 
 3. **Network/timing issues**:
-   
+
    * Check session hasn't expired
    * Retry the operation
    * Save work frequently
@@ -662,8 +654,7 @@ Vault Performance Issues
 
 1. Limit vault size (< 100 entries)
 2. Archive old passwords
-3. Clear browser cache
-4. Check database performance
+3. Check database performance
 
 **Issue: Search within vault slow**
 
@@ -731,21 +722,21 @@ Before Contacting Support
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **Document the issue:**
-   
+
    * Exact error message
    * Steps to reproduce
    * Screenshot if possible
    * Time of occurrence
 
 2. **Check basics:**
-   
+
    * Application version
    * Operating system
    * Available disk space
    * User role/permissions
 
 3. **Try standard fixes:**
-   
+
    * Restart application
    * Reboot computer
    * Check for updates
@@ -754,23 +745,21 @@ Before Contacting Support
 Collecting Diagnostic Info
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**For support tickets:**
+**For issue reports:**
 
 1. Go to Settings → About
 2. Click "Copy System Info"
-3. Include in support request
+3. Include it in the issue report
 4. Attach relevant screenshots
 5. Export recent audit logs
 
 Support Channels
 ^^^^^^^^^^^^^^^^
 
-During the alpha phase:
-
-* Primary: Your designated support contact
-* Include: System info, steps to reproduce
-* Severity: Mark urgent issues appropriately
-* Response: Check your agreed SLA
+* **Documentation**: This site
+* **Issue Tracker**: https://github.com/HillviewCap/ferrocodex/issues
+* Include the application version, operating system, steps to reproduce, and the exact error message
+* Do not post vulnerabilities publicly; email security@ferrocodex.com instead
 
 Emergency Procedures
 ^^^^^^^^^^^^^^^^^^^^
@@ -779,7 +768,7 @@ For critical issues:
 
 1. **Document everything** immediately
 2. **Stop using** affected features
-3. **Contact support** urgently
+3. **Report the issue** on the issue tracker
 4. **Prepare rollback** if needed
 5. **Communicate** with team
 
