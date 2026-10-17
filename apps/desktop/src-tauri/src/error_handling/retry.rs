@@ -260,26 +260,7 @@ impl RetryExecutor {
 
             match result {
                 Ok(value) => {
-                    // Success - record attempt and return
-                    if attempts.len() > 0 {
-                        // Only record attempts if we actually retried
-                        let attempt = RetryAttempt {
-                            attempt: attempt_num,
-                            error: last_error.unwrap_or_else(|| {
-                                EnhancedError::new(
-                                    crate::error_handling::ErrorSeverity::Low,
-                                    crate::error_handling::ErrorDomain::System,
-                                    RecoveryStrategy::AutoRecoverable,
-                                    "Unknown error".to_string(),
-                                )
-                            }),
-                            timestamp: chrono::Utc::now(),
-                            delay,
-                            is_final: false,
-                        };
-                        attempts.push(attempt);
-                    }
-
+                    // Success - failed attempts were already recorded as they happened
                     return RetryResult {
                         result: Ok(value),
                         attempts,
@@ -290,7 +271,8 @@ impl RetryExecutor {
                 }
                 Err(error) => {
                     let is_final_attempt = attempt_num >= self.strategy.max_attempts;
-                    let should_retry = !is_final_attempt && self.should_retry(&error);
+                    let is_retryable = self.should_retry(&error);
+                    let should_retry = !is_final_attempt && is_retryable;
 
                     // Record this attempt
                     let attempt = RetryAttempt {
@@ -310,7 +292,7 @@ impl RetryExecutor {
                             result: Err(error),
                             attempts,
                             total_duration: start_time.elapsed(),
-                            retry_limit_exceeded: is_final_attempt && should_retry,
+                            retry_limit_exceeded: is_final_attempt && is_retryable,
                             execution_id,
                         };
                     }
@@ -763,8 +745,8 @@ mod tests {
         assert!((stats.average_time_us - 5333.333).abs() < 0.1); // Average should be ~5.33ms
         assert!(stats.meets_requirement); // All under 10ms
         
-        // Add a slow execution
-        executor.execution_times.push(15000); // 15ms
+        // Add a slow execution: (5 + 8 + 3 + 30) / 4 = 11.5ms average
+        executor.execution_times.push(30000); // 30ms
         let stats = executor.get_performance_stats();
         assert!(!stats.meets_requirement); // Now exceeds 10ms average
     }

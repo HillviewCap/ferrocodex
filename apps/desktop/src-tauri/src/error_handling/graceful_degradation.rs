@@ -275,7 +275,7 @@ impl FeatureAvailabilityManager {
         // Determine availability
         let new_availability = if !feature_deps_available {
             FeatureAvailability::Unavailable
-        } else if !any_service_available {
+        } else if !feature.service_dependencies.is_empty() && !any_service_available {
             if feature.offline_capable {
                 FeatureAvailability::Degraded
             } else {

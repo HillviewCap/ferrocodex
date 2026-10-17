@@ -426,7 +426,7 @@ impl EnhancedSqliteCache {
         match entry_result {
             Ok((data_type, source, data_bytes, cached_at, ttl_seconds, compressed, access_count)) => {
                 // Check if expired
-                if (now - cached_at) > ttl_seconds {
+                if (now - cached_at) >= ttl_seconds {
                     // Remove expired entry
                     drop(stmt);
                     conn.execute("DELETE FROM cache_entries WHERE key = ?1", params![key])
@@ -522,7 +522,7 @@ impl EnhancedSqliteCache {
         let conn = self.connection.lock().unwrap();
         
         let expired_count = conn.execute(
-            "DELETE FROM cache_entries WHERE (cached_at + ttl_seconds) < ?1",
+            "DELETE FROM cache_entries WHERE (cached_at + ttl_seconds) <= ?1",
             params![now],
         ).map_err(|e| EnhancedError::new(
             ErrorSeverity::Medium,

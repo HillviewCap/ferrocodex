@@ -458,10 +458,14 @@ impl FailoverExecutor {
             
             services_tried.push(provider.name().to_string());
             
-            // Update service usage statistics
+            // Update service usage statistics, recording a failover when this
+            // isn't the first service tried
             {
                 let mut stats = self.execution_stats.lock().unwrap();
                 *stats.service_usage.entry(provider.name().to_string()).or_insert(0) += 1;
+                if services_tried.len() > 1 {
+                    stats.failover_count += 1;
+                }
             }
             
             // Attempt the operation
@@ -478,12 +482,6 @@ impl FailoverExecutor {
                 }
                 Err(error) => {
                     last_error = Some(error);
-                    
-                    // Record failover if we're not on the first service
-                    if services_tried.len() > 1 {
-                        let mut stats = self.execution_stats.lock().unwrap();
-                        stats.failover_count += 1;
-                    }
                     
                     // Continue to next service
                     continue;
