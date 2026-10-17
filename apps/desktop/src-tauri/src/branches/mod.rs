@@ -275,7 +275,7 @@ impl<'a> SqliteBranchRepository<'a> {
 
     fn generate_next_branch_version_number(&self, branch_id: i64) -> Result<String> {
         let mut stmt = self.conn.prepare(
-            "SELECT branch_version_number FROM branch_versions WHERE branch_id = ?1 ORDER BY created_at DESC LIMIT 1"
+            "SELECT branch_version_number FROM branch_versions WHERE branch_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1"
         )?;
 
         let result = stmt.query_row([branch_id], |row| row.get::<_, String>(0));
