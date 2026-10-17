@@ -39,7 +39,7 @@ const PasswordStrengthIndicator: React.FC<PasswordStrengthIndicatorProps> = ({
             percent={strength.score}
             strokeColor={color}
             showInfo={false}
-            size={size}
+            size={size === 'default' ? 'medium' : size}
             style={{ flex: 1 }}
           />
           <Tag color={color} style={{ margin: 0 }}>

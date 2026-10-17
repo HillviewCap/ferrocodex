@@ -362,7 +362,7 @@ const AssociationReview: React.FC<AssociationReviewProps> = ({
         <Table
           columns={columns}
           dataSource={reviewAssociations}
-          rowKey={(record, index) => `${record.fileId}-${index}`}
+          rowKey={(record) => `${record.fileId}`}
           pagination={false}
           size="small"
           scroll={{ x: 800 }}

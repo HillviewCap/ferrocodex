@@ -201,28 +201,30 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       title: 'New Password',
       content: (
         <div>
-          <Form.Item
-            name="new_password"
-            label="New Password"
-            rules={[
-              { required: true, message: 'Please enter a new password' },
-              { min: 12, message: 'Password must be at least 12 characters long' },
-            ]}
-          >
-            <Input.Password
-              size="large"
-              placeholder="Enter new password"
-              onChange={(e) => validatePassword(e.target.value)}
-              addonAfter={
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={generatePassword}
-                  size="small"
-                >
-                  Generate
-                </Button>
-              }
-            />
+          <Form.Item label="New Password" required>
+            <Space.Compact style={{ width: '100%' }}>
+              <Form.Item
+                name="new_password"
+                noStyle
+                rules={[
+                  { required: true, message: 'Please enter a new password' },
+                  { min: 12, message: 'Password must be at least 12 characters long' },
+                ]}
+              >
+                <Input.Password
+                  size="large"
+                  placeholder="Enter new password"
+                  onChange={(e) => validatePassword(e.target.value)}
+                />
+              </Form.Item>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={generatePassword}
+                size="large"
+              >
+                Generate
+              </Button>
+            </Space.Compact>
           </Form.Item>
 
           {passwordStrength && (

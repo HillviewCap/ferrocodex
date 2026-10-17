@@ -18,12 +18,12 @@ import {
   SearchOutlined,
   InfoCircleOutlined
 } from '@ant-design/icons';
+import type { DataNode } from 'antd/es/tree';
 import { invoke } from '@tauri-apps/api/core';
 import { AssetInfo, AssetSelectorProps } from '../../types/associations';
 
 const { Search } = Input;
 const { Title, Text } = Typography;
-const { TreeNode } = Tree;
 
 interface AssetHierarchy {
   id: number;
@@ -171,43 +171,40 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
     setExpandedKeys(expandedKeys as string[]);
   };
 
-  const renderTreeNodes = (assetList: AssetHierarchy[]): React.ReactNode => {
+  const buildTreeData = (assetList: AssetHierarchy[]): DataNode[] => {
     return assetList.map(asset => {
       const isDevice = asset.assetType === 'Device';
       const isSelectable = isDevice && !disabled;
-      
-      return (
-        <TreeNode
-          key={asset.id.toString()}
-          title={
-            <Space>
-              {isDevice ? (
-                <DatabaseOutlined style={{ color: '#1890ff' }} />
-              ) : (
-                <FolderOutlined style={{ color: '#faad14' }} />
-              )}
-              <span style={{ 
-                fontWeight: isDevice ? 'normal' : 'bold',
-                color: isSelectable ? '#000' : '#999'
-              }}>
-                {asset.name}
-              </span>
-              <Tag color={isDevice ? 'blue' : 'orange'}>
-                {asset.assetType}
-              </Tag>
-              {!isSelectable && isDevice && (
-                <Tooltip title="This device may not be compatible with the selected file type">
-                  <InfoCircleOutlined style={{ color: '#faad14' }} />
-                </Tooltip>
-              )}
-            </Space>
-          }
-          selectable={isSelectable}
-          disabled={!isSelectable}
-        >
-          {asset.children.length > 0 && renderTreeNodes(asset.children)}
-        </TreeNode>
-      );
+
+      return {
+        key: asset.id.toString(),
+        title: (
+          <Space>
+            {isDevice ? (
+              <DatabaseOutlined style={{ color: '#1890ff' }} />
+            ) : (
+              <FolderOutlined style={{ color: '#faad14' }} />
+            )}
+            <span style={{
+              fontWeight: isDevice ? 'normal' : 'bold',
+              color: isSelectable ? '#000' : '#999'
+            }}>
+              {asset.name}
+            </span>
+            <Tag color={isDevice ? 'blue' : 'orange'}>
+              {asset.assetType}
+            </Tag>
+            {!isSelectable && isDevice && (
+              <Tooltip title="This device may not be compatible with the selected file type">
+                <InfoCircleOutlined style={{ color: '#faad14' }} />
+              </Tooltip>
+            )}
+          </Space>
+        ),
+        selectable: isSelectable,
+        disabled: !isSelectable,
+        children: asset.children.length > 0 ? buildTreeData(asset.children) : undefined,
+      };
     });
   };
 
@@ -306,16 +303,15 @@ const AssetFileSelector: React.FC<AssetSelectorProps> = ({
             expandedKeys={expandedKeys}
             onSelect={handleSelect}
             onExpand={handleExpand}
-            style={{ 
-              background: '#fafafa', 
-              padding: '16px', 
+            treeData={buildTreeData(filteredAssets)}
+            style={{
+              background: '#fafafa',
+              padding: '16px',
               borderRadius: '6px',
               maxHeight: '400px',
               overflowY: 'auto'
             }}
-          >
-            {renderTreeNodes(filteredAssets)}
-          </Tree>
+          />
         )}
       </Space>
     </Card>

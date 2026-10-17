@@ -22,7 +22,9 @@ import {
   SettingOutlined,
   CopyOutlined,
   StarOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  UpOutlined,
+  DownOutlined
 } from '@ant-design/icons';
 import { AssetSearchResult, SearchResultsProps, MetadataMatch, MatchType } from '../../types/search';
 import { useSearch } from '../../contexts/SearchContext';
@@ -214,7 +216,7 @@ const MetadataSearchResults: React.FC<SearchResultsProps> = ({
             <Button
               key="metadata"
               type="text"
-              icon={isExpanded ? 'Collapse' : 'Expand'}
+              icon={isExpanded ? <UpOutlined /> : <DownOutlined />}
               onClick={() => toggleExpanded(result.asset_id)}
             >
               {isExpanded ? 'Less' : 'More'}
