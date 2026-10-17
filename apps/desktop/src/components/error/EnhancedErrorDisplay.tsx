@@ -248,7 +248,7 @@ const EnhancedErrorDisplay: React.FC<EnhancedErrorDisplayProps> = ({
                 
                 {isAdminUser && (
                   <>
-                    <Divider orientation="left" style={{ margin: '16px 0 8px 0' }}>Debug Information</Divider>
+                    <Divider titlePlacement="start" style={{ margin: '16px 0 8px 0' }}>Debug Information</Divider>
                     <Paragraph 
                       code 
                       style={{ 

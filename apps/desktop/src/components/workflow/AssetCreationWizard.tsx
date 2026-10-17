@@ -11,7 +11,6 @@ import { ReviewConfirmationStep } from './steps/ReviewConfirmationStep';
 import { WorkflowProgressIndicator } from './WorkflowProgressIndicator';
 import { DraftSaveIndicator } from './DraftSaveIndicator';
 
-const { Step } = Steps;
 const { confirm } = Modal;
 
 interface AssetCreationWizardProps {
@@ -209,7 +208,7 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
     return getStepIndex(currentStepKey);
   };
 
-  const renderSteps = () => {
+  const stepItems = () => {
     return WORKFLOW_STEPS.map((step, index) => {
       let status: 'wait' | 'process' | 'finish' | 'error' = 'wait';
       
@@ -219,14 +218,12 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
         status = 'process';
       }
 
-      return (
-        <Step
-          key={step.name}
-          title={step.title}
-          description={step.description}
-          status={status}
-        />
-      );
+      return {
+        key: step.name,
+        title: step.title,
+        content: step.description,
+        status,
+      };
     });
   };
 
@@ -273,9 +270,7 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
           />
         </div>
 
-        <Steps current={currentStepIndex} style={{ marginBottom: '32px' }}>
-          {renderSteps()}
-        </Steps>
+        <Steps current={currentStepIndex} style={{ marginBottom: '32px' }} items={stepItems()} />
 
         <div style={{ minHeight: '400px', marginBottom: '24px' }}>
           <Spin spinning={isLoading}>

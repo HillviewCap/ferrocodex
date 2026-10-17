@@ -390,15 +390,11 @@ const QuickFirmwareUploadModal: React.FC<QuickFirmwareUploadModalProps> = ({
       width={600}
       destroyOnClose
     >
-      <Steps current={currentStep} style={{ marginBottom: '24px' }}>
-        {steps.map(step => (
-          <Steps.Step
-            key={step.title}
-            title={step.title}
-            description={step.description}
-          />
-        ))}
-      </Steps>
+      <Steps
+        current={currentStep}
+        style={{ marginBottom: '24px' }}
+        items={steps.map(step => ({ title: step.title, content: step.description }))}
+      />
 
       {renderStepContent()}
     </Modal>

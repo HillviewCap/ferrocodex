@@ -267,8 +267,8 @@ export const SecurityAlertPanel: React.FC = () => {
       content={content}
       trigger="click"
       placement="bottomRight"
-      visible={visible}
-      onVisibleChange={setVisible}
+      open={visible}
+      onOpenChange={setVisible}
     >
       <Button
         type="text"

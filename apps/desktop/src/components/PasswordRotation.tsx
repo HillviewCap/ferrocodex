@@ -5,7 +5,6 @@ import { LockOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/ic
 import { VaultSecret, PasswordRotationRequest, PasswordHistory, PasswordStrength, GeneratePasswordRequest, defaultPasswordRequest } from '../types/vault';
 import useAuthStore from '../store/auth';
 
-const { Step } = Steps;
 const { TextArea } = Input;
 const { Text } = Typography;
 
@@ -308,11 +307,11 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       footer={null}
     >
       <Spin spinning={loading}>
-        <Steps current={currentStep} style={{ marginBottom: 24 }}>
-          {steps.map(item => (
-            <Step key={item.title} title={item.title} />
-          ))}
-        </Steps>
+        <Steps
+          current={currentStep}
+          style={{ marginBottom: 24 }}
+          items={steps.map(item => ({ title: item.title }))}
+        />
 
         <Form
           form={form}
