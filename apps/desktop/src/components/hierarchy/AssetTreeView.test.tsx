@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AssetTreeView } from './AssetTreeView';
 import { AssetHierarchy } from '../../types/assets';
@@ -158,7 +158,7 @@ describe('AssetTreeView', () => {
     expect(tree).toBeInTheDocument();
   });
 
-  it('expands and collapses folders', () => {
+  it('expands and collapses folders', async () => {
     render(<AssetTreeView {...defaultProps} />);
     
     // Initially collapsed, child nodes aren't rendered
@@ -167,8 +167,14 @@ describe('AssetTreeView', () => {
     expandFolder('Production Line 1');
     expect(screen.getByText('PLC-001')).toBeVisible();
 
+    // rc-tree ignores expand clicks until it clears its list-motion flag in a
+    // setTimeout; let that run before collapsing
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+
     expandFolder('Production Line 1');
-    expect(screen.queryByText('PLC-001')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('PLC-001')).not.toBeInTheDocument();
+    });
   });
 
   it('handles drag and drop when allowDragDrop is true', () => {

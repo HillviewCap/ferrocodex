@@ -274,11 +274,12 @@ describe('Firmware Management Integration Tests', () => {
         await import('../FirmwareVersionList')
       ).default;
       
-      expect(FirmwareVersionList).toHaveBeenCalledWith(
+      // Check props only: React 18 passed a second argument to function components,
+      // React 19 passes undefined
+      expect(FirmwareVersionList.mock.lastCall?.[0]).toEqual(
         expect.objectContaining({
           onDelete: expect.any(Function)
-        }),
-        expect.anything()
+        })
       );
       
       deleteCallback = FirmwareVersionList.mock.calls[0][0].onDelete;

@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom';
+// antd 5 needs this to render message/notification/Modal static methods on React 19
+import '@ant-design/v5-patch-for-react-19';
 import { vi } from 'vitest';
 
 // Browser API stubs below are plain functions/classes rather than vi.fn() so that

@@ -23,7 +23,7 @@ import {
   SaveOutlined,
   DownloadOutlined
 } from '@ant-design/icons';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 

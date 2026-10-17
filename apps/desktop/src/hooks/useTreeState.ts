@@ -33,7 +33,7 @@ export const useTreeState = (config: TreeStateConfig = {}) => {
   const navigationState = useNavigationHistory();
   const actions = useTreeStateActions();
 
-  const persistenceTimeoutRef = useRef<number>();
+  const persistenceTimeoutRef = useRef<number | undefined>(undefined);
 
   // Debounced persistence to avoid excessive saves
   const scheduleStatePersistence = useCallback(() => {
