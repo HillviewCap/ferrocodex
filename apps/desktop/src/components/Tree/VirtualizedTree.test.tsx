@@ -4,15 +4,16 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import VirtualizedTree from './VirtualizedTree';
 import { AssetHierarchy } from '../../types/assets';
 
-// Mock react-window
+// Mock react-window (v2 API: rowComponent receives { index, style, ...rowProps })
 vi.mock('react-window', () => ({
-  FixedSizeList: ({ children, itemCount, itemSize }: any) => (
+  List: ({ rowComponent: Row, rowCount, rowHeight, rowProps }: any) => (
     <div data-testid="virtualized-list">
-      {Array.from({ length: Math.min(itemCount, 10) }, (_, index) => 
-        children({ index, style: { height: itemSize } })
-      )}
+      {Array.from({ length: Math.min(rowCount, 10) }, (_, index) => (
+        <Row key={index} index={index} style={{ height: rowHeight }} {...rowProps} />
+      ))}
     </div>
   ),
+  useListRef: () => ({ current: null }),
 }));
 
 const mockAssetHierarchy: AssetHierarchy[] = [
@@ -123,10 +124,10 @@ describe('VirtualizedTree', () => {
 
   it('calls onAssetSelect when asset is selected', () => {
     render(<VirtualizedTree {...defaultProps} />);
-    
-    // The tree item should be rendered by the virtualized list
-    // Note: This test might need adjustment based on the actual implementation
-    expect(screen.getByTestId('virtualized-list')).toBeInTheDocument();
+
+    // Rows receive their data via rowProps, so clicking a rendered row selects it
+    fireEvent.click(screen.getByText('Production Line 1'));
+    expect(defaultProps.onAssetSelect).toHaveBeenCalledWith(mockAssetHierarchy[0]);
   });
 
   it('handles search input changes', async () => {
@@ -154,31 +155,25 @@ describe('VirtualizedTree', () => {
   });
 
   it('shows performance metrics in development mode', () => {
-    // Mock development environment
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('DEV', true);
     
     render(<VirtualizedTree {...defaultProps} />);
     
     // Should show performance info in development
     expect(screen.getByText(/Items:/)).toBeInTheDocument();
     
-    // Restore environment
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it('hides performance metrics in production mode', () => {
-    // Mock production environment
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('DEV', false);
     
     render(<VirtualizedTree {...defaultProps} />);
     
     // Should not show performance info in production
     expect(screen.queryByText(/Items:/)).not.toBeInTheDocument();
     
-    // Restore environment
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it('applies correct height to virtualized list', () => {
