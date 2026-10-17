@@ -591,7 +591,8 @@ const FieldConfigModal: React.FC<FieldConfigModalProps> = ({
       onCancel={onCancel}
       width={600}
     >
-      <Form form={form} layout="vertical">
+      {/* Form.Item controls the type Select, so its 'text' default must live in the form */}
+      <Form form={form} layout="vertical" initialValues={{ type: 'text' }}>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item

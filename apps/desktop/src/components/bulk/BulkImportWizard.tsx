@@ -185,24 +185,19 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
     });
   };
 
-  const handleFileChange = (info: any) => {
-    const { fileList } = info;
-    if (fileList.length > 0) {
-      const file = fileList[0].originFileObj;
-      const validationError = validateCSVFile(file);
-      
-      if (validationError) {
-        notification.error({
-          message: 'Invalid File',
-          description: validationError,
-        });
-        return false;
-      }
-      
-      setSelectedFile(file);
-    } else {
-      setSelectedFile(null);
+  // Used as the Dragger's beforeUpload, which receives the selected File
+  const handleFileChange = (file: File) => {
+    const validationError = validateCSVFile(file);
+
+    if (validationError) {
+      notification.error({
+        message: 'Invalid File',
+        description: validationError,
+      });
+      return false;
     }
+
+    setSelectedFile(file);
     return false; // Prevent automatic upload
   };
 
@@ -227,6 +222,8 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
                   { required: true, message: 'Please enter a session name' },
                   {
                     validator: (_, value) => {
+                      // Empty values are reported by the required rule above
+                      if (!value) return Promise.resolve();
                       const error = validateSessionName(value);
                       return error ? Promise.reject(error) : Promise.resolve();
                     },
@@ -257,15 +254,16 @@ const BulkImportWizard: React.FC<BulkImportWizardProps> = ({
               </Form.Item>
 
               <Form.Item
-                name="templatePath"
                 label="Template (Optional)"
                 extra="Select a pre-configured template to guide the import process"
               >
                 <Input.Group compact>
-                  <Input
-                    style={{ width: 'calc(100% - 120px)' }}
-                    placeholder="Select or enter template name"
-                  />
+                  <Form.Item name="templatePath" noStyle>
+                    <Input
+                      style={{ width: 'calc(100% - 120px)' }}
+                      placeholder="Select or enter template name"
+                    />
+                  </Form.Item>
                   <Button
                     style={{ width: '120px' }}
                     onClick={() => setTemplateManagerVisible(true)}

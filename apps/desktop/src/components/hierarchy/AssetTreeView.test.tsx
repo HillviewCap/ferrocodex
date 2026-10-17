@@ -83,10 +83,20 @@ describe('AssetTreeView', () => {
     vi.clearAllMocks();
   });
 
+  // Folders start collapsed; click a folder's expand switcher to reveal its children
+  const expandFolder = (name: string) => {
+    const node = screen.getByText(name).closest('.ant-tree-treenode');
+    const switcher = node?.querySelector('.ant-tree-switcher');
+    expect(switcher).toBeInTheDocument();
+    fireEvent.click(switcher!);
+  };
+
   it('renders tree structure correctly', () => {
     render(<AssetTreeView {...defaultProps} />);
     
     expect(screen.getByText('Production Line 1')).toBeInTheDocument();
+
+    expandFolder('Production Line 1');
     expect(screen.getByText('PLC-001')).toBeInTheDocument();
     expect(screen.getByText('Control Room')).toBeInTheDocument();
   });
@@ -104,6 +114,8 @@ describe('AssetTreeView', () => {
     
     // Production Line 1 has 2 children
     expect(screen.getByText('(2)')).toBeInTheDocument();
+
+    expandFolder('Production Line 1');
     // Control Room has 1 child
     expect(screen.getByText('(1)')).toBeInTheDocument();
   });
@@ -149,32 +161,27 @@ describe('AssetTreeView', () => {
   it('expands and collapses folders', () => {
     render(<AssetTreeView {...defaultProps} />);
     
-    const folderNode = screen.getByText('Production Line 1');
-    
-    // Initially collapsed, should not show child nodes
-    expect(screen.queryByText('PLC-001')).not.toBeVisible();
-    
-    // Click to expand
-    const expandIcon = document.querySelector('.ant-tree-switcher');
-    if (expandIcon) {
-      fireEvent.click(expandIcon);
-      // After expansion, child nodes should be visible
-      expect(screen.getByText('PLC-001')).toBeVisible();
-    }
+    // Initially collapsed, child nodes aren't rendered
+    expect(screen.queryByText('PLC-001')).not.toBeInTheDocument();
+
+    expandFolder('Production Line 1');
+    expect(screen.getByText('PLC-001')).toBeVisible();
+
+    expandFolder('Production Line 1');
+    expect(screen.queryByText('PLC-001')).not.toBeInTheDocument();
   });
 
   it('handles drag and drop when allowDragDrop is true', () => {
     render(<AssetTreeView {...defaultProps} allowDragDrop={true} />);
-    
-    const tree = document.querySelector('.ant-tree');
-    expect(tree).toHaveAttribute('draggable');
+
+    expect(document.querySelector('.ant-tree-treenode[draggable="true"]')).toBeInTheDocument();
   });
 
   it('disables drag and drop when allowDragDrop is false', () => {
     render(<AssetTreeView {...defaultProps} allowDragDrop={false} />);
-    
-    const tree = document.querySelector('.ant-tree');
-    expect(tree).not.toHaveAttribute('draggable');
+
+    expect(document.querySelector('.ant-tree-treenode')).toBeInTheDocument();
+    expect(document.querySelector('.ant-tree-treenode[draggable="true"]')).not.toBeInTheDocument();
   });
 
   it('displays different content for folders vs devices', () => {
@@ -185,6 +192,7 @@ describe('AssetTreeView', () => {
     expect(productionLine.closest('.ant-tree-node-content-wrapper')).toBeInTheDocument();
     
     // Devices should show device icons
+    expandFolder('Production Line 1');
     const plc = screen.getByText('PLC-001');
     expect(plc.closest('.ant-tree-node-content-wrapper')).toBeInTheDocument();
   });

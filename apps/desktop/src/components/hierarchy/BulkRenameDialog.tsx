@@ -108,7 +108,8 @@ export const BulkRenameDialog: React.FC<BulkRenameDialogProps> = ({
       const originalName = asset.name;
       const fileExtension = originalName.includes('.') ? 
         originalName.substring(originalName.lastIndexOf('.')) : '';
-      const baseName = originalName.includes('.') ? 
+      // When the extension isn't preserved it's part of the name being renamed
+      const baseName = renameOptions.preserve_extension && originalName.includes('.') ? 
         originalName.substring(0, originalName.lastIndexOf('.')) : originalName;
 
       if (renameOptions.use_pattern && renameOptions.pattern) {

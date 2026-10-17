@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import SchemaDesigner from '../SchemaDesigner';
 import { invoke } from '@tauri-apps/api/core';
+import useAuthStore from '../../../store/auth';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -17,6 +18,12 @@ vi.mock('react-beautiful-dnd', () => ({
 }));
 
 const mockInvoke = vi.mocked(invoke);
+
+// Role queries with accessible names are very slow on this DOM, so find buttons by their text
+const clickOkIn = (container: HTMLElement) => {
+  fireEvent.click(within(container).getByText('OK').closest('button')!);
+};
+const getOpenModal = () => document.querySelector('.ant-modal-wrap:not([style*="display: none"]) .ant-modal') as HTMLElement;
 
 describe('SchemaDesigner', () => {
   const mockOnSave = vi.fn();
@@ -52,15 +59,8 @@ describe('SchemaDesigner', () => {
   };
 
   beforeEach(() => {
-    // Mock localStorage
-    Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: vi.fn(() => 'mock-token'),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-      },
-      writable: true,
-    });
+    // The designer reads the session token from the auth store
+    useAuthStore.setState({ token: 'mock-token' });
 
     // Reset mocks
     mockInvoke.mockReset();
@@ -157,8 +157,7 @@ describe('SchemaDesigner', () => {
     });
 
     // Save field
-    const okButton = screen.getByRole('button', { name: /ok/i });
-    fireEvent.click(okButton);
+    clickOkIn(getOpenModal());
 
     await waitFor(() => {
       expect(screen.getByText('Test Field')).toBeInTheDocument();
@@ -194,15 +193,14 @@ describe('SchemaDesigner', () => {
       target: { value: 'Device Name' }
     });
 
-    const okButton = screen.getByRole('button', { name: /ok/i });
-    fireEvent.click(okButton);
+    clickOkIn(getOpenModal());
 
     // Switch to JSON Schema tab
     const jsonTab = screen.getByText('JSON Schema');
     fireEvent.click(jsonTab);
 
     await waitFor(() => {
-      const textarea = screen.getByRole('textbox');
+      const textarea = screen.getByDisplayValue(/"type": "object"/) as HTMLTextAreaElement;
       expect(textarea.value).toContain('"title": "Test Schema"');
       expect(textarea.value).toContain('"device_name"');
       expect(textarea.value).toContain('"Device Name"');
@@ -245,8 +243,12 @@ describe('SchemaDesigner', () => {
       target: { value: 'Test Field' }
     });
 
-    const okButton = screen.getByRole('button', { name: /ok/i });
-    fireEvent.click(okButton);
+    clickOkIn(getOpenModal());
+
+    // The modal validates asynchronously before adding the field
+    await waitFor(() => {
+      expect(screen.getByText('test_field (text)')).toBeInTheDocument();
+    });
 
     // Save schema
     const saveButton = screen.getByText('Save Schema');
@@ -336,12 +338,16 @@ describe('SchemaDesigner', () => {
     });
 
     // Find and click delete button for a field
-    const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+    const deleteButtons = screen.getAllByLabelText('delete').map(icon => icon.closest('button')!);
     fireEvent.click(deleteButtons[0]);
 
     // Confirm deletion in popconfirm
-    const confirmButton = screen.getByText('Yes');
-    fireEvent.click(confirmButton);
+    const popconfirm = await waitFor(() => {
+      const el = document.querySelector('.ant-popconfirm');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    clickOkIn(popconfirm);
 
     await waitFor(() => {
       // Field should be removed from the list
@@ -364,8 +370,6 @@ describe('SchemaDesigner', () => {
       click: mockClick
     };
     
-    vi.spyOn(document, 'createElement').mockReturnValue(mockAnchor as any);
-
     render(
       <SchemaDesigner
         onSave={mockOnSave}
@@ -378,12 +382,24 @@ describe('SchemaDesigner', () => {
       target: { value: 'Export Test' }
     });
 
-    // Click export button
-    const exportButton = screen.getByText('Export');
-    fireEvent.click(exportButton);
+    // Only intercept the download anchor; React still needs the real createElement
+    const realCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(
+      ((tagName: string, options?: ElementCreationOptions) =>
+        tagName === 'a' ? (mockAnchor as any) : realCreateElement(tagName, options)) as typeof document.createElement
+    );
+
+    try {
+      // Click export button
+      const exportButton = screen.getByText('Export');
+      fireEvent.click(exportButton);
+    } finally {
+      createElementSpy.mockRestore();
+    }
 
     expect(mockCreateObjectURL).toHaveBeenCalled();
     expect(mockClick).toHaveBeenCalled();
+    expect(mockAnchor.download).toBe('export_test_schema.json');
     expect(mockRevokeObjectURL).toHaveBeenCalled();
   });
 

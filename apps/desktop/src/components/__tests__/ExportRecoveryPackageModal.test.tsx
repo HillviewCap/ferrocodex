@@ -67,15 +67,40 @@ const mockFirmware = {
   created_at: '2024-01-01T00:00:00Z'
 };
 
+const mockManifest = '/export/path/recovery_manifest.json';
+
 describe('ExportRecoveryPackageModal', () => {
   const mockOnCancel = vi.fn();
   const mockOnSuccess = vi.fn();
   const mockInvoke = vi.mocked(invoke);
   const mockDialog = vi.mocked(dialog);
 
+  // The modal calls get_firmware_list and get_export_options on open, so mock by command
+  // rather than by call order
+  const mockCommands = (exportResult: () => Promise<unknown> = () => Promise.resolve(mockManifest)) => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case 'get_firmware_list':
+          return Promise.resolve([mockFirmware]);
+        case 'get_export_options':
+          return Promise.resolve({ includeVault: false, vaultAvailable: false, vaultSecretCount: 0 });
+        case 'export_complete_recovery':
+          return exportResult();
+        default:
+          return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+      }
+    });
+  };
+
+  // The chosen path shows on the picker button and in a "Selected Directory" alert
+  const expectSelectedPath = (path: string) => {
+    expect(screen.getByText('Selected Directory')).toBeInTheDocument();
+    expect(screen.getAllByText(path)).toHaveLength(2);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInvoke.mockResolvedValue([mockFirmware]); // Default to returning firmware list
+    mockCommands();
   });
 
   it('should render the modal with package contents', async () => {
@@ -164,16 +189,13 @@ describe('ExportRecoveryPackageModal', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('/export/path')).toBeInTheDocument();
+      expectSelectedPath('/export/path');
     });
   });
 
   it('should export recovery package successfully', async () => {
     const user = userEvent.setup();
     mockDialog.open.mockResolvedValueOnce('/export/path');
-    mockInvoke
-      .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockResolvedValueOnce('/export/path/recovery_manifest.json'); // export_complete_recovery
 
     render(
       <ExportRecoveryPackageModal
@@ -191,7 +213,7 @@ describe('ExportRecoveryPackageModal', () => {
     await user.click(screen.getByText('Click to select export directory...'));
     
     await waitFor(() => {
-      expect(screen.getByText('/export/path')).toBeInTheDocument();
+      expectSelectedPath('/export/path');
     });
 
     // Click export
@@ -201,17 +223,18 @@ describe('ExportRecoveryPackageModal', () => {
       expect(mockInvoke).toHaveBeenCalledWith('export_complete_recovery', {
         app: null,
         token: 'test-token',
-        asset_id: 1,
-        config_version_id: 1,
-        firmware_version_id: 1,
-        export_directory: '/export/path'
+        assetId: 1,
+        configVersionId: 1,
+        firmwareVersionId: 1,
+        exportDirectory: '/export/path',
+        includeVault: false
       });
       expect(message.success).toHaveBeenCalledWith('Recovery package exported successfully!');
       expect(mockOnSuccess).toHaveBeenCalledWith('/export/path/recovery_manifest.json');
     });
   });
 
-  it('should show error when no firmware is linked on export', async () => {
+  it('should not export when no firmware is linked', async () => {
     const user = userEvent.setup();
     
     render(
@@ -226,12 +249,14 @@ describe('ExportRecoveryPackageModal', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: /Export Package/i }));
-
-    expect(message.error).toHaveBeenCalledWith('No firmware is linked to this configuration');
+    // The button stays disabled, so the export can't be started at all
+    const exportButton = screen.getByRole('button', { name: /Export Package/i });
+    expect(exportButton).toBeDisabled();
+    await user.click(exportButton);
+    expect(mockInvoke).not.toHaveBeenCalledWith('export_complete_recovery', expect.anything());
   });
 
-  it('should show error when no directory is selected', async () => {
+  it('should not export when no directory is selected', async () => {
     const user = userEvent.setup();
     
     render(
@@ -246,17 +271,17 @@ describe('ExportRecoveryPackageModal', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: /Export Package/i }));
-
-    expect(message.error).toHaveBeenCalledWith('Please select an export directory');
+    // The button stays disabled until a directory is chosen
+    const exportButton = screen.getByRole('button', { name: /Export Package/i });
+    expect(exportButton).toBeDisabled();
+    await user.click(exportButton);
+    expect(mockInvoke).not.toHaveBeenCalledWith('export_complete_recovery', expect.anything());
   });
 
   it('should handle export error', async () => {
     const user = userEvent.setup();
     mockDialog.open.mockResolvedValueOnce('/export/path');
-    mockInvoke
-      .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockRejectedValueOnce(new Error('Export failed')); // export_complete_recovery
+    mockCommands(() => Promise.reject(new Error('Export failed')));
 
     render(
       <ExportRecoveryPackageModal
@@ -273,7 +298,7 @@ describe('ExportRecoveryPackageModal', () => {
     // Select directory and export
     await user.click(screen.getByText('Click to select export directory...'));
     await waitFor(() => {
-      expect(screen.getByText('/export/path')).toBeInTheDocument();
+      expectSelectedPath('/export/path');
     });
     await user.click(screen.getByRole('button', { name: /Export Package/i }));
 
@@ -288,9 +313,7 @@ describe('ExportRecoveryPackageModal', () => {
     mockDialog.open.mockResolvedValueOnce('/export/path');
     
     // Make export hang
-    mockInvoke
-      .mockResolvedValueOnce([mockFirmware]) // get_firmware_list
-      .mockImplementationOnce(() => new Promise(() => {})); // export_complete_recovery never resolves
+    mockCommands(() => new Promise(() => {}));
 
     render(
       <ExportRecoveryPackageModal
@@ -307,7 +330,7 @@ describe('ExportRecoveryPackageModal', () => {
     // Select directory
     await user.click(screen.getByText('Click to select export directory...'));
     await waitFor(() => {
-      expect(screen.getByText('/export/path')).toBeInTheDocument();
+      expectSelectedPath('/export/path');
     });
 
     const exportButton = screen.getByRole('button', { name: /Export Package/i });

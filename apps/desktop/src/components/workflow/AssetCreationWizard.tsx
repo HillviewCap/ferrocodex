@@ -32,6 +32,7 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
     autoSave,
     lastSaveTime,
     startWorkflow,
+    updateStep,
     nextStep,
     previousStep,
     completeWorkflow,
@@ -229,7 +230,8 @@ export const AssetCreationWizard: React.FC<AssetCreationWizardProps> = ({
     });
   };
 
-  if (!isInitialized || !currentWorkflow) {
+  // A workflow already in the store (e.g. resumed) is shown without re-initializing
+  if (!currentWorkflow) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
         <Spin size="large" tip="Initializing asset creation workflow..." />

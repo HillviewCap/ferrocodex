@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider } from 'antd';
+import { exit } from '@tauri-apps/plugin-process';
 import EulaModal from '../EulaModal';
 
 // Mock Tauri APIs
@@ -64,7 +65,7 @@ describe('EulaModal', () => {
     
     const prereleaseElements = screen.getAllByText(/This is a pre-release, Alpha version/);
     expect(prereleaseElements.length).toBeGreaterThan(0);
-    const asIsElements = screen.getAllByText(/provided to you "AS-IS" and "AS-AVAILABLE"/);
+    const asIsElements = screen.getAllByText(/provided to you "AS-IS" and "AS-AVAILABLE,"/);
     expect(asIsElements.length).toBeGreaterThan(0);
     const assumeRiskElements = screen.getAllByText(/You voluntarily and explicitly assume all risks/);
     expect(assumeRiskElements.length).toBeGreaterThan(0);
@@ -93,15 +94,21 @@ describe('EulaModal', () => {
     fireEvent.click(declineButton);
     
     await waitFor(() => {
-      const { exit } = vi.mocked(require('@tauri-apps/plugin-process'));
       expect(exit).toHaveBeenCalledWith(0);
     });
   });
 
   it('falls back to window.close if exit fails', async () => {
-    // This test would require more complex mocking setup in Vitest
-    // For now, we trust that the error handling works as designed
-    expect(true).toBe(true);
+    vi.mocked(exit).mockRejectedValueOnce(new Error('exit unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderEulaModal(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /decline/i }));
+
+    await waitFor(() => {
+      expect(window.close).toHaveBeenCalled();
+    });
+    consoleError.mockRestore();
   });
 
   it('modal cannot be closed by external means', () => {

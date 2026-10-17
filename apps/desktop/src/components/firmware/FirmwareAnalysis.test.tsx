@@ -194,7 +194,10 @@ describe('FirmwareAnalysis', () => {
     });
 
     unmount();
-    expect(mockUnlisten).toHaveBeenCalled();
+    // Cleanup unsubscribes once the listen() promise resolves
+    await waitFor(() => {
+      expect(mockUnlisten).toHaveBeenCalled();
+    });
   });
 
   it('renders analysis in progress', async () => {

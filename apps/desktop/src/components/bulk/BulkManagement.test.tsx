@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { expect, test, vi, beforeEach, describe } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import BulkManagement from './BulkManagement';
@@ -144,13 +144,15 @@ describe('BulkManagement', () => {
       expect(screen.getByText('Items Processed')).toBeInTheDocument();
       expect(screen.getByText('Success Rate')).toBeInTheDocument();
       
-      // Check for specific stat values using more specific queries
-      const statValues = screen.getAllByRole('heading');
-      const values = statValues.map(el => el.textContent);
-      expect(values).toContain('10');
-      expect(values).toContain('2');
-      expect(values).toContain('1500');
     });
+
+    // Each Statistic renders its value next to its title
+    const statValue = (title: string) =>
+      screen.getByText(title).closest('.ant-statistic')!.querySelector('.ant-statistic-content');
+    expect(statValue('Total Sessions')).toHaveTextContent('10');
+    expect(statValue('Active Sessions')).toHaveTextContent('2');
+    expect(statValue('Items Processed')).toHaveTextContent('1,500');
+    expect(statValue('Success Rate')).toHaveTextContent('95.5%');
   });
 
   test('should display sessions in the table', async () => {
@@ -196,7 +198,7 @@ describe('BulkManagement', () => {
     expect(screen.getByText('Recent Sessions')).toBeInTheDocument();
     
     // Switch to Progress tab
-    const progressTab = screen.getByText('Progress');
+    const progressTab = screen.getByRole('tab', { name: /progress/i });
     await user.click(progressTab);
     
     await waitFor(() => {
@@ -204,7 +206,7 @@ describe('BulkManagement', () => {
     });
     
     // Switch to Dashboard tab
-    const dashboardTab = screen.getByText('Dashboard');
+    const dashboardTab = screen.getByRole('tab', { name: /dashboard/i });
     await user.click(dashboardTab);
     
     await waitFor(() => {
@@ -239,26 +241,19 @@ describe('BulkManagement', () => {
       expect(screen.getByText('Test Import 1')).toBeInTheDocument();
     });
     
-    // Find all buttons and look for the delete button by its icon
-    const deleteButtons = screen.getAllByRole('button');
-    const deleteButton = deleteButtons.find(btn => 
-      btn.querySelector('.anticon-delete')
-    );
-    
-    if (deleteButton) {
-      await user.click(deleteButton);
-      
-      // Confirm deletion in the popconfirm  
-      const confirmButton = await screen.findByRole('button', { name: /delete/i });
-      await user.click(confirmButton);
-      
-      await waitFor(() => {
-        expect(mockDeleteSession).toHaveBeenCalledWith(1);
-      });
-    } else {
-      // If we can't find the delete button, skip the test
-      expect(true).toBe(true);
-    }
+    // The delete button is icon-only; use the first session row's
+    const firstRow = screen.getByText('Test Import 1').closest('tr')!;
+    const deleteButton = firstRow.querySelector('.anticon-delete')!.closest('button')!;
+    await user.click(deleteButton);
+
+    // Confirm deletion in the popconfirm
+    const popconfirm = await screen.findByRole('tooltip');
+    expect(within(popconfirm).getByText('Are you sure you want to delete this session?')).toBeInTheDocument();
+    await user.click(within(popconfirm).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(mockDeleteSession).toHaveBeenCalledWith(1);
+    });
   });
 
   test('should handle wizard completion', async () => {

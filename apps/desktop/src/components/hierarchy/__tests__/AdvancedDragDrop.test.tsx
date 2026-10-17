@@ -75,6 +75,9 @@ describe('AdvancedDragDrop', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore defaults; some tests override these with mockReturnValue
+    mockStore.getSelectedAssets.mockImplementation(() => [1, 2]);
+    mockStore.isSelected.mockImplementation((id: number) => [1, 2].includes(id));
   });
 
   it('should render children correctly', () => {
@@ -158,6 +161,9 @@ describe('AdvancedDragDrop', () => {
   });
 
   it('should validate drop targets correctly', async () => {
+    // Drag a single, unselected asset
+    mockStore.isSelected.mockReturnValue(false);
+    mockStore.getSelectedAssets.mockReturnValue([]);
     mockStore.validateBulkMove.mockResolvedValueOnce({
       is_valid: true,
       errors: [],
@@ -205,6 +211,9 @@ describe('AdvancedDragDrop', () => {
   });
 
   it('should handle drop events', async () => {
+    // Drag a single, unselected asset
+    mockStore.isSelected.mockReturnValue(false);
+    mockStore.getSelectedAssets.mockReturnValue([]);
     mockStore.validateBulkMove.mockResolvedValue({
       is_valid: true,
       errors: [],
@@ -245,6 +254,11 @@ describe('AdvancedDragDrop', () => {
     if (dropElement) {
       fireEvent(dropElement, dragOverEvent);
     }
+
+    // Drag-over validation is async; wait for it before dropping
+    await waitFor(() => {
+      expect(mockDataTransfer.dropEffect).toBe('move');
+    });
 
     // Drop
     const dropEvent = new Event('drop', { bubbles: true }) as any;

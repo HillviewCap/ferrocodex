@@ -1,12 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useHierarchyStore } from './hierarchy';
 import { AssetHierarchy } from '../types/assets';
+import { invoke } from '@tauri-apps/api/core';
 
-// Mock Tauri API
-const mockInvoke = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: mockInvoke,
-}));
+const mockInvoke = vi.mocked(invoke);
 
 describe('HierarchyStore', () => {
   const mockHierarchyData: AssetHierarchy[] = [

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import DynamicMetadataForm from '../DynamicMetadataForm';
 import { invoke } from '@tauri-apps/api/core';
+import useAuthStore from '../../../store/auth';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -10,6 +11,17 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 const mockInvoke = vi.mocked(invoke);
+
+// Ant Design's Select isn't a native <select>; open it and click the option instead
+const selectOption = async (label: RegExp, optionText: string) => {
+  fireEvent.mouseDown(screen.getByLabelText(label));
+  const option = await waitFor(() => {
+    const el = document.querySelector(`.ant-select-item-option[title="${optionText}"]`);
+    expect(el).not.toBeNull();
+    return el as HTMLElement;
+  });
+  fireEvent.click(option);
+};
 
 describe('DynamicMetadataForm', () => {
   const mockSchema = {
@@ -69,15 +81,8 @@ describe('DynamicMetadataForm', () => {
   const mockOnCancel = vi.fn();
 
   beforeEach(() => {
-    // Mock localStorage
-    Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: vi.fn(() => 'mock-token'),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-      },
-      writable: true,
-    });
+    // The form only loads its schema once there's a session token
+    useAuthStore.setState({ token: 'mock-token' });
 
     // Reset mocks
     mockInvoke.mockReset();
@@ -172,9 +177,7 @@ describe('DynamicMetadataForm', () => {
       target: { value: 'Test Device' }
     });
 
-    fireEvent.change(screen.getByLabelText(/Device Type/), {
-      target: { value: 'PLC' }
-    });
+    await selectOption(/Device Type/, 'PLC');
 
     fireEvent.change(screen.getByLabelText(/IP Address/), {
       target: { value: '192.168.1.100' }
@@ -252,9 +255,10 @@ describe('DynamicMetadataForm', () => {
 
     // Check that initial values are populated
     expect(screen.getByDisplayValue('Existing Device')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('HMI')).toBeInTheDocument();
+    expect(document.querySelector('.ant-select-selection-item[title="HMI"]')).toBeInTheDocument();
     expect(screen.getByDisplayValue('10.0.0.1')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('8080')).toBeInTheDocument();
+    // InputNumber updates its displayed text asynchronously
+    expect(await screen.findByDisplayValue('8080')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Pre-filled notes')).toBeInTheDocument();
   });
 

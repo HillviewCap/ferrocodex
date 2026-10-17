@@ -116,17 +116,17 @@ export const AdvancedDragDrop: React.FC<AdvancedDragDropProps> = ({
       };
     }
 
-    // Check if any of the assets being dragged are ancestors of the target
+    // Check if any of the assets being dragged are ancestors of (or the same as) the target
     const isAncestor = (ancestorId: number, descendantId: number | null): boolean => {
       if (!descendantId) return false;
-      
-      const checkPath = (asset: AssetHierarchy): boolean => {
-        if (asset.id === descendantId) return true;
-        if (asset.id === ancestorId) return false; // Found ancestor first
-        return asset.children?.some(checkPath) || false;
-      };
 
-      return assets.some(checkPath);
+      const ancestor = findAsset(assets, ancestorId);
+      if (!ancestor) return false;
+
+      const containsTarget = (asset: AssetHierarchy): boolean =>
+        asset.id === descendantId || (asset.children?.some(containsTarget) ?? false);
+
+      return containsTarget(ancestor);
     };
 
     for (const assetId of assetIds) {

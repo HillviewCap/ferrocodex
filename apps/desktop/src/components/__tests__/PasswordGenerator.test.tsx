@@ -11,11 +11,10 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-// Mock auth store
+// Mock auth store; tests can set authState.token to simulate a missing session
+const authState = vi.hoisted(() => ({ token: 'mock-token' as string | null }));
 vi.mock('../../store/auth', () => ({
-  default: () => ({
-    token: 'mock-token',
-  }),
+  default: () => authState,
 }));
 
 // Mock PasswordStrengthIndicator component
@@ -79,6 +78,24 @@ const AppWrapper = ({ children }: { children: React.ReactNode }) => (
   <App>{children}</App>
 );
 
+// Each switch shares an ant-space with its visible label text
+const getSwitch = (label: string) =>
+  screen.getByText(label).closest('.ant-space')!.querySelector<HTMLElement>('[role="switch"]')!;
+
+// The antd slider handle has no value setter; move it with the keyboard instead.
+// rc-slider reads keyCode rather than key.
+const SLIDER_KEYS = { ArrowRight: 39, End: 35 } as const;
+const pressSliderKey = async (key: keyof typeof SLIDER_KEYS, times = 1) => {
+  const slider = screen.getByRole('slider');
+  for (let i = 0; i < times; i++) {
+    await act(async () => {
+      fireEvent.keyDown(slider, { key, keyCode: SLIDER_KEYS[key] });
+    });
+  }
+};
+
+// Each test mounts a full antd Modal and waits on async generate + analyze round trips,
+// which can exceed the 5s default when the suite runs files in parallel
 describe('PasswordGenerator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -105,6 +122,7 @@ describe('PasswordGenerator', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    authState.token = 'mock-token';
   });
 
   describe('Component Rendering', () => {
@@ -192,11 +210,11 @@ describe('PasswordGenerator', () => {
       });
 
       // Find and toggle uppercase switch OFF
-      const uppercaseSwitch = screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch');
+      const uppercaseSwitch = getSwitch('Uppercase (A-Z)');
       expect(uppercaseSwitch).toBeInTheDocument();
       
       await act(async () => {
-        fireEvent.click(uppercaseSwitch!);
+        fireEvent.click(uppercaseSwitch);
       });
 
       await waitFor(() => {
@@ -220,11 +238,11 @@ describe('PasswordGenerator', () => {
         expect(screen.getByText('Generate')).toBeInTheDocument();
       });
 
-      const lowercaseSwitch = screen.getByText('Lowercase (a-z)').previousElementSibling?.querySelector('.ant-switch');
+      const lowercaseSwitch = getSwitch('Lowercase (a-z)');
       expect(lowercaseSwitch).toBeInTheDocument();
       
       await act(async () => {
-        fireEvent.click(lowercaseSwitch!);
+        fireEvent.click(lowercaseSwitch);
       });
 
       await waitFor(() => {
@@ -248,11 +266,11 @@ describe('PasswordGenerator', () => {
         expect(screen.getByText('Generate')).toBeInTheDocument();
       });
 
-      const numbersSwitch = screen.getByText('Numbers (0-9)').previousElementSibling?.querySelector('.ant-switch');
+      const numbersSwitch = getSwitch('Numbers (0-9)');
       expect(numbersSwitch).toBeInTheDocument();
       
       await act(async () => {
-        fireEvent.click(numbersSwitch!);
+        fireEvent.click(numbersSwitch);
       });
 
       await waitFor(() => {
@@ -276,11 +294,11 @@ describe('PasswordGenerator', () => {
         expect(screen.getByText('Generate')).toBeInTheDocument();
       });
 
-      const specialSwitch = screen.getByText('Special (!@#$...)').previousElementSibling?.querySelector('.ant-switch');
+      const specialSwitch = getSwitch('Special (!@#$...)');
       expect(specialSwitch).toBeInTheDocument();
       
       await act(async () => {
-        fireEvent.click(specialSwitch!);
+        fireEvent.click(specialSwitch);
       });
 
       await waitFor(() => {
@@ -304,12 +322,12 @@ describe('PasswordGenerator', () => {
         expect(screen.getByText('Generate')).toBeInTheDocument();
       });
 
-      const ambiguousSwitch = screen.getByText('Exclude ambiguous characters').previousElementSibling?.querySelector('.ant-switch');
+      const ambiguousSwitch = getSwitch('Exclude ambiguous characters');
       expect(ambiguousSwitch).toBeInTheDocument();
       
       // Toggle OFF (currently ON by default)
       await act(async () => {
-        fireEvent.click(ambiguousSwitch!);
+        fireEvent.click(ambiguousSwitch);
       });
 
       await waitFor(() => {
@@ -335,19 +353,14 @@ describe('PasswordGenerator', () => {
         expect(screen.getByText('Generate')).toBeInTheDocument();
       });
 
-      // Find and change the length slider
-      const slider = screen.getByRole('slider');
-      expect(slider).toBeInTheDocument();
-
-      await act(async () => {
-        fireEvent.change(slider, { target: { value: '24' } });
-      });
+      // Move the length slider from the default 16 up to 18
+      await pressSliderKey('ArrowRight', 2);
 
       await waitFor(() => {
         expect(mockInvoke).toHaveBeenCalledWith('generate_secure_password', {
           token: 'mock-token',
           request: expect.objectContaining({
-            length: 24,
+            length: 18,
           }),
         });
       });
@@ -387,10 +400,10 @@ describe('PasswordGenerator', () => {
       vi.clearAllMocks();
 
       // Change a setting (toggle uppercase off)
-      const uppercaseSwitch = screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch');
+      const uppercaseSwitch = getSwitch('Uppercase (A-Z)');
       
       await act(async () => {
-        fireEvent.click(uppercaseSwitch!);
+        fireEvent.click(uppercaseSwitch);
       });
 
       // Should auto-regenerate
@@ -417,16 +430,14 @@ describe('PasswordGenerator', () => {
 
       vi.clearAllMocks();
 
-      const slider = screen.getByRole('slider');
-      await act(async () => {
-        fireEvent.change(slider, { target: { value: '32' } });
-      });
+      // Jump the slider to its maximum
+      await pressSliderKey('End');
 
       await waitFor(() => {
         expect(mockInvoke).toHaveBeenCalledWith('generate_secure_password', {
           token: 'mock-token',
           request: expect.objectContaining({
-            length: 32,
+            length: 64,
           }),
         });
       });
@@ -447,18 +458,16 @@ describe('PasswordGenerator', () => {
 
       // Turn off all character types
       const switches = [
-        screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Lowercase (a-z)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Numbers (0-9)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Special (!@#$...)').previousElementSibling?.querySelector('.ant-switch'),
+        getSwitch('Uppercase (A-Z)'),
+        getSwitch('Lowercase (a-z)'),
+        getSwitch('Numbers (0-9)'),
+        getSwitch('Special (!@#$...)'),
       ];
 
       for (const switchEl of switches) {
-        if (switchEl) {
-          await act(async () => {
-            fireEvent.click(switchEl);
-          });
-        }
+        await act(async () => {
+          fireEvent.click(switchEl);
+        });
       }
 
       await waitFor(() => {
@@ -479,21 +488,19 @@ describe('PasswordGenerator', () => {
 
       // Turn off all character types
       const switches = [
-        screen.getByText('Uppercase (A-Z)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Lowercase (a-z)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Numbers (0-9)').previousElementSibling?.querySelector('.ant-switch'),
-        screen.getByText('Special (!@#$...)').previousElementSibling?.querySelector('.ant-switch'),
+        getSwitch('Uppercase (A-Z)'),
+        getSwitch('Lowercase (a-z)'),
+        getSwitch('Numbers (0-9)'),
+        getSwitch('Special (!@#$...)'),
       ];
 
       for (const switchEl of switches) {
-        if (switchEl) {
-          await act(async () => {
-            fireEvent.click(switchEl);
-          });
-        }
+        await act(async () => {
+          fireEvent.click(switchEl);
+        });
       }
 
-      const generateButton = screen.getByText('Generate').closest('button');
+      const generateButton = screen.getByRole('button', { name: /Generate/ });
       await waitFor(() => {
         expect(generateButton).toBeDisabled();
       });
@@ -566,16 +573,21 @@ describe('PasswordGenerator', () => {
         expect(passwordField).toBeInTheDocument();
       });
 
-      // Click hide password
-      const eyeButton = screen.getByLabelText('Hide password') || screen.getByLabelText('Show password');
+      // Hide the password
       await act(async () => {
-        fireEvent.click(eyeButton);
+        fireEvent.click(screen.getByLabelText('Hide password'));
       });
 
       await waitFor(() => {
-        const hiddenField = screen.getByDisplayValue('••••••••••••••••');
-        expect(hiddenField).toBeInTheDocument();
+        expect(screen.getByDisplayValue('••••••••••••••••')).toBeInTheDocument();
       });
+
+      // Show it again
+      await act(async () => {
+        fireEvent.click(screen.getByLabelText('Show password'));
+      });
+
+      expect(screen.getByDisplayValue(testPassword)).toBeInTheDocument();
     });
 
     it('copies password to clipboard when copy button is clicked', async () => {
@@ -640,15 +652,19 @@ describe('PasswordGenerator', () => {
         expect(screen.getByDisplayValue(testPassword)).toBeInTheDocument();
       });
 
-      const useButton = screen.getByText('Use This Password');
-      expect(useButton).not.toBeDisabled();
+      // Enabled once the strength analysis comes back above the threshold
+      const useButton = screen.getByRole('button', { name: 'Use This Password' });
+      await waitFor(() => {
+        expect(useButton).not.toBeDisabled();
+      });
 
       await act(async () => {
         fireEvent.click(useButton);
       });
 
       expect(onGenerated).toHaveBeenCalledWith(testPassword);
-      expect(onCancel).toHaveBeenCalled();
+      // The parent closes the modal; PasswordGenerator doesn't call onCancel itself
+      expect(onCancel).not.toHaveBeenCalled();
     });
 
     it('disables "Use This Password" button for weak passwords', async () => {
@@ -669,10 +685,17 @@ describe('PasswordGenerator', () => {
         </AppWrapper>
       );
 
+      // Wait for the weak analysis result to land, then check the button
       await waitFor(() => {
-        const useButton = screen.getByText('Use This Password');
-        expect(useButton).toBeDisabled();
+        expect(mockInvoke).toHaveBeenCalledWith('validate_password_strength', {
+          token: 'mock-token',
+          password: testPassword,
+        });
       });
+      await waitFor(() => {
+        expect(screen.getByText('Score: 20')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: 'Use This Password' })).toBeDisabled();
     });
   });
 
@@ -746,12 +769,7 @@ describe('PasswordGenerator', () => {
 
   describe('Edge Cases', () => {
     it('handles missing auth token gracefully', async () => {
-      // Mock no token
-      vi.doMock('../../store/auth', () => ({
-        default: () => ({
-          token: null,
-        }),
-      }));
+      authState.token = null;
 
       render(
         <AppWrapper>
@@ -806,7 +824,7 @@ describe('PasswordGenerator', () => {
 
       // The slider should enforce minimum of 8
       const slider = screen.getByRole('slider');
-      expect(slider).toHaveAttribute('min', '8');
+      expect(slider).toHaveAttribute('aria-valuemin', '8');
     });
 
     it('validates maximum length requirements', async () => {
@@ -818,7 +836,7 @@ describe('PasswordGenerator', () => {
 
       // The slider should enforce maximum of 64
       const slider = screen.getByRole('slider');
-      expect(slider).toHaveAttribute('max', '64');
+      expect(slider).toHaveAttribute('aria-valuemax', '64');
     });
   });
 });

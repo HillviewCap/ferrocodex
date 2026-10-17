@@ -66,9 +66,12 @@ test('renders navigation menu', () => {
   const vaultElements = screen.getAllByText('Vault');
   expect(vaultElements.length).toBeGreaterThan(0);
   
-  // Check for Metadata menu item (admin only)
-  const metadataElements = screen.getAllByText('Metadata');
-  expect(metadataElements.length).toBeGreaterThan(0);
+  // Check for Bulk Operations menu item
+  const bulkElements = screen.getAllByText('Bulk Operations');
+  expect(bulkElements.length).toBeGreaterThan(0);
+
+  // Metadata menu is temporarily hidden in Dashboard.tsx pending field testing
+  expect(screen.queryByText('Metadata')).not.toBeInTheDocument();
   
   // Check for Security menu item (admin only)
   const securityElements = screen.getAllByText('Security');

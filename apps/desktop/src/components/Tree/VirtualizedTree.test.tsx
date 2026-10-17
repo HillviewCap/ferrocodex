@@ -15,25 +15,6 @@ vi.mock('react-window', () => ({
   ),
 }));
 
-// Mock useTreeVirtualization hook
-vi.mock('../../hooks/useTreeVirtualization', () => ({
-  useTreeVirtualization: vi.fn(() => ({
-    flattenedItems: [],
-    visibleItems: [],
-    expandNode: vi.fn(),
-    collapseNode: vi.fn(),
-    searchItems: vi.fn(),
-    performanceMetrics: {
-      totalItems: 0,
-      visibleItems: 0,
-      maxDepth: 0,
-      renderTime: 0,
-      searchTime: 0,
-      lastUpdate: new Date(),
-    },
-  })),
-}));
-
 const mockAssetHierarchy: AssetHierarchy[] = [
   {
     id: 1,
@@ -260,7 +241,7 @@ describe('VirtualizedTree', () => {
     );
 
     // Should render without performance issues
-    expect(screen.getByTestId('tree-container')).toBeInTheDocument();
+    expect(screen.getByRole('tree')).toBeInTheDocument();
   });
 
   it('handles null/undefined data gracefully', () => {

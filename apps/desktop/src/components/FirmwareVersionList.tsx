@@ -234,7 +234,9 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     setTempNotes('');
   };
 
-  const FirmwareCard: React.FC<{ firmware: FirmwareVersionInfo }> = ({ firmware }) => {
+  // A render function, not a nested component: a component defined here would get a new
+  // identity on every render and remount, dropping focus from the notes TextArea per keystroke.
+  const renderFirmwareCard = (firmware: FirmwareVersionInfo) => {
     const menuItems = [];
 
     // Analysis option available to all users
@@ -280,7 +282,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
     }
 
     return (
-      <>
+      <React.Fragment key={firmware.id}>
       <Card 
         style={{ 
           marginBottom: '16px',
@@ -481,7 +483,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
           />
         </Card>
       )}
-      </>
+      </React.Fragment>
     );
   };
 
@@ -497,9 +499,7 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
   return (
     <>
       <div>
-        {sortedVersions.map(firmware => (
-          <FirmwareCard key={firmware.id} firmware={firmware} />
-        ))}
+        {sortedVersions.map(firmware => renderFirmwareCard(firmware))}
       </div>
       
       <Modal

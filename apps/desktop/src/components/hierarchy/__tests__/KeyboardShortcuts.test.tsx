@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
+import { message } from 'antd';
 import KeyboardShortcuts from '../KeyboardShortcuts';
 import { AssetHierarchy } from '../../../types/assets';
 
@@ -79,6 +80,13 @@ describe('KeyboardShortcuts', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStore.getSelectedCount.mockReturnValue(0);
+    mockStore.isSelected.mockReturnValue(false);
+    mockStore.keyboardState = {
+      last_focused_asset: null,
+      selection_anchor: null,
+      keyboard_navigation_mode: false
+    };
   });
 
   it('should render children correctly', () => {
@@ -251,7 +259,7 @@ describe('KeyboardShortcuts', () => {
     fireEvent.keyDown(document, { key: ' ' });
 
     // Should show message about selection toggle
-    expect(vi.mocked(require('antd').message.info)).toHaveBeenCalledWith('Asset selected');
+    expect(message.info).toHaveBeenCalledWith('Asset selected');
   });
 
   it('should handle Shift+Arrow for range selection', () => {

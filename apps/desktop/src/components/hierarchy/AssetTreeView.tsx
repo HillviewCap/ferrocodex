@@ -641,10 +641,10 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           onRightClick={handleRightClick}
           selectedKeys={selectedAssetId ? [selectedAssetId.toString()] : selectedKeys}
           expandedKeys={expandedKeys}
-          draggable={{
+          draggable={allowDragDrop ? {
             icon: false,
             nodeDraggable: () => true
-          }}
+          } : false}
           allowDrop={({ dropNode, dragNode, dropPosition }) => {
             console.log('allowDrop called:', { 
               dragKey: dragNode?.key, 

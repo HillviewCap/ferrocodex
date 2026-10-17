@@ -22,6 +22,11 @@ describe('FirmwareStatusDialog', () => {
     vi.clearAllMocks();
   });
 
+  // antd Select also renders a hidden accessibility listbox with the same text,
+  // so pick the visible dropdown option
+  const getVisibleOption = (status: string) =>
+    screen.getAllByText(status).find(el => el.closest('.ant-select-item-option')) as HTMLElement;
+
   it('renders dialog with current status', () => {
     render(<FirmwareStatusDialog {...defaultProps} />);
     
@@ -35,8 +40,8 @@ describe('FirmwareStatusDialog', () => {
     const selectInput = screen.getByRole('combobox');
     await userEvent.click(selectInput);
     
-    expect(screen.getByText('Approved')).toBeInTheDocument();
-    expect(screen.getByText('Archived')).toBeInTheDocument();
+    expect(getVisibleOption('Approved')).toBeInTheDocument();
+    expect(getVisibleOption('Archived')).toBeInTheDocument();
   });
 
   it('shows warning for Golden promotion', () => {
@@ -79,7 +84,7 @@ describe('FirmwareStatusDialog', () => {
     // Select new status
     const selectInput = screen.getByRole('combobox');
     await userEvent.click(selectInput);
-    await userEvent.click(screen.getByText('Approved'));
+    await userEvent.click(getVisibleOption('Approved'));
     
     // Enter reason
     const reasonInput = screen.getByPlaceholderText(/provide a reason/i);
@@ -114,7 +119,7 @@ describe('FirmwareStatusDialog', () => {
     // Select Golden status
     const selectInput = screen.getByRole('combobox');
     await userEvent.click(selectInput);
-    await userEvent.click(screen.getByText('Golden'));
+    await userEvent.click(getVisibleOption('Golden'));
     
     expect(screen.getByText(/golden standard version/i)).toBeInTheDocument();
   });
@@ -125,7 +130,9 @@ describe('FirmwareStatusDialog', () => {
     const reasonInput = screen.getByPlaceholderText(/provide a reason/i);
     const longText = 'a'.repeat(600); // Exceeds 500 char limit
     
-    await userEvent.type(reasonInput, longText);
+    // Paste rather than type: 600 individual keystrokes are slow enough to time out
+    await userEvent.click(reasonInput);
+    await userEvent.paste(longText);
     
     // Should show character count
     expect(screen.getByText(/500 \/ 500/)).toBeInTheDocument();
@@ -140,7 +147,7 @@ describe('FirmwareStatusDialog', () => {
     // Select status and submit
     const selectInput = screen.getByRole('combobox');
     await userEvent.click(selectInput);
-    await userEvent.click(screen.getByText('Approved'));
+    await userEvent.click(getVisibleOption('Approved'));
     
     const okButton = screen.getByText('Change Status');
     await userEvent.click(okButton);

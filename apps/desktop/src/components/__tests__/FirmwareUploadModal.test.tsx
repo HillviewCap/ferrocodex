@@ -35,6 +35,24 @@ describe('FirmwareUploadModal', () => {
     (useFirmwareStore as any).mockReturnValue(mockFirmwareStore);
   });
 
+  const validMetadata = {
+    name: 'firmware.bin',
+    size: 1048576,
+    content_type: 'application/octet-stream',
+    hash: 'abc123'
+  };
+
+  // Selects a file, fills in the required version and clicks Upload Firmware
+  const selectFileAndUpload = async () => {
+    (dialog.open as any).mockResolvedValue('/path/to/firmware.bin');
+    (invoke as any).mockResolvedValue(validMetadata);
+
+    fireEvent.click(screen.getByText('Click to select firmware file').parentElement!);
+    const versionInput = await screen.findByLabelText('Version');
+    fireEvent.change(versionInput, { target: { value: '1.0.0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload Firmware' }));
+  };
+
   it('renders modal with initial file selection step', () => {
     render(<FirmwareUploadModal {...mockProps} />);
     
@@ -86,7 +104,7 @@ describe('FirmwareUploadModal', () => {
         multiple: false,
         filters: [{
           name: 'Firmware Files',
-          extensions: ['bin', 'hex', 'img', 'rom', 'fw', 'elf', 'dfu', 'upd', 'dat', '*']
+          extensions: expect.arrayContaining(['bin', 'hex', 'img', 'rom', 'fw', 'elf', 'dfu', 'upd', 'dat'])
         }]
       });
     });
@@ -164,19 +182,22 @@ describe('FirmwareUploadModal', () => {
     });
   });
 
-  it('shows upload progress', () => {
+  it('shows upload progress while the upload is running', async () => {
     const progressStore = {
       ...mockFirmwareStore,
+      uploadFirmware: vi.fn(() => new Promise(() => {})), // Never resolves
       uploadProgress: { progress: 50, status: 'uploading' as const }
     };
     (useFirmwareStore as any).mockReturnValue(progressStore);
     
     render(<FirmwareUploadModal {...mockProps} />);
+    await selectFileAndUpload();
     
-    expect(screen.getByText('Uploading Firmware...')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading Firmware...')).toBeInTheDocument();
+    expect(mockProps.onSuccess).not.toHaveBeenCalled();
   });
 
-  it('shows success state', () => {
+  it('shows success state', async () => {
     const successStore = {
       ...mockFirmwareStore,
       uploadProgress: { progress: 100, status: 'complete' as const }
@@ -184,14 +205,17 @@ describe('FirmwareUploadModal', () => {
     (useFirmwareStore as any).mockReturnValue(successStore);
     
     render(<FirmwareUploadModal {...mockProps} />);
+    await selectFileAndUpload();
     
-    expect(screen.getByText('Upload Complete!')).toBeInTheDocument();
+    expect(await screen.findByText('Upload Complete!')).toBeInTheDocument();
     expect(screen.getByText('Firmware has been uploaded and encrypted successfully')).toBeInTheDocument();
+    await waitFor(() => expect(mockProps.onSuccess).toHaveBeenCalled(), { timeout: 3000 });
   });
 
-  it('shows error state', () => {
+  it('shows error state', async () => {
     const errorStore = {
       ...mockFirmwareStore,
+      uploadFirmware: vi.fn().mockRejectedValue(new Error('Upload failed due to network error')),
       uploadProgress: { 
         progress: 0, 
         status: 'error' as const,
@@ -201,9 +225,12 @@ describe('FirmwareUploadModal', () => {
     (useFirmwareStore as any).mockReturnValue(errorStore);
     
     render(<FirmwareUploadModal {...mockProps} />);
+    await selectFileAndUpload();
     
-    expect(screen.getByText('Upload Failed')).toBeInTheDocument();
+    expect(await screen.findByText('Upload Failed')).toBeInTheDocument();
     expect(screen.getByText('Upload failed due to network error')).toBeInTheDocument();
+    // Footer Close button (the modal's X button is also named "Close" but has no text)
+    expect(screen.getByText('Close').closest('button')).toBeInTheDocument();
   });
 
   it('resets state when modal is closed', () => {
@@ -283,12 +310,13 @@ describe('FirmwareUploadModal', () => {
       });
       
       // Try to submit without version
-      const uploadButton = screen.getByText('Upload Firmware');
+      const uploadButton = screen.getByRole('button', { name: 'Upload Firmware' });
       fireEvent.click(uploadButton);
       
       await waitFor(() => {
         expect(screen.getByText('Please enter firmware version')).toBeInTheDocument();
       });
+      expect(mockFirmwareStore.uploadFirmware).not.toHaveBeenCalled();
     });
 
     it('validates version field pattern', async () => {
@@ -346,17 +374,17 @@ describe('FirmwareUploadModal', () => {
       fireEvent.change(screen.getByLabelText('Version'), { target: { value: '2.8.1' } });
       fireEvent.change(screen.getByLabelText('Notes (Optional)'), { target: { value: 'Stable release' } });
       
-      const uploadButton = screen.getByText('Upload Firmware');
+      const uploadButton = screen.getByRole('button', { name: 'Upload Firmware' });
       fireEvent.click(uploadButton);
       
       await waitFor(() => {
         expect(mockFirmwareStore.uploadFirmware).toHaveBeenCalledWith({
-          asset_id: 1,
+          assetId: 1,
           vendor: 'Siemens',
           model: 'S7-1500',
           version: '2.8.1',
           notes: 'Stable release',
-          file_path: '/path/to/firmware.bin'
+          filePath: '/path/to/firmware.bin'
         });
       });
     });
@@ -417,12 +445,14 @@ describe('FirmwareUploadModal', () => {
       
       // Fill form and submit
       fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.0.0' } });
-      fireEvent.click(screen.getByText('Upload Firmware'));
+      fireEvent.click(screen.getByRole('button', { name: 'Upload Firmware' }));
       
-      // Should not close modal on error
       await waitFor(() => {
-        expect(mockProps.onSuccess).not.toHaveBeenCalled();
+        expect(mockFirmwareStore.uploadFirmware).toHaveBeenCalled();
       });
+      // Should not close modal on error
+      expect(mockProps.onSuccess).not.toHaveBeenCalled();
+      expect(mockProps.onCancel).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { CompleteRecoveryModal } from './CompleteRecoveryModal';
 import { ConfigurationVersionInfo, FirmwareVersionInfo } from '../../types/recovery';
@@ -31,6 +31,30 @@ vi.mock('antd', async () => {
     },
   };
 });
+
+// Ant Design's Select shows its placeholder as text and renders each dropdown in a portal.
+// Open the select found by its placeholder and click the option in the one open dropdown.
+const chooseOption = async (placeholder: string, optionText: string) => {
+  const select = screen.getByText(placeholder).closest('.ant-select') as HTMLElement;
+  fireEvent.mouseDown(select.querySelector('.ant-select-selector')!);
+  const dropdown = await waitFor(() => {
+    const open = document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
+    expect(open).toHaveLength(1);
+    return open[0] as HTMLElement;
+  });
+  fireEvent.click(within(dropdown).getByText(optionText));
+  await waitFor(() => expect(dropdown).toHaveClass('ant-select-dropdown-hidden'));
+};
+
+const getExportButton = () => screen.getByRole('button', { name: /Export Recovery Package/ });
+
+// Select config 1.0.0 + firmware 2.0.0 (linked), pick a directory, and wait for export to be enabled
+const fillExportForm = async () => {
+  await chooseOption('Select configuration version', '1.0.0');
+  await chooseOption('Select firmware version', '2.0.0');
+  fireEvent.click(screen.getByText('Browse'));
+  await waitFor(() => expect(getExportButton()).not.toBeDisabled());
+};
 
 describe('CompleteRecoveryModal', () => {
   const mockConfigVersions: ConfigurationVersionInfo[] = [
@@ -133,8 +157,8 @@ describe('CompleteRecoveryModal', () => {
     
     expect(screen.getByText('Configuration Version:')).toBeInTheDocument();
     expect(screen.getByText('Firmware Version:')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Select configuration version')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Select firmware version')).toBeInTheDocument();
+    expect(screen.getByText('Select configuration version')).toBeInTheDocument();
+    expect(screen.getByText('Select firmware version')).toBeInTheDocument();
   });
 
   it('shows export directory selector', () => {
@@ -157,25 +181,14 @@ describe('CompleteRecoveryModal', () => {
 
     render(<CompleteRecoveryModal {...defaultProps} />);
     
-    // Select configuration version
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    const configOption = screen.getByText('1.0.0');
-    fireEvent.click(configOption);
+    await chooseOption('Select configuration version', '1.0.0');
+    await chooseOption('Select firmware version', '2.0.0');
+    expect(getExportButton()).toBeDisabled(); // still needs a directory
 
-    // Select firmware version
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    const firmwareOption = screen.getByText('2.0.0');
-    fireEvent.click(firmwareOption);
+    fireEvent.click(screen.getByText('Browse'));
 
-    // Select export directory
-    const browseButton = screen.getByText('Browse');
-    fireEvent.click(browseButton);
-    
     await waitFor(() => {
-      const exportButton = screen.getByRole('button', { name: /Export Recovery Package/ });
-      expect(exportButton).not.toBeDisabled();
+      expect(getExportButton()).not.toBeDisabled();
     });
   });
 
@@ -183,13 +196,8 @@ describe('CompleteRecoveryModal', () => {
     render(<CompleteRecoveryModal {...defaultProps} />);
     
     // Select linked configuration and firmware (config 1 has firmware_version_id: 1)
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    fireEvent.click(screen.getByText('1.0.0'));
-
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    fireEvent.click(screen.getByText('2.0.0'));
+    await chooseOption('Select configuration version', '1.0.0');
+    await chooseOption('Select firmware version', '2.0.0');
 
     await waitFor(() => {
       expect(screen.getByText(/Versions are compatible/)).toBeInTheDocument();
@@ -200,13 +208,8 @@ describe('CompleteRecoveryModal', () => {
     render(<CompleteRecoveryModal {...defaultProps} />);
     
     // Select non-linked configuration and firmware
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    fireEvent.click(screen.getByText('1.0.0'));
-
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    fireEvent.click(screen.getByText('3.0.0')); // firmware id 2, not linked to config 1
+    await chooseOption('Select configuration version', '1.0.0');
+    await chooseOption('Select firmware version', '3.0.0'); // firmware id 2, not linked to config 1
 
     await waitFor(() => {
       expect(screen.getByText(/Versions are not linked/)).toBeInTheDocument();
@@ -243,22 +246,10 @@ describe('CompleteRecoveryModal', () => {
 
     render(<CompleteRecoveryModal {...defaultProps} />);
     
-    // Select options and export directory
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    fireEvent.click(screen.getByText('1.0.0'));
+    await fillExportForm();
+    fireEvent.click(getExportButton());
 
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    fireEvent.click(screen.getByText('2.0.0'));
-
-    const browseButton = screen.getByText('Browse');
-    fireEvent.click(browseButton);
-
-    await waitFor(async () => {
-      const exportButton = screen.getByRole('button', { name: /Export Recovery Package/ });
-      fireEvent.click(exportButton);
-
+    await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('export_complete_recovery', {
         token: 'mock-token',
         assetId: 1,
@@ -300,25 +291,11 @@ describe('CompleteRecoveryModal', () => {
 
     render(<CompleteRecoveryModal {...defaultProps} />);
     
-    // Select options and trigger export
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    fireEvent.click(screen.getByText('1.0.0'));
+    await fillExportForm();
+    fireEvent.click(getExportButton());
 
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    fireEvent.click(screen.getByText('2.0.0'));
-
-    const browseButton = screen.getByText('Browse');
-    fireEvent.click(browseButton);
-
-    await waitFor(async () => {
-      const exportButton = screen.getByRole('button', { name: /Export Recovery Package/ });
-      fireEvent.click(exportButton);
-
-      await waitFor(() => {
-        expect(message.success).toHaveBeenCalledWith('Complete recovery package exported successfully!');
-      });
+    await waitFor(() => {
+      expect(message.success).toHaveBeenCalledWith('Complete recovery package exported successfully!');
     });
   });
 
@@ -332,25 +309,11 @@ describe('CompleteRecoveryModal', () => {
 
     render(<CompleteRecoveryModal {...defaultProps} />);
     
-    // Select options and trigger export
-    const configSelect = screen.getByPlaceholderText('Select configuration version');
-    fireEvent.mouseDown(configSelect);
-    fireEvent.click(screen.getByText('1.0.0'));
+    await fillExportForm();
+    fireEvent.click(getExportButton());
 
-    const firmwareSelect = screen.getByPlaceholderText('Select firmware version');
-    fireEvent.mouseDown(firmwareSelect);
-    fireEvent.click(screen.getByText('2.0.0'));
-
-    const browseButton = screen.getByText('Browse');
-    fireEvent.click(browseButton);
-
-    await waitFor(async () => {
-      const exportButton = screen.getByRole('button', { name: /Export Recovery Package/ });
-      fireEvent.click(exportButton);
-
-      await waitFor(() => {
-        expect(message.error).toHaveBeenCalledWith('Export failed: Export failed');
-      });
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith('Export failed: Export failed');
     });
   });
 
@@ -364,8 +327,9 @@ describe('CompleteRecoveryModal', () => {
     render(<CompleteRecoveryModal {...propsWithSingleOptions} />);
     
     // Should auto-select the single options
-    expect(screen.getByDisplayValue('1.0.0')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2.0.0')).toBeInTheDocument();
+    expect(screen.queryByText('Select configuration version')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select firmware version')).not.toBeInTheDocument();
+    expect(screen.getByText('Selected: 1.0.0 + 2.0.0')).toBeInTheDocument();
   });
 
   it('calls onClose when cancel is clicked', () => {

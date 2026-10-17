@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Modal, message } from 'antd';
 import FirmwareVersionList from '../FirmwareVersionList';
 import { FirmwareVersionInfo } from '../../types/firmware';
 import useAuthStore from '../../store/auth';
@@ -44,33 +45,33 @@ describe('FirmwareVersionList', () => {
   const mockFirmwareVersions: FirmwareVersionInfo[] = [
     {
       id: 1,
-      asset_id: 1,
-      author_id: 1,
-      author_username: 'engineer',
+      assetId: 1,
+      authorId: 1,
+      authorUsername: 'engineer',
       vendor: 'Siemens',
       model: 'S7-1500',
       version: '2.8.1',
       notes: 'Stable firmware version',
       status: 'Golden',
-      file_path: '/path/to/firmware1.enc',
-      file_hash: 'abc123def456789012345678901234567890123456789012345678901234567890',
-      file_size: 1048576, // 1MB
-      created_at: '2023-01-01T12:00:00Z'
+      filePath: '/path/to/firmware1.enc',
+      fileHash: 'abc123def456789012345678901234567890123456789012345678901234567890',
+      fileSize: 1048576, // 1MB
+      createdAt: '2023-01-01T12:00:00Z'
     },
     {
       id: 2,
-      asset_id: 1,
-      author_id: 2,
-      author_username: 'admin',
+      assetId: 1,
+      authorId: 2,
+      authorUsername: 'admin',
       vendor: null,
       model: null,
       version: '1.0.0',
       notes: null,
       status: 'Draft',
-      file_path: '/path/to/firmware2.enc',
-      file_hash: 'def456789012345678901234567890123456789012345678901234567890abcdef',
-      file_size: 2097152, // 2MB
-      created_at: '2023-01-02T12:00:00Z'
+      filePath: '/path/to/firmware2.enc',
+      fileHash: 'def456789012345678901234567890123456789012345678901234567890abcdef',
+      fileSize: 2097152, // 2MB
+      createdAt: '2023-01-02T12:00:00Z'
     }
   ];
 
@@ -87,6 +88,12 @@ describe('FirmwareVersionList', () => {
     (useAuthStore as any).mockReturnValue(mockAuthStore);
     (useFirmwareStore as any).mockReturnValue(mockFirmwareStore);
   });
+
+  // Opens the actions dropdown on the card whose title matches cardTitle
+  const openActionsMenu = (cardTitle: string) => {
+    const card = screen.getByText(cardTitle).closest('.ant-card') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: /more/i }));
+  };
 
   it('renders firmware versions correctly', () => {
     render(<FirmwareVersionList versions={mockFirmwareVersions} />);
@@ -152,7 +159,7 @@ describe('FirmwareVersionList', () => {
     expect(moreButtons.length).toBeGreaterThan(0);
   });
 
-  it('hides delete option for non-engineer role', () => {
+  it('hides delete option for non-engineer role', async () => {
     (useAuthStore as any).mockReturnValue({
       ...mockAuthStore,
       user: { ...mockAuthStore.user, role: 'Administrator' }
@@ -160,15 +167,16 @@ describe('FirmwareVersionList', () => {
     
     render(<FirmwareVersionList versions={mockFirmwareVersions} />);
     
-    // Should not show the more options buttons (with MoreOutlined icon)
-    const moreButtons = screen.queryAllByLabelText('more');
-    expect(moreButtons.length).toBe(0);
+    // The actions menu is available to everyone, but without Delete
+    openActionsMenu('Siemens - S7-1500');
+    expect(await screen.findByText('View Analysis')).toBeInTheDocument();
+    expect(screen.queryByText('Delete')).not.toBeInTheDocument();
   });
 
   it('formats relative time correctly', () => {
     const recentVersion = {
       ...mockFirmwareVersions[0],
-      created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString() // 5 minutes ago
+      createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString() // 5 minutes ago
     };
     
     render(<FirmwareVersionList versions={[recentVersion]} />);
@@ -199,31 +207,27 @@ describe('FirmwareVersionList', () => {
       const onDelete = vi.fn();
       render(<FirmwareVersionList versions={mockFirmwareVersions} onDelete={onDelete} />);
       
-      // Click the first more button
-      const moreButtons = screen.getAllByRole('button');
-      fireEvent.click(moreButtons[0]);
+      openActionsMenu('Siemens - S7-1500');
+      fireEvent.click(await screen.findByText('Delete'));
       
-      // Click delete in dropdown
-      const deleteOption = await screen.findByText('Delete');
-      fireEvent.click(deleteOption);
-      
-      // Verify modal content
-      expect(screen.getByText('Delete Firmware?')).toBeInTheDocument();
-      expect(screen.getByText('Are you sure you want to delete this firmware version?')).toBeInTheDocument();
-      expect(screen.getByText('2.8.1')).toBeInTheDocument();
-      expect(screen.getByText('Siemens')).toBeInTheDocument();
-      expect(screen.getByText('S7-1500')).toBeInTheDocument();
+      // Modal.confirm is mocked, so render the content it was given
+      expect(Modal.confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Delete Firmware?', okText: 'Delete' })
+      );
+      const { content } = vi.mocked(Modal.confirm).mock.calls[0][0];
+      const modal = within(render(<>{content}</>).container);
+      expect(modal.getByText('Are you sure you want to delete this firmware version?')).toBeInTheDocument();
+      expect(modal.getByText('2.8.1')).toBeInTheDocument();
+      expect(modal.getByText('Siemens')).toBeInTheDocument();
+      expect(modal.getByText('S7-1500')).toBeInTheDocument();
     });
 
     it('calls deleteFirmware when confirmed', async () => {
       const onDelete = vi.fn();
       render(<FirmwareVersionList versions={mockFirmwareVersions} onDelete={onDelete} />);
       
-      // Click more button and delete
-      const moreButtons = screen.getAllByRole('button');
-      fireEvent.click(moreButtons[0]);
-      const deleteOption = await screen.findByText('Delete');
-      fireEvent.click(deleteOption);
+      openActionsMenu('Siemens - S7-1500');
+      fireEvent.click(await screen.findByText('Delete'));
       
       // Confirm deletion
       expect(mockFirmwareStore.deleteFirmware).toHaveBeenCalledWith(1);
@@ -237,11 +241,8 @@ describe('FirmwareVersionList', () => {
       
       const { container } = render(<FirmwareVersionList versions={mockFirmwareVersions} onDelete={onDelete} />);
       
-      // Trigger delete
-      const moreButtons = screen.getAllByRole('button');
-      fireEvent.click(moreButtons[0]);
-      const deleteOption = await screen.findByText('Delete');
-      fireEvent.click(deleteOption);
+      openActionsMenu('Siemens - S7-1500');
+      fireEvent.click(await screen.findByText('Delete'));
       
       // Check for loading state on the card
       const firstCard = container.querySelector('.ant-card-loading');
@@ -254,11 +255,8 @@ describe('FirmwareVersionList', () => {
       
       render(<FirmwareVersionList versions={mockFirmwareVersions} onDelete={onDelete} />);
       
-      // Click more button and delete
-      const moreButtons = screen.getAllByRole('button');
-      fireEvent.click(moreButtons[0]);
-      const deleteOption = await screen.findByText('Delete');
-      fireEvent.click(deleteOption);
+      openActionsMenu('Siemens - S7-1500');
+      fireEvent.click(await screen.findByText('Delete'));
       
       // Wait for deletion to complete
       await waitFor(() => {
@@ -273,19 +271,17 @@ describe('FirmwareVersionList', () => {
       
       render(<FirmwareVersionList versions={mockFirmwareVersions} onDelete={onDelete} />);
       
-      // Click more button and delete
-      const moreButtons = screen.getAllByRole('button');
-      fireEvent.click(moreButtons[0]);
-      const deleteOption = await screen.findByText('Delete');
-      fireEvent.click(deleteOption);
+      openActionsMenu('Siemens - S7-1500');
+      fireEvent.click(await screen.findByText('Delete'));
       
-      // Should not call onDelete on failure
       await waitFor(() => {
-        expect(onDelete).not.toHaveBeenCalled();
+        expect(message.error).toHaveBeenCalledWith(`Failed to delete firmware: ${errorMessage}`);
       });
+      // Should not call onDelete on failure
+      expect(onDelete).not.toHaveBeenCalled();
     });
 
-    it('does not show delete option for non-engineer users', () => {
+    it('does not show delete option for non-engineer users', async () => {
       (useAuthStore as any).mockReturnValue({
         ...mockAuthStore,
         user: { ...mockAuthStore.user, role: 'Administrator' }
@@ -293,9 +289,10 @@ describe('FirmwareVersionList', () => {
       
       render(<FirmwareVersionList versions={mockFirmwareVersions} />);
       
-      // Should not have any dropdown buttons
-      const buttons = screen.queryAllByRole('button');
-      expect(buttons.length).toBe(0);
+      openActionsMenu('Generic');
+      expect(await screen.findByText('View History')).toBeInTheDocument();
+      expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+      expect(mockFirmwareStore.deleteFirmware).not.toHaveBeenCalled();
     });
   });
 });

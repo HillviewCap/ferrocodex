@@ -2,13 +2,9 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import FirmwareHistoryTimeline from './FirmwareHistoryTimeline';
 import { FirmwareStatusHistory } from '../../types/firmware';
-
-// Mock Tauri API
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn()
-}));
 
 // Mock auth store
 vi.mock('../../store/auth', () => ({
@@ -18,9 +14,9 @@ vi.mock('../../store/auth', () => ({
 }));
 
 // Mock Ant Design message
-const mockMessage = {
+const mockMessage = vi.hoisted(() => ({
   error: vi.fn()
-};
+}));
 vi.mock('antd', async () => {
   const actual = await vi.importActual('antd');
   return {
@@ -63,7 +59,7 @@ const mockHistoryData: FirmwareStatusHistory[] = [
 ];
 
 describe('FirmwareHistoryTimeline', () => {
-  const { invoke } = require('@tauri-apps/api/core');
+  const invoke = vi.mocked(tauriInvoke);
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -85,17 +85,21 @@ interface AssetMetadataSchema {
   version: number;
 }
 
+// Stable default so the initial-values effect doesn't re-run on every render
+const EMPTY_INITIAL_VALUES: Record<string, any> = {};
+
 // Inner form component that uses conditional logic
 const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(({
   schemaId,
   assetId,
-  initialValues = {},
+  initialValues = EMPTY_INITIAL_VALUES,
   onSubmit,
   onCancel,
   readonly = false,
   showTitle = true
 }) => {
   const conditionalLogic = useConditionalLogic();
+  const { clearRules, addRules } = conditionalLogic;
   const { token } = useAuthStore();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
@@ -131,8 +135,8 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(
 
           // Set up conditional logic rules if present
           if (jsonSchema.conditionalLogic) {
-            conditionalLogic.clearRules();
-            conditionalLogic.addRules(jsonSchema.conditionalLogic);
+            clearRules();
+            addRules(jsonSchema.conditionalLogic);
           }
 
           setIsDirty(false);
@@ -144,31 +148,35 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(
         }
       })();
     }
-  }, [schemaId, token, conditionalLogic]); // Only depend on schemaId, token, and conditionalLogic
+  }, [schemaId, token, clearRules, addRules]); // conditionalLogic itself changes on every rule evaluation
+
+  // Process initial values and convert dates
+  const buildInitialFormValues = useCallback(() => {
+    const formValues: Record<string, any> = {};
+
+    formFields.forEach(field => {
+      const value = initialValues[field.name];
+
+      if (field.type === 'date' && value) {
+        // Convert date strings to dayjs objects for DatePicker
+        const dateValue = dayjs.isDayjs(value) ? value : dayjs(value);
+        formValues[field.name] = dateValue.isValid() ? dateValue : null;
+      } else if (value !== undefined) {
+        formValues[field.name] = value;
+      } else if (field.defaultValue !== undefined) {
+        formValues[field.name] = field.defaultValue;
+      }
+    });
+
+    return formValues;
+  }, [formFields, initialValues]);
 
   // Separate effect to handle initial values and form field setting
   useEffect(() => {
     if (formFields.length > 0 && !loading) {
-      const formValues: Record<string, any> = {};
-      
-      // Process initial values and convert dates
-      formFields.forEach(field => {
-        const value = initialValues[field.name];
-        
-        if (field.type === 'date' && value) {
-          // Convert date strings to dayjs objects for DatePicker
-          const dateValue = dayjs.isDayjs(value) ? value : dayjs(value);
-          formValues[field.name] = dateValue.isValid() ? dateValue : null;
-        } else if (value !== undefined) {
-          formValues[field.name] = value;
-        } else if (field.defaultValue !== undefined) {
-          formValues[field.name] = field.defaultValue;
-        }
-      });
-      
-      form.setFieldsValue(formValues);
+      form.setFieldsValue(buildInitialFormValues());
     }
-  }, [formFields, initialValues, loading, form])
+  }, [formFields, buildInitialFormValues, loading, form])
 
   // Convert JSON Schema to FormField array
   const convertSchemaToFields = (jsonSchema: JSONSchema): FormField[] => {
@@ -339,7 +347,9 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(
 
   // Handle form reset
   const handleReset = () => {
+    // resetFields() alone would clear the form, since initial values are set via setFieldsValue
     form.resetFields();
+    form.setFieldsValue(buildInitialFormValues());
     setFieldErrors({});
     setIsDirty(false);
   };

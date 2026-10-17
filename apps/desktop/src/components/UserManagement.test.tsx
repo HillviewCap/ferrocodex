@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import UserManagement from './UserManagement';
 import useAuthStore from '../store/auth';
@@ -12,6 +12,9 @@ vi.mock('../store/userManagement');
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
+
+// Ant Design form validation is async and can exceed waitFor's 1s default in jsdom
+const VALIDATION_TIMEOUT = { timeout: 5000 };
 
 describe('UserManagement', () => {
   const mockAuthStore = {
@@ -98,15 +101,12 @@ describe('UserManagement', () => {
     const createButton = screen.getByText('Create Engineer Account');
     fireEvent.click(createButton);
     
-    await waitFor(() => {
-      const submitButton = screen.getByText('Create Account');
-      fireEvent.click(submitButton);
-    });
+    fireEvent.click(await screen.findByText('Create Account'));
     
     await waitFor(() => {
       expect(screen.getByText('Please input username')).toBeInTheDocument();
       expect(screen.getByText('Please input password')).toBeInTheDocument();
-    });
+    }, VALIDATION_TIMEOUT);
   });
 
   it('calls createEngineerUser when form is submitted with valid data', async () => {
@@ -154,14 +154,11 @@ describe('UserManagement', () => {
   it('calls deactivateUser when deactivate is confirmed', async () => {
     render(<UserManagement />);
     
-    const deactivateButton = screen.getAllByText('Deactivate')[0];
-    fireEvent.click(deactivateButton);
+    // The admin row's Deactivate button is disabled, so target engineer1 (id 2)
+    const engineerRow = screen.getByText('engineer1').closest('tr')!;
+    fireEvent.click(within(engineerRow).getByText('Deactivate'));
     
-    await waitFor(() => {
-      const confirmButtons = screen.getAllByText('Yes');
-      const confirmButton = confirmButtons[0];
-      fireEvent.click(confirmButton);
-    });
+    fireEvent.click(await screen.findByText('Yes'));
     
     await waitFor(() => {
       expect(mockUserManagementStore.deactivateUser).toHaveBeenCalledWith('test-token', 2);

@@ -190,8 +190,9 @@ describe('BulkRenameDialog', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Preview')).toBeInTheDocument();
-      expect(screen.getByText('Asset1.txt')).toBeInTheDocument();
-      expect(screen.getByText('Asset2.doc')).toBeInTheDocument();
+      // With no options set, each row shows the unchanged name as both original and new
+      expect(screen.getAllByText('Asset1.txt')).toHaveLength(2);
+      expect(screen.getAllByText('Asset2.doc')).toHaveLength(2);
     });
   });
 
@@ -314,7 +315,8 @@ describe('BulkRenameDialog', () => {
     fireEvent.click(previewButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Name contains invalid characters')).toBeInTheDocument();
+      // Both selected assets get the invalid name
+      expect(screen.getAllByText('Name contains invalid characters')).toHaveLength(2);
     });
   });
 
@@ -424,7 +426,7 @@ describe('BulkRenameDialog', () => {
     });
 
     // Try to confirm
-    const confirmButton = screen.getByText(/Rename \d+ Asset/);
+    const confirmButton = screen.getByRole('button', { name: /Rename \d+ Asset/ });
     expect(confirmButton).toBeDisabled();
   });
 

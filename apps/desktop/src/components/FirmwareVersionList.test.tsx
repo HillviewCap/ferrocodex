@@ -5,11 +5,8 @@ import { vi } from 'vitest';
 import FirmwareVersionList from './FirmwareVersionList';
 import { FirmwareVersionInfo } from '../types/firmware';
 import * as roleUtils from '../utils/roleUtils';
-
-// Mock dependencies
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn()
-}));
+import useAuthStoreImport from '../store/auth';
+import useFirmwareStoreImport from '../store/firmware';
 
 vi.mock('../store/auth', () => ({
   default: vi.fn(() => ({
@@ -53,23 +50,23 @@ vi.mock('./LinkedConfigurationsList', () => ({
 
 const mockFirmware: FirmwareVersionInfo = {
   id: 1,
-  asset_id: 1,
-  author_id: 1,
-  author_username: 'test_user',
+  assetId: 1,
+  authorId: 1,
+  authorUsername: 'test_user',
   vendor: 'TestVendor',
   model: 'TestModel',
   version: '1.0.0',
   notes: 'Test notes',
   status: 'Draft',
-  file_path: '/test/path',
-  file_hash: 'abc123',
-  file_size: 1024,
-  created_at: new Date().toISOString()
+  filePath: '/test/path',
+  fileHash: 'abc123',
+  fileSize: 1024,
+  createdAt: new Date().toISOString()
 };
 
 describe('FirmwareVersionList - Permission-based UI', () => {
-  const useAuthStore = require('../store/auth').default;
-  const useFirmwareStore = require('../store/firmware').default;
+  const useAuthStore = vi.mocked(useAuthStoreImport) as any;
+  const useFirmwareStore = vi.mocked(useFirmwareStoreImport) as any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -175,10 +172,12 @@ describe('FirmwareVersionList - Permission-based UI', () => {
     });
   });
 
-  describe('Read-only user', () => {
+  // There is no read-only role; Engineers always get Delete (see above). A user with no
+  // role and no granted permissions should only see the view actions.
+  describe('User without edit permissions', () => {
     beforeEach(() => {
       useAuthStore.mockReturnValue({
-        user: { id: 1, username: 'readonly', role: 'Engineer', is_active: true }
+        user: null
       });
       vi.mocked(roleUtils.canChangeFirmwareStatus).mockReturnValue(false);
       vi.mocked(roleUtils.canUpdateFirmwareNotes).mockReturnValue(false);

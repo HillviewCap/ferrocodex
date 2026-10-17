@@ -39,6 +39,9 @@ interface FlatTreeItem {
   parentIds: number[];
 }
 
+// Stable fallback so a null hierarchyData doesn't produce a new array each render
+const EMPTY_HIERARCHY: AssetHierarchy[] = [];
+
 const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
   hierarchyData,
   onAssetSelect,
@@ -66,7 +69,7 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
     searchItems,
     performanceMetrics
   } = useTreeVirtualization({
-    data: hierarchyData,
+    data: hierarchyData ?? EMPTY_HIERARCHY,
     expandedKeys,
     searchValue,
     maxItems

@@ -4,6 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LinkedConfigurationsList from '../LinkedConfigurationsList';
 import { message } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
 
 // Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
@@ -28,10 +29,11 @@ vi.mock('../../store/auth', () => ({
   }))
 }));
 
-// Mock the asset store
+// Mock the asset store; the spy is shared so tests can assert on what the component calls
+const { navigateToHistory } = vi.hoisted(() => ({ navigateToHistory: vi.fn() }));
 vi.mock('../../store/assets', () => ({
   default: vi.fn(() => ({
-    navigateToHistory: vi.fn()
+    navigateToHistory
   }))
 }));
 
@@ -65,7 +67,7 @@ const mockLinkedConfigs = [
 ];
 
 describe('LinkedConfigurationsList', () => {
-  const mockInvoke = vi.mocked(await import('@tauri-apps/api/core')).invoke;
+  const mockInvoke = vi.mocked(invoke);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -152,7 +154,6 @@ describe('LinkedConfigurationsList', () => {
   });
 
   it('should navigate to configuration history on click', async () => {
-    const { navigateToHistory } = await import('../../store/assets').then(m => m.default());
     mockInvoke.mockResolvedValueOnce(mockLinkedConfigs);
 
     const user = userEvent.setup();

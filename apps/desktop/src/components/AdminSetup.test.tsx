@@ -15,6 +15,9 @@ vi.mock('../store/auth', () => ({
   }),
 }));
 
+// Ant Design form validation is async and can exceed waitFor's 1s default in jsdom
+const VALIDATION_TIMEOUT = { timeout: 5000 };
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -42,7 +45,7 @@ test('validates username requirements', async () => {
   
   await waitFor(() => {
     expect(screen.getByText('Please enter a username')).toBeInTheDocument();
-  });
+  }, VALIDATION_TIMEOUT);
   
   // Test short username
   fireEvent.change(usernameInput, { target: { value: 'ab' } });
@@ -50,7 +53,7 @@ test('validates username requirements', async () => {
   
   await waitFor(() => {
     expect(screen.getByText('Username must be at least 3 characters')).toBeInTheDocument();
-  });
+  }, VALIDATION_TIMEOUT);
 });
 
 test('validates password requirements', async () => {
@@ -65,7 +68,7 @@ test('validates password requirements', async () => {
   
   await waitFor(() => {
     expect(screen.getByText('Please enter a password')).toBeInTheDocument();
-  });
+  }, VALIDATION_TIMEOUT);
   
   // Test short password
   fireEvent.change(passwordInput, { target: { value: '1234567' } });
@@ -73,7 +76,7 @@ test('validates password requirements', async () => {
   
   await waitFor(() => {
     expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-  });
+  }, VALIDATION_TIMEOUT);
 });
 
 test('validates password confirmation', async () => {
@@ -89,7 +92,7 @@ test('validates password confirmation', async () => {
   
   await waitFor(() => {
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-  });
+  }, VALIDATION_TIMEOUT);
 });
 
 test('shows password strength indicator', async () => {

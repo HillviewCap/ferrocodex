@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React, { useState } from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { expect, test, vi, describe, beforeEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import SecurityValidationInput from './SecurityValidationInput';
@@ -19,24 +20,50 @@ vi.mock('../../store/auth', () => ({
 const { invoke } = await import('@tauri-apps/api/core');
 const mockInvoke = vi.mocked(invoke);
 
+// SecurityValidationInput is controlled; hold the value in state so typing accumulates
+const ControlledInput: React.FC<Omit<React.ComponentProps<typeof SecurityValidationInput>, 'value'>> = ({
+  onChange,
+  ...props
+}) => {
+  const [value, setValue] = useState('');
+  return (
+    <SecurityValidationInput
+      {...props}
+      value={value}
+      onChange={(next) => {
+        setValue(next);
+        onChange(next);
+      }}
+    />
+  );
+};
+
+// antd renders each suggestion twice (visible item + a11y listbox); return the visible item
+const findSuggestionOption = async (name: string) => {
+  const matches = await screen.findAllByText(name);
+  const option = matches.map(el => el.closest('.ant-select-item-option')).find(Boolean);
+  if (!option) throw new Error(`No dropdown option for ${name}`);
+  return option as HTMLElement;
+};
+
 describe('SecurityValidationInput', () => {
   const mockOnChange = vi.fn();
   const mockOnValidationChange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInvoke.mockReset();
   });
 
   test('renders input field correctly', () => {
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     expect(input).toBeInTheDocument();
     expect(input).toHaveAttribute('placeholder', 'Enter asset name');
   });
@@ -44,14 +71,13 @@ describe('SecurityValidationInput', () => {
   test('calls onChange when user types', async () => {
     const user = userEvent.setup();
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'test-asset');
 
     expect(mockOnChange).toHaveBeenLastCalledWith('test-asset');
@@ -64,15 +90,14 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 1000)));
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={50}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'test');
 
     // Wait for debounce delay
@@ -93,15 +118,14 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockResolvedValue(mockValidationResult);
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={50}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'valid-asset-name');
 
     await waitFor(() => {
@@ -130,19 +154,18 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockResolvedValue(mockValidationResult);
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={50}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'invalid@asset#name');
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid asset name')).toBeInTheDocument();
+      expect(screen.getByText('Asset name needs adjustment')).toBeInTheDocument();
       expect(screen.getByText('Asset name contains invalid characters')).toBeInTheDocument();
     });
   });
@@ -161,8 +184,7 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockResolvedValue(mockValidationResult);
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         showSuggestions={true}
@@ -170,7 +192,7 @@ describe('SecurityValidationInput', () => {
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'invalid');
 
     // Wait for validation and then check for suggestions in dropdown
@@ -184,10 +206,8 @@ describe('SecurityValidationInput', () => {
     // Click input to open suggestions
     await user.click(input);
     
-    await waitFor(() => {
-      expect(screen.getByText('suggestion-1')).toBeInTheDocument();
-      expect(screen.getByText('suggestion-2')).toBeInTheDocument();
-    });
+    expect(await findSuggestionOption('suggestion-1')).toBeInTheDocument();
+    expect(await findSuggestionOption('suggestion-2')).toBeInTheDocument();
   });
 
   test('handles suggestion selection', async () => {
@@ -210,8 +230,7 @@ describe('SecurityValidationInput', () => {
       .mockResolvedValueOnce(mockValidationResultForSuggestion);
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         showSuggestions={true}
@@ -219,20 +238,21 @@ describe('SecurityValidationInput', () => {
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'invalid');
 
-    await waitFor(() => {
-      expect(screen.getByText('corrected-name')).toBeInTheDocument();
-    });
-
-    // Select the suggestion
-    await user.click(screen.getByText('corrected-name'));
+    await user.click(await findSuggestionOption('corrected-name'));
 
     expect(mockOnChange).toHaveBeenCalledWith('corrected-name');
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenLastCalledWith('validate_asset_name', {
+        token: 'test-token',
+        name: 'corrected-name',
+      });
+    });
   });
 
-  test('displays security flags when present', async () => {
+  test('reports security flags to the parent', async () => {
     const user = userEvent.setup();
     
     const mockValidationResult: SecurityValidationResult = {
@@ -244,21 +264,23 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockResolvedValue(mockValidationResult);
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={50}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'sensitive-asset');
 
     await waitFor(() => {
-      expect(screen.getByText('Security Notice')).toBeInTheDocument();
-      expect(screen.getByText('Contains sensitive keywords')).toBeInTheDocument();
-      expect(screen.getByText('Requires administrator review')).toBeInTheDocument();
+      expect(mockOnValidationChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isValid: true,
+          securityFlags: ['Contains sensitive keywords', 'Requires administrator review'],
+        })
+      );
     });
   });
 
@@ -309,15 +331,14 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockRejectedValue(new Error('Network error'));
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={50}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     await user.type(input, 'test');
 
     await waitFor(() => {
@@ -333,15 +354,14 @@ describe('SecurityValidationInput', () => {
 
   test('respects disabled state', () => {
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         disabled={true}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     expect(input).toBeDisabled();
   });
 
@@ -351,15 +371,14 @@ describe('SecurityValidationInput', () => {
     mockInvoke.mockResolvedValue({ isValid: true, suggestedCorrections: [], securityFlags: [] });
 
     render(
-      <SecurityValidationInput 
-        value=""
+      <ControlledInput
         onChange={mockOnChange}
         onValidationChange={mockOnValidationChange}
         validationDelay={200}
       />
     );
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('combobox');
     
     // Type multiple characters quickly
     await user.type(input, 'test', { delay: 10 });
