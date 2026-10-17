@@ -1,5 +1,5 @@
 use anyhow::Result;
-use jsonschema::{JSONSchema, Draft, ValidationError as JsonSchemaValidationError};
+use jsonschema::{Draft, ValidationError as JsonSchemaValidationError, Validator};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use regex::Regex;
@@ -9,7 +9,7 @@ use super::{ValidationResult, ValidationError, AssetMetadataSchema};
 
 /// Schema validation service with caching and custom validators
 pub struct SchemaValidator {
-    compiled_schemas: HashMap<String, JSONSchema>,
+    compiled_schemas: HashMap<String, Validator>,
     custom_validators: HashMap<String, Box<dyn Fn(&Value) -> Result<(), String> + Send + Sync>>,
 }
 
@@ -99,10 +99,7 @@ impl SchemaValidator {
             };
 
             // Collect errors into a vector to avoid iterator lifetime issues
-            match compiled_schema.validate(&values) {
-                Ok(_) => Vec::new(),
-                Err(errors) => errors.collect::<Vec<_>>(),
-            }
+            compiled_schema.iter_errors(&values).collect::<Vec<_>>()
         }; // Mutable borrow ends here
 
         // Convert validation errors now that we don't have any borrows
@@ -129,7 +126,7 @@ impl SchemaValidator {
     }
 
     /// Get or compile a schema with caching
-    fn get_or_compile_schema(&mut self, schema_json: &str) -> Result<&JSONSchema> {
+    fn get_or_compile_schema(&mut self, schema_json: &str) -> Result<&Validator> {
         // Use schema JSON as cache key (in production, consider using a hash)
         let cache_key = schema_json.to_string();
         
@@ -143,17 +140,17 @@ impl SchemaValidator {
     }
 
     /// Compile a JSON Schema
-    fn compile_schema(&self, schema_value: &Value) -> Result<JSONSchema> {
-        JSONSchema::options()
+    fn compile_schema(&self, schema_value: &Value) -> Result<Validator> {
+        jsonschema::options()
             .with_draft(Draft::Draft7)
-            .compile(schema_value)
+            .build(schema_value)
             .map_err(|e| anyhow::anyhow!("Schema compilation failed: {}", e))
     }
 
     /// Convert jsonschema validation error to our format
     #[allow(dead_code)]
     fn convert_validation_error(&self, error: JsonSchemaValidationError) -> ValidationError {
-        let field_path = error.instance_path.to_string();
+        let field_path = error.instance_path().to_string();
         let field_path = if field_path.is_empty() {
             "root".to_string()
         } else {
@@ -162,7 +159,7 @@ impl SchemaValidator {
 
         ValidationError::new(
             field_path,
-            format!("{:?}", error.kind), // Use debug format for now
+            format!("{:?}", error.kind()), // Use debug format for now
             error.to_string(),
             None, // Could extract expected value from error if needed
             Some(Value::String("placeholder".to_string())), // Placeholder for now

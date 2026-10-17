@@ -473,9 +473,9 @@ impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
             .map_err(|e| anyhow::anyhow!("Invalid JSON in schema: {}", e))?;
         
         // Test compilation to ensure it's valid JSON Schema
-        let _compiled = jsonschema::JSONSchema::options()
+        let _compiled = jsonschema::options()
             .with_draft(jsonschema::Draft::Draft7)
-            .compile(&schema_value)
+            .build(&schema_value)
             .map_err(|e| anyhow::anyhow!("Invalid JSON Schema: {}", e))?;
 
         // Check for duplicate name
@@ -581,9 +581,9 @@ impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
             let schema_value: Value = serde_json::from_str(schema_json)
                 .map_err(|e| anyhow::anyhow!("Invalid JSON in schema: {}", e))?;
             
-            let _compiled = jsonschema::JSONSchema::options()
+            let _compiled = jsonschema::options()
                 .with_draft(jsonschema::Draft::Draft7)
-                .compile(&schema_value)
+                .build(&schema_value)
                 .map_err(|e| anyhow::anyhow!("Invalid JSON Schema: {}", e))?;
 
             updates.push("schema_json = ?");

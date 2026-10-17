@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use jsonschema::{JSONSchema, Draft};
+use jsonschema::{Draft, Validator};
 
 pub mod repository;
 pub mod search;
@@ -125,19 +125,19 @@ impl AssetMetadataSchema {
     /// Validate that the schema JSON is valid JSON Schema
     pub fn validate_schema(&self) -> Result<()> {
         let schema_value: Value = serde_json::from_str(&self.schema_json)?;
-        let _compiled = JSONSchema::options()
+        let _compiled = jsonschema::options()
             .with_draft(Draft::Draft7)
-            .compile(&schema_value)
+            .build(&schema_value)
             .map_err(|e| anyhow::anyhow!("Invalid JSON Schema: {}", e))?;
         Ok(())
     }
 
     /// Get the compiled JSON Schema for validation
-    pub fn get_compiled_schema(&self) -> Result<JSONSchema> {
+    pub fn get_compiled_schema(&self) -> Result<Validator> {
         let schema_value: Value = serde_json::from_str(&self.schema_json)?;
-        JSONSchema::options()
+        jsonschema::options()
             .with_draft(Draft::Draft7)
-            .compile(&schema_value)
+            .build(&schema_value)
             .map_err(|e| anyhow::anyhow!("Failed to compile schema: {}", e))
     }
 }
@@ -242,15 +242,11 @@ impl AssetMetadata {
         let compiled_schema = schema.get_compiled_schema()?;
         let values = self.get_metadata_values()?;
         
-        let result = compiled_schema.validate(&values);
-        let mut errors = Vec::new();
-        
-        if let Err(validation_errors) = result {
-            for error in validation_errors {
-                errors.push(format!("{}: {}", error.instance_path, error));
-            }
-        }
-        
+        let errors = compiled_schema
+            .iter_errors(&values)
+            .map(|error| format!("{}: {}", error.instance_path(), error))
+            .collect();
+
         Ok(errors)
     }
 }
