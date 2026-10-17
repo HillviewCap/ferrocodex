@@ -1,7 +1,7 @@
 Firmware Management Guide
 =========================
 
-This comprehensive guide covers all aspects of firmware management in Ferrocodex, from basic uploads to advanced analysis and compliance workflows.
+This guide covers all aspects of firmware management in Ferrocodex, from basic uploads to advanced analysis and compliance workflows.
 
 .. contents:: Table of Contents
    :local:
@@ -10,7 +10,7 @@ This comprehensive guide covers all aspects of firmware management in Ferrocodex
 Overview
 --------
 
-Firmware management in Ferrocodex provides a complete solution for tracking, analyzing, and deploying firmware updates across your industrial equipment fleet.
+Firmware management in Ferrocodex tracks, analyzes, and records the deployment of firmware across your industrial equipment.
 
 Key Capabilities
 ^^^^^^^^^^^^^^^^
@@ -43,23 +43,23 @@ Initial Setup
 Before uploading firmware:
 
 1. **Establish Naming Convention**:
-   
+
    * Include vendor name
    * Version number
    * Release date
    * Equipment model
-   
+
    Example: ``ABB_PLC5000_v2.3.1_20250115.bin``
 
 2. **Create Documentation Standards**:
-   
+
    * Release notes format
    * Testing requirements
    * Approval process
    * Deployment procedures
 
 3. **Define Roles**:
-   
+
    * Who can upload firmware
    * Who approves golden versions
    * Who performs deployments
@@ -75,21 +75,21 @@ First Firmware Upload
 3. Click **Upload Firmware**
 4. Choose firmware file
 5. Complete metadata:
-   
+
    .. code-block:: text
-   
+
       Version: 2.3.1
       Release Date: 2025-01-15
       Vendor: ABB
       Model: PLC5000
       Type: Security Update
       Criticality: High
-      
+
       Release Notes:
       - Fixes CVE-2024-1234 vulnerability
       - Improves communication stability
       - Adds new diagnostic commands
-      
+
       Compatibility:
       - Hardware: Rev C or later
       - Requires configuration v1.5+
@@ -139,21 +139,21 @@ Analysis Reports
 **Report Sections:**
 
 1. **Summary Dashboard**:
-   
+
    * Overall risk score
    * Critical findings
    * Compliance status
    * Recommendations
 
 2. **Detailed Findings**:
-   
+
    * Vulnerability details
    * CVSS scores
    * Remediation steps
    * Reference links
 
 3. **Compliance Results**:
-   
+
    * Standards checked
    * Pass/fail status
    * Gap analysis
@@ -172,21 +172,21 @@ Manual Analysis Integration
 For additional verification:
 
 1. **Export for External Scanning**:
-   
+
    * Download firmware
    * Run through IDA Pro
    * Use vendor tools
    * Custom analysis
 
 2. **Import Results**:
-   
+
    * Upload scan reports
    * Add manual findings
    * Update risk score
    * Document decisions
 
 3. **Tracking**:
-   
+
    * Analysis history
    * Who performed
    * Tools used
@@ -228,19 +228,19 @@ Golden Promotion Process
 **Promotion Workflow:**
 
 1. **Initiate Promotion**:
-   
+
    * Select firmware version
    * Click "Promote to Golden"
    * Choose promotion type:
-     
+
      - Standard (normal testing)
      - Emergency (critical fix)
      - Conditional (with caveats)
 
 2. **Complete Checklist**:
-   
+
    .. code-block:: text
-   
+
       [ ] Functional testing complete
       [ ] Security scan passed
       [ ] Performance acceptable
@@ -250,14 +250,14 @@ Golden Promotion Process
       [ ] Stakeholders notified
 
 3. **Add Promotion Notes**:
-   
+
    * Test environment details
    * Known limitations
    * Deployment recommendations
    * Special considerations
 
 4. **Approval Process**:
-   
+
    * Submit for review
    * Approver notification
    * Review period
@@ -299,7 +299,7 @@ Pre-Deployment Planning
 **Deployment Checklist:**
 
 1. **Verify Prerequisites**:
-   
+
    * Current version documented
    * Rollback plan ready
    * Maintenance window scheduled
@@ -307,14 +307,14 @@ Pre-Deployment Planning
    * Backups completed
 
 2. **Compatibility Check**:
-   
+
    * Hardware revision
    * Configuration version
    * Dependencies
    * Integration points
 
 3. **Risk Assessment**:
-   
+
    * Impact analysis
    * Failure scenarios
    * Recovery time
@@ -326,13 +326,13 @@ Deployment Tracking
 **Recording Deployments:**
 
 1. **Mark as Current**:
-   
+
    * Select firmware version
    * Click "Set as Current"
    * Add deployment notes:
-     
+
      .. code-block:: text
-     
+
         Deployment Date: 2025-01-20
         Deployed By: John Smith
         Environment: Production Line 1
@@ -341,13 +341,13 @@ Deployment Tracking
         Validation: All tests passed
 
 2. **Link Configuration**:
-   
+
    * Associate with active config
    * Document relationship
    * Note dependencies
 
 3. **Update Status**:
-   
+
    * Mark previous as "Previous"
    * Update asset records
    * Notify stakeholders
@@ -358,21 +358,21 @@ Staged Deployments
 For critical systems:
 
 1. **Pilot Deployment**:
-   
+
    * Single non-critical asset
    * Extended monitoring
    * Performance metrics
    * Issue tracking
 
 2. **Limited Rollout**:
-   
+
    * 10% of assets
    * Different locations
    * Varied workloads
    * Feedback collection
 
 3. **Full Deployment**:
-   
+
    * Remaining assets
    * Scheduled batches
    * Progress tracking
@@ -384,21 +384,21 @@ Emergency Deployments
 For critical security updates:
 
 1. **Fast-Track Process**:
-   
+
    * Abbreviated testing
    * Emergency approval
    * Rapid deployment
    * Enhanced monitoring
 
 2. **Documentation**:
-   
+
    * Threat details
    * Risk assessment
    * Decision rationale
    * Deviation approval
 
 3. **Post-Deployment**:
-   
+
    * Immediate validation
    * Performance monitoring
    * Issue tracking
@@ -420,14 +420,14 @@ Linking Best Practices
 **How to Link:**
 
 1. **From Firmware View**:
-   
+
    * Select firmware version
    * Click "Link to Configuration"
    * Choose configuration(s)
    * Document relationship
 
 2. **From Configuration View**:
-   
+
    * Open configuration details
    * Click "Link Firmware"
    * Select firmware version
@@ -462,21 +462,21 @@ Bundle Management
 Creating deployment bundles:
 
 1. **Select Components**:
-   
+
    * Firmware file
    * Configuration file
    * Deployment script
    * Validation checklist
 
 2. **Create Bundle**:
-   
+
    * Name meaningfully
    * Version bundle
    * Test together
    * Document contents
 
 3. **Deploy as Unit**:
-   
+
    * Atomic deployment
    * Rollback together
    * Track as package
@@ -490,21 +490,21 @@ Firmware Compliance Requirements
 **Industry Standards:**
 
 1. **IEC 62443**:
-   
+
    * Security levels
    * Update procedures
    * Access controls
    * Audit requirements
 
 2. **NERC CIP**:
-   
+
    * Baseline documentation
    * Change tracking
    * Security patches
    * Evidence retention
 
 3. **FDA 21 CFR Part 11**:
-   
+
    * Electronic signatures
    * Audit trails
    * Version control
@@ -533,21 +533,21 @@ Reporting
 **Standard Reports:**
 
 1. **Firmware Inventory**:
-   
+
    * All firmware versions
    * Deployment status
    * Age analysis
    * Update priority
 
 2. **Security Status**:
-   
+
    * Vulnerability summary
    * Patch compliance
    * Risk exposure
    * Remediation progress
 
 3. **Deployment History**:
-   
+
    * Timeline view
    * Success rates
    * Rollback events
@@ -577,20 +577,20 @@ Firmware Rollback Procedures
 **Rollback Process:**
 
 1. **Identify Target Version**:
-   
+
    * Previous golden
    * Last known good
    * Specific version
 
 2. **Execute Rollback**:
-   
+
    * Select version
    * Deploy immediately
    * Document reason
    * Monitor closely
 
 3. **Post-Rollback**:
-   
+
    * Verify functionality
    * Update records
    * Investigate issues
@@ -602,19 +602,19 @@ Automated Workflows
 **Automation Opportunities:**
 
 1. **Scheduled Analysis**:
-   
+
    * Nightly scans
    * Weekly reports
    * Monthly compliance
 
 2. **Alert Integration**:
-   
+
    * Vendor notifications
    * CVE alerts
    * Compliance warnings
 
 3. **Deployment Automation**:
-   
+
    * Maintenance windows
    * Staged rollouts
    * Success validation
@@ -633,14 +633,14 @@ Multi-Site Management
 **Best Practices:**
 
 1. **Centralized Planning**:
-   
+
    * Master firmware library
    * Standardized procedures
    * Coordinated windows
    * Unified reporting
 
 2. **Local Execution**:
-   
+
    * Site champions
    * Local testing
    * Phased deployment
@@ -677,7 +677,7 @@ Common Problems
 
 * Re-upload file
 * Check file integrity
-* Contact support
+* Report the problem on the GitHub issue tracker
 * Try manual analysis
 
 **Deployment Issues:**
@@ -701,21 +701,21 @@ Organizational
 ^^^^^^^^^^^^^^
 
 1. **Standardization**:
-   
+
    * Naming conventions
    * Version schemes
    * Documentation templates
    * Approval processes
 
 2. **Training**:
-   
+
    * Upload procedures
    * Analysis interpretation
    * Deployment protocols
    * Emergency procedures
 
 3. **Communication**:
-   
+
    * Update notifications
    * Deployment schedules
    * Issue reporting
@@ -725,24 +725,24 @@ Technical
 ^^^^^^^^^
 
 1. **Security**:
-   
+
    * Verify sources
    * Scan everything
    * Test thoroughly
    * Monitor continuously
 
 2. **Documentation**:
-   
+
    * Detailed notes
    * Relationship tracking
    * Decision rationale
    * Lessons learned
 
 3. **Risk Management**:
-   
+
    * Rollback planning
    * Staged deployments
    * Performance monitoring
    * Incident response
 
-Remember: Firmware management is critical for industrial equipment security and reliability. Following these procedures ensures safe, compliant, and efficient firmware deployments across your organization.
+Firmware management is critical for industrial equipment security and reliability. Following these procedures supports safe, compliant, and efficient firmware deployments across your organization.

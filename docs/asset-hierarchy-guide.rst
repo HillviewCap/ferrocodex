@@ -1,7 +1,7 @@
 Asset Hierarchy Management Guide
 =================================
 
-The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides comprehensive hierarchical organization capabilities for industrial assets, enabling intuitive folder-based structures with advanced metadata management and search functionality.
+The Asset Hierarchy Management system in Ferrocodex organizes industrial assets in folder-based structures with custom metadata and tree filtering.
 
 .. contents:: Table of Contents
    :local:
@@ -10,14 +10,14 @@ The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides comprehensiv
 Overview
 --------
 
-The Asset Hierarchy Management system transforms how you organize and manage industrial equipment by providing:
+The Asset Hierarchy Management system provides:
 
 * **Hierarchical Organization**: Create unlimited nested folder structures
 * **Two Asset Types**: Folders (containers) and Devices (equipment)
-* **Drag-and-Drop Management**: Intuitive reorganization of assets
-* **Advanced Search**: Full-text search with sub-200ms performance
+* **Drag-and-Drop Management**: Reorganization of assets
+* **Tree Filtering**: Narrow the tree by name, description, and asset type
 * **Custom Metadata**: Flexible field definitions with validation
-* **Cybersecurity Compliance**: Secure naming conventions and validation
+* **Naming Validation**: Enforced naming pattern and input validation
 * **Bulk Operations**: Efficient management of multiple assets
 
 Understanding Asset Types
@@ -31,7 +31,7 @@ Folder assets act as organizational containers for grouping related equipment:
 * **Purpose**: Organize devices into logical groups
 * **Nesting**: Unlimited depth for complex hierarchies
 * **Examples**:
-  
+
   * Production Lines
   * Facility Areas
   * Equipment Categories
@@ -43,7 +43,7 @@ Folder assets act as organizational containers for grouping related equipment:
 2. Click **"Add Asset"** button
 3. Select **"Folder"** as asset type
 4. Enter folder details:
-   
+
    * **Name**: Following security naming pattern
    * **Description**: Purpose of the folder
    * **Parent Folder**: Location in hierarchy
@@ -60,7 +60,7 @@ Device assets represent actual industrial equipment:
 * **Location**: Can exist in folders or at root level
 * **Configuration Association**: Link to configuration files
 * **Examples**:
-  
+
   * PLCs (PLC-WEST-01)
   * HMIs (HMI-LINE2-03)
   * SCADA Systems (SCADA-MAIN-01)
@@ -71,7 +71,7 @@ Device assets represent actual industrial equipment:
 1. Navigate to target folder location
 2. Click **"Add Device"** button
 3. Complete device information:
-   
+
    * **Name**: Unique identifier
    * **Type**: Equipment category
    * **Manufacturer**: Device vendor
@@ -86,7 +86,7 @@ Hierarchical Navigation
 Tree View Interface
 ^^^^^^^^^^^^^^^^^^^
 
-The tree navigation provides intuitive browsing of your asset hierarchy:
+The tree navigation provides browsing of your asset hierarchy:
 
 .. figure:: _static/images/asset-tree-view.png
    :alt: Asset hierarchy tree navigation
@@ -99,7 +99,7 @@ The tree navigation provides intuitive browsing of your asset hierarchy:
 
 * **Expand/Collapse**: Click arrows to navigate folders
 * **Visual Indicators**:
-  
+
   * Folder icons for containers
   * Device icons for equipment
   * Configuration count badges
@@ -112,7 +112,7 @@ The tree navigation provides intuitive browsing of your asset hierarchy:
 Drag-and-Drop Organization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Reorganize assets easily with drag-and-drop:
+Reorganize assets with drag-and-drop:
 
 1. **Select Asset**: Click to select source asset
 2. **Drag**: Hold and drag to target location
@@ -170,7 +170,6 @@ Metadata allows capturing equipment-specific information beyond basic fields:
 
 * **Flexibility**: Define fields specific to your needs
 * **Validation**: Ensure data quality with rules
-* **Searchability**: All metadata is searchable
 * **Templates**: Reusable field configurations
 
 Field Types
@@ -219,7 +218,7 @@ Creating Custom Fields
 2. Click **"Manage Metadata"**
 3. Click **"Add Field"**
 4. Configure field properties:
-   
+
    * **Field Name**: Internal identifier
    * **Display Label**: User-friendly name
    * **Field Type**: Select from available types
@@ -302,119 +301,29 @@ Ensure data quality with validation:
 * External system checks
 * Business rule enforcement
 
-Advanced Search & Filtering
----------------------------
+Filtering the Asset Tree
+------------------------
 
-Full-Text Search
-^^^^^^^^^^^^^^^^
+The search box above the asset tree narrows the tree to matching assets:
 
-The search system uses SQLite FTS5 for powerful text searching:
+* **Text match**: Type part of an asset name or description; matching is case-insensitive
+* **Type filter**: Show all assets, only folders, or only devices
+* **Context**: The parent folders of each match are expanded so you can see where it sits in the hierarchy
+* **Clear**: Use the clear button to restore the full tree
 
-**Search Features:**
+The filter matches asset names and descriptions only. Custom metadata values are not searched.
 
-* **Instant Results**: Sub-200ms response time
-* **Fuzzy Matching**: Tolerates typos
-* **Relevance Ranking**: Best matches first
-* **Highlighting**: Matched terms highlighted
-* **Auto-complete**: Suggestions as you type
-
-**Search Syntax:**
-
-.. code-block:: text
-
-   Simple search:
-   pump                    # Find all assets containing "pump"
-   
-   Phrase search:
-   "cooling pump"          # Exact phrase match
-   
-   Field-specific search:
-   manufacturer:siemens    # Search specific field
-   
-   Wildcard search:
-   PLC-*                   # Matches PLC-001, PLC-002, etc.
-   
-   Boolean operators:
-   pump AND cooling        # Both terms required
-   pump OR fan             # Either term
-   pump NOT broken         # Exclude term
-
-Filter Builder
-^^^^^^^^^^^^^^
-
-Create complex filters with the visual builder:
-
-1. Click **"Advanced Filter"** button
-2. Add filter conditions:
-   
-   * Select field
-   * Choose operator
-   * Enter value
-
-3. Combine conditions:
-   
-   * AND: All conditions must match
-   * OR: Any condition matches
-   * NOT: Exclude matches
-
-4. Save as preset for reuse
-
-**Filter Examples:**
-
-.. code-block:: text
-
-   Recently Added Devices:
-   - Asset Type = "Device"
-   - AND Created Date > "30 days ago"
-   
-   Critical Production Equipment:
-   - Location = "Production Floor"
-   - AND Criticality = "High"
-   - AND Status = "Active"
-   
-   Maintenance Due:
-   - Next Service < "7 days from now"
-   - OR Last Service > "365 days ago"
-
-Search Integration
-^^^^^^^^^^^^^^^^^^
-
-Search is integrated throughout the application:
-
-* **Global Search Bar**: Always accessible
-* **Context Search**: Within current folder
-* **Quick Filters**: Common searches
-* **Search History**: Recent searches
-* **Saved Searches**: Custom filter presets
-
-Similar Asset Discovery
-^^^^^^^^^^^^^^^^^^^^^^^
-
-Find assets with similar characteristics:
-
-1. Select reference asset
-2. Click **"Find Similar"**
-3. Choose similarity criteria:
-   
-   * Metadata fields
-   * Asset type
-   * Manufacturer
-   * Location
-
-4. Set similarity threshold
-5. View matched assets
-
-Cybersecurity-Compliant Naming
--------------------------------
+Asset Naming Rules
+------------------
 
 Naming Requirements
 ^^^^^^^^^^^^^^^^^^^
 
-All asset names must follow security best practices:
+All asset names must match the naming pattern:
 
 **Pattern Requirements:**
 
-.. code-block:: regex
+.. code-block:: text
 
    ^[A-Z0-9][A-Z0-9_-]{2,49}$
 
@@ -493,9 +402,9 @@ Import multiple assets from external sources:
 **CSV Import:**
 
 1. Prepare CSV file with headers:
-   
-   .. code-block:: csv
-   
+
+   .. code-block:: text
+
       Name,Type,Manufacturer,Model,Location,IP_Address
       PLC-001,Device,Siemens,S7-1500,Line 1,192.168.1.10
       HMI-001,Device,Rockwell,PanelView,Line 1,192.168.1.11
@@ -559,7 +468,7 @@ Rename multiple assets efficiently:
 1. Select target assets
 2. Click **"Bulk Rename"**
 3. Choose rename pattern:
-   
+
    * Find and replace
    * Add prefix/suffix
    * Sequential numbering
@@ -576,7 +485,7 @@ Rename multiple assets efficiently:
    Selected: [PUMP-01, PUMP-02]
    Pattern: Add prefix "MAIN-"
    Result: [MAIN-PUMP-01, MAIN-PUMP-02]
-   
+
    Sequential numbering:
    Selected: [SENSOR, SENSOR, SENSOR]
    Pattern: Append number "-%03d"
@@ -590,7 +499,7 @@ Update metadata across multiple assets:
 1. Select target assets
 2. Click **"Update Metadata"**
 3. Choose update mode:
-   
+
    * **Replace**: Overwrite existing values
    * **Append**: Add to existing values
    * **Merge**: Combine with existing
@@ -610,132 +519,8 @@ Select multiple assets for bulk operations:
 * **Ctrl+A**: Select all visible
 * **Selection Box**: Drag to select area
 
-Workflow Management
--------------------
-
-Multi-Step Workflows
-^^^^^^^^^^^^^^^^^^^^
-
-Create structured workflows for complex operations:
-
-**Workflow Components:**
-
-* **Steps**: Sequential tasks
-* **Conditions**: Branching logic
-* **Validations**: Data checks
-* **Approvals**: Review gates
-* **Notifications**: Status updates
-
-**Example Workflow - New Equipment Setup:**
-
-1. **Asset Creation**
-   
-   * Create device asset
-   * Apply metadata template
-   * Set security classification
-
-2. **Configuration**
-   
-   * Upload initial configuration
-   * Link firmware version
-   * Set baseline
-
-3. **Identity Vault**
-   
-   * Create vault entry
-   * Add credentials
-   * Set rotation schedule
-
-4. **Documentation**
-   
-   * Upload manuals
-   * Add maintenance procedures
-   * Link to vendor resources
-
-5. **Validation**
-   
-   * Verify all required fields
-   * Check security compliance
-   * Confirm network settings
-
-6. **Approval**
-   
-   * Submit for review
-   * Administrator approval
-   * Activate asset
-
-Draft Management
-^^^^^^^^^^^^^^^^
-
-Save incomplete work as drafts:
-
-**Draft Features:**
-
-* **Auto-save**: Every 30 seconds
-* **Manual Save**: Explicit draft creation
-* **Resume Later**: Continue from any device
-* **Version History**: Track draft changes
-* **Sharing**: Collaborate on drafts
-
-**Working with Drafts:**
-
-1. Start creating/editing asset
-2. Click **"Save as Draft"**
-3. Add draft notes (optional)
-4. Resume from **"My Drafts"** section
-5. Publish when complete
-
-Progress Tracking
-^^^^^^^^^^^^^^^^^
-
-Monitor workflow progress:
-
-**Progress Indicators:**
-
-* **Step Counter**: "Step 3 of 7"
-* **Progress Bar**: Visual completion
-* **Time Estimates**: Expected duration
-* **Status Tags**: Pending, In Progress, Complete
-* **Blockers**: Issues preventing progress
-
-**Progress Dashboard:**
-
-View all active workflows:
-
-* Filter by status
-* Sort by priority
-* View assignees
-* Check due dates
-* Export reports
-
 Performance Optimization
 ------------------------
-
-Search Performance
-^^^^^^^^^^^^^^^^^^
-
-Optimizations for sub-200ms search:
-
-**Database Optimizations:**
-
-* SQLite FTS5 full-text indexing
-* Optimized query plans
-* Efficient JOIN strategies
-* Index maintenance routines
-
-**Caching Strategy:**
-
-* Result caching with TTL
-* Query plan caching
-* Metadata caching
-* Invalidation on updates
-
-**Background Processing:**
-
-* Async index updates
-* Batch processing
-* Queue management
-* Priority scheduling
 
 Tree Rendering
 ^^^^^^^^^^^^^^
@@ -752,7 +537,7 @@ Efficient rendering for large hierarchies:
 **Performance Tips:**
 
 * Collapse unused branches
-* Use search to navigate
+* Use the tree filter to navigate
 * Filter to reduce nodes
 * Archive old assets
 
@@ -830,25 +615,6 @@ Metadata Management
 * **Compliance**: Certification, audit date
 * **Financial**: Cost, depreciation, owner
 
-Search Optimization
-^^^^^^^^^^^^^^^^^^^
-
-**Search Tips:**
-
-1. Use specific terms
-2. Leverage field-specific search
-3. Save common searches
-4. Use filters to narrow results
-5. Learn search syntax
-
-**Performance Tips:**
-
-1. Index custom fields used in search
-2. Archive old assets
-3. Optimize metadata schemas
-4. Regular database maintenance
-5. Monitor search analytics
-
 Security Considerations
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -885,16 +651,10 @@ Common Issues
 * **Issue**: "Duplicate asset name"
 * **Solution**: Use unique names within same parent
 
-**Search Problems:**
+**Tree Filter Problems:**
 
-* **Issue**: No search results
-* **Solution**: Check spelling, try broader terms
-
-* **Issue**: Slow search performance
-* **Solution**: Rebuild search indexes in settings
-
-* **Issue**: Missing metadata in results
-* **Solution**: Verify metadata is indexed
+* **Issue**: No assets match the filter
+* **Solution**: Check spelling and set the type filter to "All"; the filter matches names and descriptions, not metadata values
 
 **Drag-and-Drop Issues:**
 
@@ -902,7 +662,7 @@ Common Issues
 * **Solution**: Check permissions for target folder
 
 * **Issue**: Drag not working
-* **Solution**: Ensure JavaScript enabled, try keyboard shortcuts
+* **Solution**: Restart the application, or use the keyboard shortcuts
 
 Performance Issues
 ^^^^^^^^^^^^^^^^^^
@@ -912,16 +672,7 @@ Performance Issues
 1. Check asset count (Settings → Statistics)
 2. Archive unused assets
 3. Collapse large branches
-4. Clear browser cache
-5. Check network latency
-
-**Search Performance:**
-
-1. Rebuild search indexes
-2. Optimize database (Admin → Maintenance)
-3. Review custom metadata fields
-4. Check system resources
-5. Contact support if persists
+4. Restart the application
 
 Import/Export Problems
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -945,6 +696,6 @@ Import/Export Problems
 Conclusion
 ----------
 
-The Asset Hierarchy Management system in Ferrocodex v0.5.0 provides powerful organizational capabilities for managing industrial equipment at scale. By leveraging hierarchical structures, custom metadata, advanced search, and bulk operations, you can efficiently organize and manage thousands of assets while maintaining security and compliance requirements.
+The Asset Hierarchy Management system organizes industrial equipment at scale. Hierarchical structures, custom metadata, and bulk operations let you manage thousands of assets while maintaining security and compliance requirements.
 
 For additional assistance, consult the :doc:`user-guide` or :doc:`troubleshooting` sections, or contact your system administrator.

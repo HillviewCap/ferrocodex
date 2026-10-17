@@ -3,13 +3,26 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import json
+import os
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Ferrocodex'
-copyright = '2025, Ferrocodex Team'
+copyright = '2025-2026, Ferrocodex Team'
 author = 'Ferrocodex Team'
-release = '1.0.0-alpha'
+
+# The version is read from the desktop package manifest so that the docs
+# follow the application's release number without manual edits. Read the Docs
+# checks out the whole repository, so the relative path resolves there too.
+_package_json = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    '..', 'apps', 'desktop', 'package.json',
+)
+with open(_package_json, encoding='utf-8') as _f:
+    release = json.load(_f)['version']
+version = '.'.join(release.split('.')[:2])
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

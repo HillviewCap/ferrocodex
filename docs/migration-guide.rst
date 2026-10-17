@@ -68,7 +68,7 @@ System Assessment
 Before beginning migration:
 
 1. **Current State Documentation**:
-   
+
    * Current version number
    * Number of users
    * Number of assets
@@ -76,14 +76,14 @@ Before beginning migration:
    * Custom configurations
 
 2. **Resource Requirements**:
-   
+
    * Available disk space (2x current)
    * Backup storage location
    * Migration window duration
    * Personnel availability
 
 3. **Risk Assessment**:
-   
+
    * Critical operations impact
    * User access requirements
    * Compliance considerations
@@ -95,17 +95,17 @@ Backup Procedures
 **Complete System Backup:**
 
 1. **Stop Application**:
-   
+
    .. code-block:: bash
-   
+
       # Windows
       taskkill /F /IM Ferrocodex.exe
-      
+
       # macOS/Linux
       pkill Ferrocodex
 
 2. **Export Data**:
-   
+
    * Use Admin → Export → Full System
    * Include all options:
      - Assets and configurations
@@ -115,19 +115,22 @@ Backup Procedures
      - System settings
 
 3. **Database Backup**:
-   
+
    .. code-block:: bash
-   
-      # Locate database file
-      # Windows: %APPDATA%\Ferrocodex\data.db
-      # macOS: ~/Library/Application Support/Ferrocodex/data.db
-      # Linux: ~/.config/ferrocodex/data.db
-      
-      # Create backup copy
-      cp data.db data.db.backup-$(date +%Y%m%d)
+
+      # Locate the application data directory
+      # Windows: %APPDATA%\com.ferrocodex.app\
+      # macOS: ~/Library/Application Support/com.ferrocodex.app/
+      # Linux: ~/.config/com.ferrocodex.app/
+
+      # Create backup copies. The database runs in WAL mode, so copy the
+      # -wal and -shm files too if they exist, or stop the application first.
+      cp ferrocodex.db ferrocodex.db.backup-$(date +%Y%m%d)
+      cp ferrocodex.db-wal ferrocodex.db-wal.backup-$(date +%Y%m%d) 2>/dev/null
+      cp ferrocodex.db-shm ferrocodex.db-shm.backup-$(date +%Y%m%d) 2>/dev/null
 
 4. **Configuration Backup**:
-   
+
    * Copy settings files
    * Document customizations
    * Save license information
@@ -170,55 +173,33 @@ Migrating to v0.4.0 (Asset Identity Vault)
 **Migration Steps:**
 
 1. **Pre-Migration**:
-   
+
    * Backup current system
    * Document vault requirements
    * Plan permission structure
    * Notify users of new features
 
 2. **Installation**:
-   
+
    .. code-block:: bash
-   
+
       # 1. Stop current version
       # 2. Backup database
       # 3. Install new version
       # 4. Do NOT start yet
 
-3. **Database Migration**:
-   
-   * Automatic on first launch
-   * Creates vault tables
-   * Migrates permissions
-   * Adds rotation tracking
+3. **Database Update**:
+
+   * Performed on first launch of the new version
+   * Creates the vault, permission, and rotation tables if they do not exist
+   * Existing data is left in place
 
 4. **Post-Migration**:
-   
+
    * Verify vault creation ability
    * Test permission grants
-   * Configure rotation policies
+   * Configure rotation schedules
    * Train users on features
-
-**New Configuration Options:**
-
-.. code-block:: json
-
-   {
-     "vault": {
-       "passwordPolicy": {
-         "minLength": 12,
-         "requireUppercase": true,
-         "requireNumbers": true,
-         "requireSpecial": true,
-         "historyDepth": 5
-       },
-       "rotation": {
-         "defaultDays": 90,
-         "warningDays": 7,
-         "criticalAssetDays": 30
-       }
-     }
-   }
 
 Migrating to v0.5.0 (Asset Hierarchy Management)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -227,7 +208,6 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
 
 * Complete asset hierarchy system with folders and devices
 * Advanced metadata management with custom fields
-* SQLite FTS5 full-text search implementation
 * Cybersecurity-compliant naming enforcement
 * Bulk operations and import/export enhancements
 * Drag-and-drop asset organization
@@ -235,76 +215,62 @@ Migrating to v0.5.0 (Asset Hierarchy Management)
 **Migration Process:**
 
 1. **Pre-Migration Requirements**:
-   
+
    * Backup existing database
    * Document current asset structure
    * Plan hierarchy organization
    * Review naming compliance
 
 2. **Database Schema Updates**:
-   
-   The migration will automatically:
-   
-   * Add asset_type field (folder/device)
-   * Create parent_id for hierarchy
-   * Add metadata_json columns
-   * Create FTS5 search tables
-   * Build search indexes
+
+   On first launch, the new version:
+
+   * Adds the asset type (folder/device) and parent columns
+   * Adds metadata storage
 
 3. **Asset Name Compliance**:
-   
-   Non-compliant asset names will be automatically converted:
-   
+
+   Existing asset names are not converted automatically. Review them against the pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$`` and rename any that do not comply, for example:
+
    .. code-block:: text
-   
-      Original: "plc west 01" → Converted: "PLC-WEST-01"
-      Original: "_sensor_01" → Converted: "SENSOR-01"
-      Original: "ab" → Converted: "AB-001" (padded)
-   
-   A migration report will list all renamed assets.
+
+      "plc west 01" → "PLC-WEST-01"
+      "_sensor_01"  → "SENSOR-01"
+      "ab"          → "AB-001"
 
 4. **Hierarchy Organization**:
-   
+
    * Existing assets become root-level devices
    * Create folder structure post-migration
    * Use bulk move to organize
    * Set up metadata templates
 
-5. **Search Index Building**:
-   
-   * Automatic index creation
-   * Initial indexing may take 5-10 minutes
-   * Progress shown in migration log
-   * Verify search performance
-
 **Post-Migration Steps:**
 
 1. **Organize Asset Hierarchy**:
-   
+
    * Create logical folder structure
    * Move devices into folders
    * Apply security classifications
    * Set up metadata schemas
 
 2. **Configure Metadata**:
-   
+
    * Define custom fields
    * Apply templates to asset types
    * Migrate existing data to fields
    * Set validation rules
 
-3. **Verify Search**:
-   
-   * Test full-text search
-   * Check metadata filtering
-   * Validate performance
-   * Train users on syntax
+3. **Verify the Asset Tree**:
+
+   * Filter the tree by name and by type
+   * Confirm all devices appear
 
 4. **User Training**:
-   
+
    * Hierarchy navigation
    * Drag-and-drop operations
-   * Advanced search features
+   * Tree filtering
    * Metadata management
 
 Migrating from v0.3.x to v0.4.x
@@ -366,30 +332,30 @@ Export/Import Method
 For major version jumps or clean installations:
 
 1. **Export from Old Version**:
-   
+
    .. code-block:: text
-   
+
       1. Login as Administrator
       2. Navigate to Settings → Export
       3. Select "Full System Export"
       4. Choose all options:
-         ☑ Assets
-         ☑ Configurations  
-         ☑ Users
-         ☑ Audit Logs
-         ☑ Settings
+         [x] Assets
+         [x] Configurations
+         [x] Users
+         [x] Audit Logs
+         [x] Settings
       5. Save export file
 
 2. **Prepare New System**:
-   
+
    * Fresh installation
    * Initial admin setup
    * Basic configuration
 
 3. **Import to New Version**:
-   
+
    .. code-block:: text
-   
+
       1. Login to new system
       2. Settings → Import
       3. Select export file
@@ -401,7 +367,7 @@ For major version jumps or clean installations:
       6. Execute import
 
 4. **Verification**:
-   
+
    * Count records
    * Spot check data
    * Test functionality
@@ -412,37 +378,23 @@ Database Migration
 
 For supported version upgrades:
 
-**Automatic Migration:**
+**How Schema Updates Work:**
 
-1. Install new version
-2. Start application
-3. Migration prompt appears
-4. Confirm to proceed
-5. Wait for completion
-6. Verify success
+Ferrocodex does not have a separate migration tool or a migration prompt. On every start it creates any tables that do not yet exist (``CREATE TABLE IF NOT EXISTS``) and applies a small set of recorded data fixes. Existing tables and data are left in place.
 
-**Manual Migration:**
-
-If automatic fails:
-
-.. code-block:: bash
-
-   # Run migration tool
-   Ferrocodex.exe --migrate --from 0.3.0 --to 0.4.0
-   
-   # With verbose logging
-   Ferrocodex.exe --migrate --verbose --log migration.log
+1. Install the new version
+2. Start the application
+3. Log in and verify that assets, configurations, and vaults are present
 
 **Migration Verification:**
 
+With the application stopped, you can inspect the database with the ``sqlite3`` command-line tool:
+
 .. code-block:: sql
 
-   -- Check version
-   SELECT * FROM schema_version;
-   
    -- Verify record counts
    SELECT COUNT(*) FROM assets;
-   SELECT COUNT(*) FROM configurations;
+   SELECT COUNT(*) FROM configuration_versions;
    SELECT COUNT(*) FROM users;
 
 Handling Migration Issues
@@ -501,26 +453,27 @@ Rollback Procedures
 If migration fails:
 
 1. **Immediate Rollback**:
-   
+
    .. code-block:: bash
-   
+
       # Stop application
       # Restore database backup
-      mv data.db data.db.failed
-      cp data.db.backup-20250127 data.db
-      
+      mv ferrocodex.db ferrocodex.db.failed
+      rm -f ferrocodex.db-wal ferrocodex.db-shm
+      cp ferrocodex.db.backup-20250127 ferrocodex.db
+
       # Reinstall previous version
       # Start application
 
 2. **Data Recovery**:
-   
+
    * Export partial data
    * Manual correction
    * Selective import
    * Verify integrity
 
 3. **Investigation**:
-   
+
    * Review migration logs
    * Identify failure point
    * Plan remediation
@@ -559,7 +512,7 @@ Verification Checklist
 **Performance:**
 
 - [ ] Login time acceptable
-- [ ] Search responsive
+- [ ] Asset tree filter responsive
 - [ ] Upload speeds normal
 - [ ] Database queries fast
 
@@ -571,17 +524,17 @@ User Communication
 .. code-block:: text
 
    Subject: Ferrocodex Upgrade Scheduled
-   
+
    Team,
-   
+
    We will be upgrading Ferrocodex to version [X.X.X] on [DATE].
-   
+
    Downtime: [START] to [END]
    New Features: [List key features]
    Action Required: [Any user actions]
-   
+
    Please complete any critical work before [TIME].
-   
+
    Contact [ADMIN] with questions.
 
 **Post-Migration Notice:**
@@ -589,18 +542,18 @@ User Communication
 .. code-block:: text
 
    Subject: Ferrocodex Upgrade Complete
-   
+
    Team,
-   
+
    Ferrocodex has been successfully upgraded to version [X.X.X].
-   
+
    New Features Available:
    - [Feature 1]
    - [Feature 2]
-   
+
    Training: [Schedule/resources]
    Documentation: [Updated guides]
-   
+
    Report any issues to [ADMIN].
 
 Training Updates
@@ -609,21 +562,21 @@ Training Updates
 After migration:
 
 1. **Update Documentation**:
-   
+
    * New feature guides
    * Changed workflows
    * Updated screenshots
    * FAQ additions
 
 2. **Conduct Training**:
-   
+
    * Admin changes
    * New features
    * Best practices
    * Q&A session
 
 3. **Gather Feedback**:
-   
+
    * User experience
    * Performance issues
    * Feature requests
@@ -636,21 +589,21 @@ Migration Planning
 ^^^^^^^^^^^^^^^^^^
 
 1. **Schedule Wisely**:
-   
+
    * Low-activity periods
    * Maintenance windows
    * Holiday avoidance
    * Team availability
 
 2. **Communicate Early**:
-   
+
    * Two-week notice
    * Reminder emails
    * Feature previews
    * Training schedule
 
 3. **Test Thoroughly**:
-   
+
    * Full test migration
    * Performance testing
    * Feature validation
@@ -660,21 +613,21 @@ Migration Execution
 ^^^^^^^^^^^^^^^^^^^
 
 1. **Follow Runbook**:
-   
+
    * Step-by-step procedures
    * Checkpoint verification
    * Go/no-go decisions
    * Communication plan
 
 2. **Monitor Progress**:
-   
+
    * Migration status
    * Error watching
    * Performance metrics
    * User reports
 
 3. **Document Everything**:
-   
+
    * Actions taken
    * Issues encountered
    * Resolutions applied
@@ -684,21 +637,21 @@ Post-Migration
 ^^^^^^^^^^^^^^
 
 1. **Monitor Closely**:
-   
+
    * First 24 hours critical
    * Performance tracking
    * Error monitoring
    * User feedback
 
 2. **Support Users**:
-   
+
    * Available for questions
    * Quick issue resolution
    * Training reinforcement
    * Positive messaging
 
 3. **Plan Next Steps**:
-   
+
    * Feature adoption
    * Process updates
    * Future migrations
@@ -711,7 +664,7 @@ During migration:
 
 * **Primary Admin**: [Name, Contact]
 * **Backup Admin**: [Name, Contact]
-* **Vendor Support**: [Contact Info]
+* **Issue Tracker**: https://github.com/HillviewCap/ferrocodex/issues
 * **Emergency Line**: [24/7 Number]
 
 Keep this guide updated with each migration experience to improve future upgrades.

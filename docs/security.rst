@@ -1,7 +1,7 @@
 Security Best Practices
 =======================
 
-Ferrocodex is designed with security as a core principle. This guide covers security features and best practices for protecting your industrial configurations.
+This guide covers the security features of Ferrocodex and recommended practices for protecting your industrial configurations.
 
 .. contents:: Table of Contents
    :local:
@@ -13,33 +13,35 @@ Security Architecture
 Core Security Features
 ^^^^^^^^^^^^^^^^^^^^^^
 
-* **AES-256 Encryption**: All data encrypted at rest
+* **AES-256-GCM Encryption**: Configuration content, firmware files, and vault secrets encrypted at rest
 * **Bcrypt Password Hashing**: Industry-standard password protection
 * **Identity Vault**: Secure credential storage with rotation tracking
 * **Role-Based Access Control**: Granular permission system
-* **Comprehensive Audit Trail**: Immutable activity logging
+* **Audit Trail**: Immutable activity logging
 * **Session Management**: Secure token-based authentication
 * **Input Validation**: Protection against injection attacks
-* **Asset Naming Security** (v0.5.0): Cybersecurity-compliant naming enforcement
-* **File Integrity Verification** (v0.5.0): SHA-256 checksums for all uploads
-* **Metadata Validation** (v0.5.0): JSON schema validation for custom fields
+* **Asset Naming Validation**: Enforced naming pattern for assets
+* **File Integrity Verification**: SHA-256 checksums for all uploads
+* **Metadata Validation**: JSON schema validation for custom fields
 
 Data Protection
 ^^^^^^^^^^^^^^^
 
 **Encryption at Rest:**
 
-* Database encrypted with AES-256
-* Master password protects encryption keys
-* Configuration files encrypted before storage
-* Automatic encryption for all sensitive data
+* Configuration file content is encrypted with AES-256-GCM before it is stored in the database
+* Firmware files are encrypted with AES-256-GCM before they are written to disk
+* Vault secrets are encrypted with AES-256-GCM
+* Encryption keys are derived from user credentials
+* User passwords are stored as bcrypt hashes
+
+The SQLite database file itself is not encrypted as a whole. Asset names, metadata, audit entries, and other records are stored in plaintext. Protect the application data directory with operating-system permissions and full-disk encryption.
 
 **Encryption in Transit:**
 
-* Internal IPC communications secured
-* No network transmission in offline mode
-* Export files can be encrypted
-* Secure key derivation functions
+* Ferrocodex does not transmit data over the network
+* Communication between the user interface and the backend stays inside the application process
+* Export bundles carry the encrypted payloads; protect them in transit and at rest
 
 Access Control
 --------------
@@ -91,17 +93,17 @@ Session Security
 * **Session invalidation on logout**
 * **Activity monitoring**
 
-Asset Naming Security (v0.5.0)
--------------------------------
+Asset Naming Security
+---------------------
 
-Cybersecurity-Compliant Naming
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Naming Pattern
+^^^^^^^^^^^^^^
 
-Ferrocodex v0.5.0 enforces strict naming conventions to prevent security vulnerabilities:
+Ferrocodex enforces a strict naming pattern to prevent injection and path-handling vulnerabilities:
 
 **Naming Pattern Requirements:**
 
-.. code-block:: regex
+.. code-block:: text
 
    ^[A-Z0-9][A-Z0-9_-]{2,49}$
 
@@ -129,7 +131,7 @@ The following Windows reserved names are automatically blocked:
 * **Length Limits**: Maximum 255 characters enforced
 * **SHA-256 Verification**: Integrity checking for all uploads
 
-Metadata Security (v0.5.0)
+Metadata Security
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Field Validation:**
@@ -230,7 +232,7 @@ Backup and Recovery
 
 **Recovery Planning:**
 
-* Master password recovery process
+* Administrator account continuity (passwords cannot be recovered)
 * User account recovery
 * Configuration restoration
 * Audit trail preservation
@@ -264,7 +266,7 @@ If using Ferrocodex on connected systems:
 Identity Vault Security
 -----------------------
 
-The Identity Vault provides defense-in-depth security for credential management with multiple layers of protection.
+The Identity Vault protects credentials with encryption, access permissions, and audit logging.
 
 Vault Encryption Architecture
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -276,20 +278,19 @@ Vault Encryption Architecture
 
    *Vault encryption layers showing defense in depth*
 
-**Multi-Layer Encryption:**
+**Encryption Layers:**
 
-1. **Vault Creation**: Each vault gets a unique encryption key
-2. **Key Derivation**: Keys derived from master password using PBKDF2
-3. **Data Encryption**: All secrets encrypted with AES-256-GCM
-4. **Double Protection**: Vault data encrypted, then database encrypted
+1. **Per-Secret Keys**: Each secret is encrypted with a key specific to the vault and the user who stored it
+2. **Key Derivation**: Keys are derived from user credentials with PBKDF2
+3. **Data Encryption**: All secrets are encrypted with AES-256-GCM
+4. **Access Control**: Vault permissions are checked before any secret is decrypted
 
 **Encryption Details:**
 
 * **Algorithm**: AES-256 in GCM mode
 * **Key Size**: 256-bit encryption keys
-* **IV Generation**: Unique IV for each encryption operation
-* **Authentication**: GCM provides built-in authentication
-* **Key Rotation**: Automatic re-encryption on master password change
+* **Nonce Generation**: Unique random nonce for each encryption operation
+* **Authentication**: GCM provides built-in authentication of the ciphertext
 
 Password Security Features
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -324,13 +325,13 @@ Credential Rotation Security
 **Rotation Policies:**
 
 1. **By Asset Criticality**:
-   
+
    * Critical Assets: 30-day rotation
    * Standard Assets: 60-day rotation
    * Low-Risk Assets: 90-day rotation
 
 2. **Emergency Rotation**:
-   
+
    * Immediate rotation capability
    * Batch rotation for incidents
    * Documented reason required
@@ -351,14 +352,14 @@ Vault Access Control
 **Permission Model:**
 
 1. **Granular Permissions**:
-   
+
    * **Read**: View vault contents
    * **Write**: Modify secrets
    * **Export**: Include in bundles
    * **Share**: Grant permissions
 
 2. **Access Patterns**:
-   
+
    * Default deny principle
    * Explicit grant required
    * No permission inheritance
@@ -397,7 +398,7 @@ Export and Import Security
 **Export Security:**
 
 1. **Vault Data in Exports**:
-   
+
    * Optional inclusion
    * Additional encryption layer
    * Warning dialogs
@@ -405,7 +406,7 @@ Export and Import Security
    * Checksum verification
 
 2. **Secure Handling**:
-   
+
    * Encrypt export files
    * Secure transport methods
    * Limited distribution
@@ -426,7 +427,7 @@ Security Monitoring
 **Vault-Specific Monitoring:**
 
 1. **Access Monitoring**:
-   
+
    * Real-time access logs
    * Unusual access patterns
    * Failed access attempts
@@ -434,7 +435,7 @@ Security Monitoring
    * Export operations
 
 2. **Compliance Monitoring**:
-   
+
    * Rotation compliance
    * Password strength
    * Access reviews
@@ -455,7 +456,7 @@ Incident Response for Vaults
 **Credential Compromise:**
 
 1. **Immediate Actions**:
-   
+
    * Identify affected credentials
    * Emergency rotation
    * Access review
@@ -463,7 +464,7 @@ Incident Response for Vaults
    * Document incident
 
 2. **Investigation**:
-   
+
    * Review access logs
    * Check export history
    * Analyze permission changes
@@ -471,7 +472,7 @@ Incident Response for Vaults
    * Determine impact scope
 
 3. **Remediation**:
-   
+
    * Complete credential rotation
    * Update access controls
    * Security awareness training
@@ -484,7 +485,7 @@ Best Practices for Vault Security
 **Organizational Policies:**
 
 1. **Access Management**:
-   
+
    * Principle of least privilege
    * Regular access reviews
    * Time-limited permissions
@@ -492,7 +493,7 @@ Best Practices for Vault Security
    * Documented approval process
 
 2. **Password Policies**:
-   
+
    * Minimum complexity requirements
    * Rotation schedules by risk
    * No password sharing
@@ -500,7 +501,7 @@ Best Practices for Vault Security
    * Emergency rotation procedures
 
 3. **Operational Security**:
-   
+
    * Regular security training
    * Incident response drills
    * Compliance audits
@@ -510,7 +511,7 @@ Best Practices for Vault Security
 **Technical Controls:**
 
 1. **Preventive**:
-   
+
    * Strong encryption
    * Access controls
    * Password policies
@@ -518,15 +519,15 @@ Best Practices for Vault Security
    * Secure defaults
 
 2. **Detective**:
-   
-   * Comprehensive logging
+
+   * Logging of all operations
    * Real-time monitoring
    * Anomaly detection
    * Compliance tracking
    * Regular audits
 
 3. **Corrective**:
-   
+
    * Emergency rotation
    * Access revocation
    * Incident response
@@ -637,11 +638,11 @@ Monthly Tasks
 Security Contact
 ----------------
 
-For security-related questions or to report security issues during the alpha phase:
+Ferrocodex is intended for use in industrial environments, and security issues are treated accordingly.
 
-* Contact your Ferrocodex representative
-* Use designated security channels
-* Do not share details publicly
+* To report a vulnerability, email security@ferrocodex.com with details
+* Do not open public issues for vulnerabilities
+* General questions and non-sensitive bug reports can go to the `GitHub issue tracker <https://github.com/HillviewCap/ferrocodex/issues>`_
 * Document all communications
 
-Remember: Security is everyone's responsibility. Follow these practices to maintain the integrity of your industrial configuration management system.
+Security is everyone's responsibility. Follow these practices to maintain the integrity of your industrial configuration management system.

@@ -24,7 +24,7 @@ The application is built with Tauri 2.0, with a Rust backend and a React fronten
 - **Offline-first**: Fully functional without network access. Data is stored in a local SQLite database.
 - **Configuration versioning**: Branching, version history, and a promotion workflow from working versions to approved ("golden") configurations.
 - **Asset hierarchy**: Tree-based organisation of equipment with drag-and-drop, virtualised rendering for large datasets, and bulk import, export, and rename.
-- **Search**: SQLite FTS5 full-text search across assets and metadata, with saved searches and filter presets.
+- **Search**: Filter the asset tree by name, description, and type, and search vault credentials by name or description.
 - **Metadata schemas**: Dynamic, JSON Schema-validated metadata with field templates.
 - **Firmware management**: Firmware files stored alongside their configurations, with analysis and integrity checks.
 - **Identity vault**: Encrypted storage for equipment credentials, with password rotation, history, and per-user access permissions.
