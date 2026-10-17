@@ -1,4 +1,5 @@
 // Performance optimizations for large hierarchies
+import type { Key } from 'react';
 
 export interface PerformanceMetrics {
   treeSize: number;
@@ -59,7 +60,9 @@ export const memoizeTreeNode = <T>(fn: (node: T) => any) => {
     // Limit cache size to prevent memory leaks
     if (cache.size > 500) {
       const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        cache.delete(firstKey);
+      }
     }
     
     cache.set(key, result);
@@ -93,8 +96,8 @@ export interface FlatTreeNode {
 }
 
 export const flattenTree = (
-  nodes: any[], 
-  expandedKeys: Set<string | number>,
+  nodes: any[],
+  expandedKeys: Set<Key>,
   level: number = 0
 ): FlatTreeNode[] => {
   const result: FlatTreeNode[] = [];

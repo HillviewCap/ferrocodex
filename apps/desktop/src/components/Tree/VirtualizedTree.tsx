@@ -358,7 +358,7 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
       </div>
 
       {/* Performance Info in Development */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div style={{ 
           fontSize: '10px', 
           color: '#999', 

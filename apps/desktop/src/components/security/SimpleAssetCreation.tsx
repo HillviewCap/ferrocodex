@@ -176,18 +176,7 @@ export const SimpleAssetCreation: React.FC<SimpleAssetCreationProps> = ({
         name: finalValues.name.trim(),
         description: finalValues.description || '',
         asset_type: finalValues.asset_type,
-        parent_id: finalValues.parent_id || null,
-        manufacturer: '',
-        model: '',
-        serial_number: '',
-        firmware_version: '',
-        hardware_version: '',
-        installation_date: null,
-        last_maintenance_date: null,
-        location: '',
-        criticality: 'Low',
-        status: 'Operational',
-        metadata: {}
+        parent_id: finalValues.parent_id || null
       };
 
       const result = await invoke('create_asset', {

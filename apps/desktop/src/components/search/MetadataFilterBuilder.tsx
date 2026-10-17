@@ -294,7 +294,7 @@ const MetadataFilterBuilder: React.FC<FilterBuilderProps> = ({
               onChange={(value) => handleFilterChange(index, 'field_name', value)}
               showSearch
               filterOption={(input, option) =>
-                option?.children.toLowerCase().includes(input.toLowerCase())
+                String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
               }
             >
               {availableFields.map(field => (

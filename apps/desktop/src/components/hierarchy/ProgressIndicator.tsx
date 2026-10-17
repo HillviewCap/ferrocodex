@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Progress, Typography, Spin, Space, Tag } from 'antd';
+import { Progress, Typography, Spin, Space, Tag, Flex } from 'antd';
 import {
   LoadingOutlined,
   CheckCircleOutlined,
@@ -105,7 +105,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
               {progress.processed_items}/{progress.total_items}
             </Text>
           )}
-          <Tag color={statusConfig.color} size="small">
+          <Tag color={statusConfig.color}>
             {statusConfig.text}
           </Tag>
         </Space>
@@ -120,7 +120,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
     >
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {/* Status Header */}
-        <Space justify="space-between" style={{ width: '100%' }}>
+        <Flex justify="space-between" align="center" style={{ width: '100%' }}>
           <Space>
             <div style={{ color: statusConfig.color, fontSize: '16px' }}>
               {statusConfig.icon}
@@ -132,7 +132,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
               {Math.round(progressPercent)}%
             </Text>
           )}
-        </Space>
+        </Flex>
 
         {/* Progress Bar */}
         {progress && ['validating', 'processing'].includes(status) && (
@@ -150,7 +150,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         {/* Details */}
         {showDetails && progress && (
           <Space orientation="vertical" size={2} style={{ width: '100%' }}>
-            <Space justify="space-between" style={{ width: '100%' }}>
+            <Flex justify="space-between" align="center" style={{ width: '100%' }}>
               <Text style={{ fontSize: '12px', color: '#666' }}>
                 Processed: {progress.processed_items} / {progress.total_items}
               </Text>
@@ -159,7 +159,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                   Failed: {progress.failed_items}
                 </Text>
               )}
-            </Space>
+            </Flex>
 
             {progress.current_item && (
               <Text style={{ fontSize: '12px', color: '#666' }} ellipsis>
@@ -191,7 +191,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         )}
       </Space>
 
-      <style jsx>{`
+      <style>{`
         .progress-indicator {
           padding: 12px;
           border: 1px solid #f0f0f0;
@@ -265,25 +265,25 @@ export const ProgressIndicatorSkeleton: React.FC<{
       }}
     >
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-        <Space justify="space-between" style={{ width: '100%' }}>
+        <Flex justify="space-between" align="center" style={{ width: '100%' }}>
           <Space>
             <Spin size="small" />
-            <div style={{ 
-              width: '80px', 
-              height: '16px', 
+            <div style={{
+              width: '80px',
+              height: '16px',
               background: '#f0f0f0',
               borderRadius: '2px',
               animation: prefersReducedMotion ? 'none' : 'skeleton-pulse 1.5s ease-in-out infinite'
             }} />
           </Space>
-          <div style={{ 
-            width: '30px', 
-            height: '14px', 
+          <div style={{
+            width: '30px',
+            height: '14px',
             background: '#f0f0f0',
             borderRadius: '2px',
             animation: prefersReducedMotion ? 'none' : 'skeleton-pulse 1.5s ease-in-out infinite'
           }} />
-        </Space>
+        </Flex>
         
         <div style={{ 
           width: '100%', 
@@ -302,7 +302,7 @@ export const ProgressIndicatorSkeleton: React.FC<{
         }} />
       </Space>
 
-      <style jsx>{`
+      <style>{`
         @keyframes skeleton-pulse {
           0% { opacity: 1; }
           50% { opacity: 0.5; }

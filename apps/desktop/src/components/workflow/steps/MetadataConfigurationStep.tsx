@@ -131,16 +131,21 @@ export const MetadataConfigurationStep: React.FC<BaseStepProps> = ({
 
       <Spin spinning={isLoading}>
         <Card>
-          <DynamicMetadataForm
-            assetType={data.asset_type}
-            selectedSchemaId={localData.metadata_schema_id}
-            initialValues={localData.metadata_values}
-            onSchemaChange={handleSchemaChange}
-            onValuesChange={handleMetadataChange}
-            onValidationChange={handleFormValidation}
-            showSchemaSelector={true}
-            showTitle={false}
-          />
+          {localData.metadata_schema_id ? (
+            <DynamicMetadataForm
+              schemaId={localData.metadata_schema_id}
+              initialValues={localData.metadata_values}
+              onSubmit={handleMetadataChange}
+              showTitle={false}
+            />
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              title="No metadata schema selected"
+              description="Select a metadata schema to configure metadata for this asset."
+            />
+          )}
         </Card>
       </Spin>
 

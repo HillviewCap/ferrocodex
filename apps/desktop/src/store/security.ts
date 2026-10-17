@@ -31,6 +31,7 @@ interface SecurityState {
     endDate?: string;
     eventType?: string;
     severity?: 'info' | 'warning' | 'critical';
+    userId?: number;
   };
   
   // UI state

@@ -28,8 +28,12 @@ export interface EnhancedAssetTreeViewProps {
 }
 
 interface EnhancedAssetTreeDataNode extends DataNode {
+  title: React.ReactNode;
   asset: AssetHierarchy;
   isFolder: boolean;
+  draggable?: boolean;
+  'data-asset-id'?: number;
+  'data-drop-target-id'?: number;
 }
 
 export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
@@ -68,7 +72,6 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
                 assetName={asset.name}
                 assetType={asset.asset_type}
                 context={bulkSelectionContext}
-                size="small"
                 onClick={(e) => e.stopPropagation()}
               />
             )}
@@ -192,7 +195,6 @@ export const EnhancedAssetTreeView: React.FC<EnhancedAssetTreeViewProps> = ({
     onRightClick: handleRightClick,
     showIcon: true,
     blockNode: true,
-    loading,
     ...(allowDragDrop && {
       draggable: {
         icon: false,

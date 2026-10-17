@@ -7,7 +7,7 @@ interface AssetSelectionCheckboxProps {
   assetId: number;
   assetName?: string;
   assetType?: string;
-  context?: 'tree' | 'search';
+  context?: 'tree' | 'search' | 'manual';
   disabled?: boolean;
   className?: string;
   onClick?: (event: React.MouseEvent) => void;

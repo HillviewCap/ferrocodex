@@ -202,7 +202,7 @@ export interface SelectionManager {
   selectAsset: (assetId: number, context: 'tree' | 'search' | 'manual') => void;
   deselectAsset: (assetId: number) => void;
   toggleAsset: (assetId: number, context: 'tree' | 'search' | 'manual') => void;
-  selectAll: (assetIds: number[], context: 'tree' | 'search') => void;
+  selectAll: (assetIds: number[], context: 'tree' | 'search' | 'manual') => void;
   selectNone: () => void;
   invertSelection: (availableAssetIds: number[]) => void;
   selectRange: (fromId: number, toId: number, assetIds: number[]) => void;

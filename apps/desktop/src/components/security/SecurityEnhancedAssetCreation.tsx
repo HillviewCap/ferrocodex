@@ -118,6 +118,10 @@ export const SecurityEnhancedAssetCreation: React.FC<SecurityEnhancedAssetCreati
     },
   ];
 
+  const handleValidationChange = (result: SecurityValidationResult) => {
+    setValidationResult(result);
+  };
+
   const handleNext = async () => {
     try {
       if (currentStep === 0) {

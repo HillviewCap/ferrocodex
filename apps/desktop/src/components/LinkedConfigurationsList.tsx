@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Space, Tag, Tooltip, message } from 'antd';
 import { LinkOutlined, FileOutlined } from '@ant-design/icons';
-import { ConfigurationVersionInfo } from '../types/assets';
+import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
@@ -45,10 +45,13 @@ const LinkedConfigurationsList: React.FC<LinkedConfigurationsListProps> = ({
 
   const handleNavigateToConfig = () => {
     // Navigate to the asset's configuration history view
-    const asset = {
+    const asset: AssetInfo = {
       id: assetId,
       name: '', // These will be populated by the store
       description: '',
+      asset_type: 'Device',
+      parent_id: null,
+      sort_order: 0,
       created_by: 0,
       created_by_username: '',
       created_at: '',
