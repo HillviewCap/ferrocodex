@@ -219,10 +219,10 @@ const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
             }
           ]}
         >
-          <Input 
+          <Input
             placeholder="e.g., test-new-parameters, feature-improvements"
             autoFocus
-            addonBefore={<BranchesOutlined />}
+            prefix={<BranchesOutlined />}
           />
         </Form.Item>
 

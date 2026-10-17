@@ -29,7 +29,6 @@ import {
 import { TreePerformanceMonitor, PerformanceRecommendation } from '../../utils/treePerformance';
 
 const { Text, Title } = Typography;
-const { Panel } = Collapse;
 
 export interface PerformanceMonitorProps {
   monitor: TreePerformanceMonitor;
@@ -232,37 +231,45 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
 
         {/* Tree Statistics */}
         <Col span={24}>
-          <Collapse size="small" ghost>
-            <Panel header="Tree Statistics" key="stats">
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Statistic
-                    title="Tree Size"
-                    value={treeSize}
-                    suffix="nodes"
-                    styles={{ content: { fontSize: 14 } }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="Max Depth"
-                    value={maxDepth}
-                    suffix="levels"
-                    styles={{ content: { fontSize: 14 } }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="Cache Hit Rate"
-                    value={metrics.cacheHitRate * 100}
-                    precision={1}
-                    suffix="%"
-                    styles={{ content: { fontSize: 14 } }}
-                  />
-                </Col>
-              </Row>
-            </Panel>
-          </Collapse>
+          <Collapse
+            size="small"
+            ghost
+            items={[
+              {
+                key: 'stats',
+                label: 'Tree Statistics',
+                children: (
+                  <Row gutter={16}>
+                    <Col span={8}>
+                      <Statistic
+                        title="Tree Size"
+                        value={treeSize}
+                        suffix="nodes"
+                        styles={{ content: { fontSize: 14 } }}
+                      />
+                    </Col>
+                    <Col span={8}>
+                      <Statistic
+                        title="Max Depth"
+                        value={maxDepth}
+                        suffix="levels"
+                        styles={{ content: { fontSize: 14 } }}
+                      />
+                    </Col>
+                    <Col span={8}>
+                      <Statistic
+                        title="Cache Hit Rate"
+                        value={metrics.cacheHitRate * 100}
+                        precision={1}
+                        suffix="%"
+                        styles={{ content: { fontSize: 14 } }}
+                      />
+                    </Col>
+                  </Row>
+                ),
+              },
+            ]}
+          />
         </Col>
 
         {/* Recommendations */}
@@ -305,17 +312,25 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
 
         {/* Performance Tips */}
         <Col span={24}>
-          <Collapse size="small" ghost>
-            <Panel header="Performance Tips" key="tips">
-              <div style={{ fontSize: 11 }}>
-                <div>• Virtualization improves performance for trees with 100+ nodes</div>
-                <div>• Lazy loading reduces initial render time for deep trees</div>
-                <div>• Search debouncing prevents excessive re-renders</div>
-                <div>• Cache warming can improve perceived performance</div>
-                <div>• Target: &lt;16ms render time for 60fps experience</div>
-              </div>
-            </Panel>
-          </Collapse>
+          <Collapse
+            size="small"
+            ghost
+            items={[
+              {
+                key: 'tips',
+                label: 'Performance Tips',
+                children: (
+                  <div style={{ fontSize: 11 }}>
+                    <div>• Virtualization improves performance for trees with 100+ nodes</div>
+                    <div>• Lazy loading reduces initial render time for deep trees</div>
+                    <div>• Search debouncing prevents excessive re-renders</div>
+                    <div>• Cache warming can improve perceived performance</div>
+                    <div>• Target: &lt;16ms render time for 60fps experience</div>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </Col>
       </Row>
     </Card>

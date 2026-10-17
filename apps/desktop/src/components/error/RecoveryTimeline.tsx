@@ -13,7 +13,6 @@ import {
 } from '@ant-design/icons';
 
 const { Text } = Typography;
-const { Panel } = Collapse;
 
 export interface RecoveryStep {
   id: string;
@@ -159,13 +158,22 @@ const RecoveryTimeline: React.FC<RecoveryTimelineProps> = ({
         )}
         
         {showMetadata && step.metadata && Object.keys(step.metadata).length > 0 && (
-          <Collapse size="small" ghost style={{ marginTop: 8 }}>
-            <Panel header="Metadata" key="metadata">
-              <pre style={{ fontSize: '10px', margin: 0, backgroundColor: '#f5f5f5', padding: 4 }}>
-                {JSON.stringify(step.metadata, null, 2)}
-              </pre>
-            </Panel>
-          </Collapse>
+          <Collapse
+            size="small"
+            ghost
+            style={{ marginTop: 8 }}
+            items={[
+              {
+                key: 'metadata',
+                label: 'Metadata',
+                children: (
+                  <pre style={{ fontSize: '10px', margin: 0, backgroundColor: '#f5f5f5', padding: 4 }}>
+                    {JSON.stringify(step.metadata, null, 2)}
+                  </pre>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
     );

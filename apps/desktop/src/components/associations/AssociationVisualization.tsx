@@ -23,11 +23,11 @@ import {
   ExclamationCircleOutlined,
   SettingOutlined
 } from '@ant-design/icons';
+import type { DataNode } from 'antd/es/tree';
 import { AssociationInfo, HealthStatus } from '../../types/associations';
 import useAssociationStore from '../../store/associations';
 
 const { Title, Text } = Typography;
-const { TreeNode } = Tree;
 
 interface AssociationVisualizationProps {
   assetId?: number;
@@ -169,20 +169,57 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
     }
   };
 
-  const renderAssetNode = (node: AssetNode): React.ReactNode => {
+  const buildAssetNode = (node: AssetNode): DataNode | null => {
     const { configCount, firmwareCount, warningCount, errorCount, total } = getAssociationSummary(node.associations);
-    
+
     // Filter based on settings
     if (!settings.showEmptyAssets && total === 0 && node.type === 'device') {
       return null;
     }
 
     const hasIssues = errorCount > 0 || warningCount > 0;
-    
-    return (
-      <TreeNode
-        key={node.id.toString()}
-        title={
+
+    const childNodes = node.children
+      .map(child => buildAssetNode(child))
+      .filter((child): child is DataNode => child !== null);
+
+    // Individual file associations are listed as leaves under their device
+    const associationNodes: DataNode[] = node.type === 'device'
+      ? node.associations.map(association => ({
+          key: `assoc-${association.id}`,
+          title: (
+            <Space size="small">
+              <FileOutlined style={{
+                color: association.fileType === 'Configuration' ? '#52c41a' : '#1890ff'
+              }} />
+              <Text>{association.fileName}</Text>
+              <Tag
+                color={association.fileType === 'Configuration' ? 'green' : 'blue'}
+              >
+                {association.fileType}
+              </Tag>
+              {settings.showValidationStatus && association.validationStatus !== 'Passed' && (
+                <Tag
+                  color={association.validationStatus === 'Failed' ? 'red' : 'orange'}
+                >
+                  {association.validationStatus}
+                </Tag>
+              )}
+              <Text type="secondary" style={{ fontSize: '11px' }}>
+                Order: {association.associationOrder}
+              </Text>
+            </Space>
+          ),
+          selectable: false,
+          isLeaf: true,
+        }))
+      : [];
+
+    const children = [...childNodes, ...associationNodes];
+
+    return {
+        key: node.id.toString(),
+        title: (
           <Space size="small">
             {/* Asset Icon and Name */}
             {node.type === 'folder' ? (
@@ -247,46 +284,10 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
               <LinkOutlined style={{ color: '#52c41a', fontSize: '12px' }} />
             )}
           </Space>
-        }
-        selectable={interactive}
-      >
-        {node.children.map(child => renderAssetNode(child)).filter(Boolean)}
-        
-        {/* Render individual file associations if this is a device */}
-        {node.type === 'device' && node.associations.length > 0 && (
-          node.associations.map(association => (
-            <TreeNode
-              key={`assoc-${association.id}`}
-              title={
-                <Space size="small">
-                  <FileOutlined style={{ 
-                    color: association.fileType === 'Configuration' ? '#52c41a' : '#1890ff' 
-                  }} />
-                  <Text>{association.fileName}</Text>
-                  <Tag 
-                    color={association.fileType === 'Configuration' ? 'green' : 'blue'}
-                  >
-                    {association.fileType}
-                  </Tag>
-                  {settings.showValidationStatus && association.validationStatus !== 'Passed' && (
-                    <Tag 
-                      color={association.validationStatus === 'Failed' ? 'red' : 'orange'}
-                    >
-                      {association.validationStatus}
-                    </Tag>
-                  )}
-                  <Text type="secondary" style={{ fontSize: '11px' }}>
-                    Order: {association.associationOrder}
-                  </Text>
-                </Space>
-              }
-              selectable={false}
-              isLeaf
-            />
-          ))
-        )}
-      </TreeNode>
-    );
+        ),
+        selectable: interactive,
+        children: children.length > 0 ? children : undefined,
+    };
   };
 
   const handleNodeSelect = (selectedKeys: React.Key[]) => {
@@ -348,7 +349,7 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
           </Button>
         )
       }
-      size={compact ? 'small' : 'default'}
+      size={compact ? 'small' : 'medium'}
     >
       <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         {/* Settings Panel */}
@@ -397,16 +398,17 @@ const AssociationVisualization: React.FC<AssociationVisualizationProps> = ({
             expandedKeys={expandedKeys}
             onSelect={handleNodeSelect}
             onExpand={(expandedKeys) => setExpandedKeys(expandedKeys as string[])}
-            style={{ 
-              background: '#fafafa', 
-              padding: '16px', 
+            treeData={assetHierarchy
+              .map(node => buildAssetNode(node))
+              .filter((node): node is DataNode => node !== null)}
+            style={{
+              background: '#fafafa',
+              padding: '16px',
               borderRadius: '6px',
               maxHeight: compact ? '300px' : '600px',
               overflowY: 'auto'
             }}
-          >
-            {assetHierarchy.map(node => renderAssetNode(node)).filter(Boolean)}
-          </Tree>
+          />
         )}
 
         {/* Legend */}

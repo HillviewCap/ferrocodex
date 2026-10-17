@@ -102,10 +102,10 @@ const PasswordHistoryComponent: React.FC<PasswordHistoryProps> = ({
 
   const timelineItems = history.map((item, index) => ({
     color: isCurrentPassword(item) ? '#52c41a' : '#d9d9d9',
-    dot: isCurrentPassword(item) ? 
+    icon: isCurrentPassword(item) ? 
       <CheckCircleOutlined style={{ fontSize: '16px', color: '#52c41a' }} /> :
       <ClockCircleOutlined style={{ fontSize: '16px', color: '#d9d9d9' }} />,
-    children: (
+    content: (
       <Card 
         size="small" 
         style={{ 

@@ -37,7 +37,6 @@ import { AssetSearchResult, SearchResultsProps, SortField, MatchType } from '../
 import useSearchStore from '../../store/search';
 
 const { Text, Title, Paragraph } = Typography;
-const { Panel } = Collapse;
 const { Option } = Select;
 
 const SearchResultsList: React.FC<SearchResultsProps> = ({
@@ -350,8 +349,14 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
                 {/* Expanded Details */}
                 {isExpanded && showMetadataDetails && (
                   <div style={{ marginTop: 16 }}>
-                    <Collapse size="small">
-                      <Panel header="Metadata Details" key="metadata">
+                    <Collapse
+                      size="small"
+                      items={[
+                        {
+                          key: 'metadata',
+                          label: 'Metadata Details',
+                          children: (
+                            <>
                         <Descriptions
                           size="small"
                           column={1}
@@ -415,8 +420,11 @@ const SearchResultsList: React.FC<SearchResultsProps> = ({
                             </Space>
                           </div>
                         )}
-                      </Panel>
-                    </Collapse>
+                            </>
+                          ),
+                        },
+                      ]}
+                    />
                   </div>
                 )}
               </List.Item>

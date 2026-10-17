@@ -304,6 +304,7 @@ const WorkflowDashboard: React.FC<WorkflowDashboardProps> = ({
       <Table
         dataSource={activeSessions}
         columns={columns}
+        rowKey="id"
         size="small"
         pagination={false}
         scroll={{ y: 200 }}

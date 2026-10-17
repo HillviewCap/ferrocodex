@@ -304,7 +304,7 @@ export const showEnhancedErrorNotification = ({
   
   notification[notificationType]({
     key: notificationKey,
-    message: (
+    title: (
       <Space>
         {getSeverityIcon(errorInfo.severity)}
         <span>{errorInfo.severity} Error</span>

@@ -15,7 +15,6 @@ import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 
 const { Text, Title } = Typography;
-const { Panel } = Collapse;
 
 interface FileIntegrityDisplayProps {
   filePath: string;
@@ -333,13 +332,23 @@ const FileIntegrityDisplay: React.FC<FileIntegrityDisplayProps> = ({
         {renderProgressSection()}
 
         {showDetails && verificationState.result && (
-          <Collapse size="small" ghost>
-            <Panel header="Verification Details" key="details">
-              {renderFileInfoSection()}
-              {renderHashSection()}
-              {renderSecuritySection()}
-            </Panel>
-          </Collapse>
+          <Collapse
+            size="small"
+            ghost
+            items={[
+              {
+                key: 'details',
+                label: 'Verification Details',
+                children: (
+                  <>
+                    {renderFileInfoSection()}
+                    {renderHashSection()}
+                    {renderSecuritySection()}
+                  </>
+                ),
+              },
+            ]}
+          />
         )}
 
         {!showDetails && verificationState.result && (
