@@ -255,7 +255,7 @@ describe('DynamicMetadataForm', () => {
 
     // Check that initial values are populated
     expect(screen.getByDisplayValue('Existing Device')).toBeInTheDocument();
-    expect(document.querySelector('.ant-select-selection-item[title="HMI"]')).toBeInTheDocument();
+    expect(screen.getByTitle('HMI')).toBeInTheDocument();
     expect(screen.getByDisplayValue('10.0.0.1')).toBeInTheDocument();
     // InputNumber updates its displayed text asynchronously
     expect(await screen.findByDisplayValue('8080')).toBeInTheDocument();

@@ -36,7 +36,7 @@ vi.mock('antd', async () => {
 // Open the select found by its placeholder and click the option in the one open dropdown.
 const chooseOption = async (placeholder: string, optionText: string) => {
   const select = screen.getByText(placeholder).closest('.ant-select') as HTMLElement;
-  fireEvent.mouseDown(select.querySelector('.ant-select-selector')!);
+  fireEvent.mouseDown(within(select).getByRole('combobox'));
   const dropdown = await waitFor(() => {
     const open = document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
     expect(open).toHaveLength(1);

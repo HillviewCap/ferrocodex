@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FirmwareSelector from '../FirmwareSelector';
 import { message } from 'antd';
@@ -133,9 +133,9 @@ describe('FirmwareSelector', () => {
       });
     });
 
-    // Check that the select has a value
-    const selectElement = container.querySelector('.ant-select-selection-item');
-    expect(selectElement).toBeInTheDocument();
+    // The select shows the linked firmware's version
+    const select = screen.getByRole('combobox').closest('.ant-select') as HTMLElement;
+    expect(await within(select).findByText('1.0.0')).toBeInTheDocument();
   });
 
   it('should link firmware when a firmware is selected', async () => {
@@ -162,8 +162,7 @@ describe('FirmwareSelector', () => {
     });
 
     // Open dropdown
-    const selectSelector = container.querySelector('.ant-select-selector');
-    await user.click(selectSelector!);
+    await user.click(screen.getByRole('combobox'));
 
     // Select firmware
     await waitFor(() => {
@@ -248,8 +247,7 @@ describe('FirmwareSelector', () => {
     });
 
     // Open dropdown and select different firmware
-    const selectSelector = container.querySelector('.ant-select-selector');
-    await user.click(selectSelector!);
+    await user.click(screen.getByRole('combobox'));
     
     await waitFor(() => {
       expect(screen.getByText('2.0.0')).toBeInTheDocument();

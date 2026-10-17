@@ -27,7 +27,6 @@ import { invoke } from '@tauri-apps/api/core';
 
 const { Text, Title, Paragraph } = Typography;
 const { TextArea } = Input;
-const { Step } = Steps;
 
 interface PromoteToGoldenWizardProps {
   visible: boolean;
@@ -441,11 +440,11 @@ const PromoteToGoldenWizard: React.FC<PromoteToGoldenWizardProps> = ({
       closable={!loading}
     >
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <Steps current={currentStep} size="small">
-          {steps.map((step, index) => (
-            <Step key={index} title={step.title} icon={step.icon} />
-          ))}
-        </Steps>
+        <Steps
+          current={currentStep}
+          size="small"
+          items={steps.map(step => ({ title: step.title, icon: step.icon }))}
+        />
         
         <Divider style={{ margin: '12px 0' }} />
         

@@ -188,7 +188,7 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
   return (
     <Modal
       title="Import Configuration"
-      visible={visible}
+      open={visible}
       onCancel={handleCancel}
       footer={null}
       width={720}

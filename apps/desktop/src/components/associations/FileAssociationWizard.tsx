@@ -16,7 +16,6 @@ import AssociationReview from './AssociationReview';
 import { AssetInfo, AssociationType } from '../../types/associations';
 
 const { Title } = Typography;
-const { Step } = Steps;
 
 interface FileAssociationWizardProps {
   visible: boolean;
@@ -214,23 +213,12 @@ const FileAssociationWizard: React.FC<FileAssociationWizardProps> = ({
           current={wizardState?.currentStep || 0} 
           style={{ marginBottom: 32 }}
           size="small"
-        >
-          <Step 
-            title="Select Asset" 
-            description="Choose target asset"
-            status={getStepStatus(0)}
-          />
-          <Step 
-            title="Upload Files" 
-            description="Upload configuration/firmware files"
-            status={getStepStatus(1)}
-          />
-          <Step 
-            title="Review & Confirm" 
-            description="Review associations and complete"
-            status={getStepStatus(2)}
-          />
-        </Steps>
+          items={[
+            { title: 'Select Asset', content: 'Choose target asset', status: getStepStatus(0) },
+            { title: 'Upload Files', content: 'Upload configuration/firmware files', status: getStepStatus(1) },
+            { title: 'Review & Confirm', content: 'Review associations and complete', status: getStepStatus(2) },
+          ]}
+        />
 
         {/* Error Display */}
         {error && (
