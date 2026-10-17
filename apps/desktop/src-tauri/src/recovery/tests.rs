@@ -1,5 +1,10 @@
 use super::*;
 use crate::vault::{VaultRepository, IdentityVault, VaultInfo, VaultSecret, CreateVaultRequest, AddSecretRequest, SecretType};
+use crate::vault::{
+    UpdateVaultSecretRequest, DeleteVaultSecretRequest, GrantVaultAccessRequest, RevokeVaultAccessRequest,
+    CheckVaultAccessRequest, VaultAccessInfo, VaultPermission, AccessType, AccessResult, VaultAccessLog,
+    CreatePermissionRequest, ApprovePermissionRequest, DenyPermissionRequest, PermissionRequest,
+};
 use crate::{
     configurations::{ConfigurationVersion, ConfigurationStatus},
     firmware::{FirmwareVersion, FirmwareStatus},
@@ -397,6 +402,78 @@ use tempfile::TempDir;
         }
         
         fn get_all_tags(&self) -> Result<Vec<String>> {
+            unimplemented!()
+        }
+        
+        fn update_vault_secret(&self, _request: UpdateVaultSecretRequest) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn delete_vault_secret(&self, _request: DeleteVaultSecretRequest) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn grant_vault_access(&self, _request: GrantVaultAccessRequest) -> Result<VaultPermission> {
+            unimplemented!()
+        }
+        
+        fn revoke_vault_access(&self, _request: RevokeVaultAccessRequest) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn check_vault_access(&self, _request: CheckVaultAccessRequest) -> Result<VaultAccessInfo> {
+            unimplemented!()
+        }
+        
+        fn get_user_vault_permissions(&self, _user_id: i64, _vault_id: Option<i64>) -> Result<Vec<VaultPermission>> {
+            unimplemented!()
+        }
+        
+        fn get_vault_permissions(&self, _vault_id: i64) -> Result<Vec<VaultPermission>> {
+            unimplemented!()
+        }
+        
+        fn update_permission_expiry(&self, _permission_id: i64, _new_expires_at: Option<String>) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn expire_permissions(&self) -> Result<u64> {
+            unimplemented!()
+        }
+        
+        fn log_vault_access(&self, _user_id: i64, _vault_id: i64, _access_type: AccessType, _result: AccessResult, _error_message: Option<String>) -> Result<()> {
+            unimplemented!()
+        }
+        
+        fn get_vault_access_log(&self, _vault_id: i64, _limit: Option<i32>) -> Result<Vec<VaultAccessLog>> {
+            unimplemented!()
+        }
+        
+        fn get_user_access_log(&self, _user_id: i64, _limit: Option<i32>) -> Result<Vec<VaultAccessLog>> {
+            unimplemented!()
+        }
+        
+        fn create_permission_request(&self, _request: CreatePermissionRequest, _user_id: i64) -> Result<PermissionRequest> {
+            unimplemented!()
+        }
+        
+        fn approve_permission_request(&self, _request: ApprovePermissionRequest) -> Result<PermissionRequest> {
+            unimplemented!()
+        }
+        
+        fn deny_permission_request(&self, _request: DenyPermissionRequest) -> Result<PermissionRequest> {
+            unimplemented!()
+        }
+        
+        fn get_pending_permission_requests(&self, _admin_id: i64) -> Result<Vec<PermissionRequest>> {
+            unimplemented!()
+        }
+        
+        fn get_user_permission_requests(&self, _user_id: i64) -> Result<Vec<PermissionRequest>> {
+            unimplemented!()
+        }
+        
+        fn expire_permission_requests(&self) -> Result<u64> {
             unimplemented!()
         }
     }

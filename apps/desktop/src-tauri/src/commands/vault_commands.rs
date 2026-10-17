@@ -1098,25 +1098,65 @@ pub async fn delete_standalone_credential(
         }
     };
 
+    drop(session_manager_guard);
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let vault_repo = SqliteVaultRepository::new(db.get_connection());
+    let db = db_guard.as_ref()
+        .ok_or("Database not initialized")?;
+    let conn = db.get_connection();
+    let vault_repo = SqliteVaultRepository::new(conn);
 
-            match vault_repo.delete_standalone_credential(credential_id, session.user_id) {
-                Ok(_) => {
-                    info!("Deleted standalone credential {} by {}", credential_id, session.username);
-                    Ok("Credential deleted successfully".to_string())
-                }
-                Err(e) => {
-                    error!("Failed to delete standalone credential: {}", e);
-                    Err(format!("Failed to delete credential: {}", e))
-                }
-            }
-        }
-        None => Err("Database not initialized".to_string()),
+    let credential = vault_repo.get_standalone_credential(credential_id)
+        .map_err(|e| format!("Failed to load credential: {}", e))?
+        .ok_or("Credential not found")?
+        .credential;
+
+    // Only administrators or the credential's creator may delete it
+    if session.role != UserRole::Administrator && credential.created_by != session.user_id {
+        warn!("User {} denied deleting standalone credential {} owned by user {}",
+              session.username, credential_id, credential.created_by);
+        return Err("Only administrators or the credential's creator can delete it".to_string());
     }
+
+    // The credential's history rows cascade-delete with it, so the audit log is the
+    // durable record. Delete and audit atomically so neither happens without the other.
+    let tx = conn.unchecked_transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    vault_repo.delete_standalone_credential(credential_id, session.user_id)
+        .map_err(|e| {
+            error!("Failed to delete standalone credential: {}", e);
+            format!("Failed to delete credential: {}", e)
+        })?;
+
+    let audit_repo = SqliteAuditRepository::new(conn);
+    let audit_event = AuditEventRequest {
+        event_type: AuditEventType::VaultSecretDeleted,
+        user_id: Some(session.user_id),
+        username: Some(session.username.clone()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: Some(credential.created_by),
+        target_username: None,
+        description: format!("Deleted standalone credential '{}'", credential.name),
+        metadata: Some(serde_json::json!({
+            "standalone_credential_id": credential_id,
+            "name": credential.name,
+            "credential_type": credential.credential_type.to_string(),
+            "created_by": credential.created_by,
+        }).to_string()),
+        ip_address: None,
+        user_agent: None,
+    };
+    audit_repo.log_event(&audit_event)
+        .map_err(|e| format!("Failed to record audit event: {}", e))?;
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit credential deletion: {}", e))?;
+
+    info!("Deleted standalone credential {} by {}", credential_id, session.username);
+    Ok("Credential deleted successfully".to_string())
 }
 
 #[tauri::command]
@@ -1897,5 +1937,111 @@ pub async fn update_rotation_policy(
                 .map_err(|e| format!("Failed to update rotation policy: {}", e))
         }
         None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vault::{CreateStandaloneCredentialRequest, SecretType};
+    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+    use tauri::Manager;
+
+    const ADMIN_ID: i64 = 1;
+    const OWNER_ID: i64 = 2;
+    const OTHER_ID: i64 = 3;
+
+    /// Mock app with an admin, two engineers, and a credential owned by OWNER_ID.
+    /// Returns the app, the credential id, and session tokens for (admin, owner, other).
+    fn setup_test_app() -> (tauri::App<MockRuntime>, i64, [String; 3]) {
+        let db = Database::new(":memory:".into()).unwrap();
+        let conn = db.get_connection();
+        conn.execute_batch(
+            r#"
+            INSERT INTO users (id, username, password_hash, role) VALUES (1, 'admin', 'hash', 'Administrator');
+            INSERT INTO users (id, username, password_hash, role) VALUES (2, 'owner', 'hash', 'Engineer');
+            INSERT INTO users (id, username, password_hash, role) VALUES (3, 'other', 'hash', 'Engineer');
+            "#,
+        ).unwrap();
+
+        let credential = SqliteVaultRepository::new(conn)
+            .create_standalone_credential(CreateStandaloneCredentialRequest {
+                name: "PLC Login".to_string(),
+                description: "".to_string(),
+                credential_type: SecretType::Password,
+                category_id: None,
+                value: "secret".to_string(),
+                tags: None,
+                created_by: OWNER_ID,
+            })
+            .unwrap();
+
+        let session_manager = SessionManager::new();
+        let user_repo = SqliteUserRepository::new(conn);
+        let tokens = [ADMIN_ID, OWNER_ID, OTHER_ID].map(|id| {
+            let user = user_repo.find_by_id(id).unwrap().unwrap();
+            session_manager.create_session(&user).unwrap().token
+        });
+
+        let app = mock_builder()
+            .manage(DatabaseState::new(Some(db)))
+            .manage(SessionManagerState::new(session_manager))
+            .build(mock_context(noop_assets()))
+            .unwrap();
+
+        (app, credential.id, tokens)
+    }
+
+    fn credential_exists(app: &tauri::App<MockRuntime>, credential_id: i64) -> bool {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteVaultRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_standalone_credential(credential_id)
+            .unwrap()
+            .is_some()
+    }
+
+    fn deletion_audit_events(app: &tauri::App<MockRuntime>) -> Vec<crate::audit::AuditEvent> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteAuditRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_events_by_type(&AuditEventType::VaultSecretDeleted)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_owner_can_delete_credential_and_it_is_audited() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let result = delete_standalone_credential(owner_token, credential_id, app.state(), app.state()).await;
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert!(!credential_exists(&app, credential_id));
+        let events = deletion_audit_events(&app);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].user_id, Some(OWNER_ID));
+        assert!(events[0].description.contains("PLC Login"));
+    }
+
+    #[tokio::test]
+    async fn test_admin_can_delete_another_users_credential() {
+        let (app, credential_id, [admin_token, _, _]) = setup_test_app();
+
+        let result = delete_standalone_credential(admin_token, credential_id, app.state(), app.state()).await;
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert!(!credential_exists(&app, credential_id));
+        assert_eq!(deletion_audit_events(&app).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_non_owner_engineer_cannot_delete_credential() {
+        let (app, credential_id, [_, _, other_token]) = setup_test_app();
+
+        let result = delete_standalone_credential(other_token, credential_id, app.state(), app.state()).await;
+
+        assert!(result.is_err());
+        assert!(credential_exists(&app, credential_id));
+        assert!(deletion_audit_events(&app).is_empty());
     }
 }

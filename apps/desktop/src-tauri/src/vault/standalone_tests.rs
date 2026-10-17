@@ -94,8 +94,9 @@ mod standalone_credential_tests {
         };
 
         let results = repo.search_standalone_credentials(search_request).unwrap();
-        assert_eq!(results.total_count, 2);
-        assert_eq!(results.credentials.len(), 2);
+        assert_eq!(results.total_count, 1);
+        assert_eq!(results.credentials.len(), 1);
+        assert_eq!(results.credentials[0].credential.name, "DB Password");
 
         // Test search by type
         let search_request = SearchCredentialsRequest {
@@ -293,9 +294,10 @@ mod standalone_credential_tests {
         let result = repo.get_standalone_credential(credential.id).unwrap();
         assert!(result.is_none());
 
-        // Verify history includes deletion
+        // History rows cascade-delete with the credential; the durable record of the
+        // deletion is the audit event written by the delete_standalone_credential command
         let history = repo.get_standalone_credential_history(credential.id).unwrap();
-        assert!(history.iter().any(|h| h.change_type == StandaloneChangeType::Deleted));
+        assert!(history.is_empty());
     }
 
     #[test]

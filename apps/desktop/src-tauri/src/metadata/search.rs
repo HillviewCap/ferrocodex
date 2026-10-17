@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{info, debug};
@@ -186,7 +186,20 @@ impl<'a> SqliteMetadataSearchRepository<'a> {
     /// Initialize search-related database structures including FTS5 indexes
     pub fn initialize_search_schema(&self) -> Result<()> {
         info!("Initializing metadata search schema with FTS5 support");
-        
+
+        // Older databases created the FTS table without contentless_unindexed, so its
+        // asset_id/schema_id columns read back as NULL and text search never matched.
+        // Drop it so it's recreated below and repopulated by populate_fts_index().
+        let existing_fts_sql: Option<String> = self.conn.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'asset_metadata_fts'",
+            [],
+            |row| row.get(0),
+        ).optional()?;
+        if existing_fts_sql.is_some_and(|sql| !sql.contains("contentless_unindexed")) {
+            info!("Recreating asset_metadata_fts with stored UNINDEXED columns");
+            self.conn.execute_batch("DROP TABLE asset_metadata_fts;")?;
+        }
+
         self.conn.execute_batch(
             r#"
             -- Enable FTS5 extension
@@ -201,7 +214,8 @@ impl<'a> SqliteMetadataSearchRepository<'a> {
                 field_values,
                 combined_content,
                 content='',
-                contentless_delete=1
+                contentless_delete=1,
+                contentless_unindexed=1
             );
 
             -- Create search analytics table
@@ -445,6 +459,16 @@ impl<'a> SqliteMetadataSearchRepository<'a> {
         Ok(path)
     }
 
+    /// Convert free-form user text into an FTS5 query that matches every term literally.
+    /// Each whitespace-separated term becomes a quoted string (embedded quotes doubled),
+    /// so characters like `.`, `-`, `:` and `*` are not parsed as FTS5 syntax.
+    fn to_fts5_query(text: &str) -> String {
+        text.split_whitespace()
+            .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     /// Record search analytics
     fn record_search_analytics(&self, query: &SearchQuery, result_count: usize, response_time_ms: i64, user_id: Option<i64>) -> Result<()> {
         let query_text = query.text_query.as_deref().unwrap_or("");
@@ -486,7 +510,7 @@ impl<'a> MetadataSearchRepository for SqliteMetadataSearchRepository<'a> {
                         WHERE asset_metadata_fts MATCH ?1
                     )".to_string()
                 );
-                params.push(Box::new(text_query.clone()));
+                params.push(Box::new(Self::to_fts5_query(text_query)));
             }
         }
         
@@ -1118,6 +1142,56 @@ mod tests {
     }
 
     #[test]
+    fn test_legacy_fts_table_is_recreated() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteMetadataSearchRepository::new(&conn);
+
+        // Recreate the FTS table as older versions did, without contentless_unindexed.
+        // SQLite leaves the _content shadow table behind when dropping a contentless_unindexed table.
+        conn.execute_batch(
+            r#"
+            DROP TABLE asset_metadata_fts;
+            DROP TABLE asset_metadata_fts_content;
+            CREATE VIRTUAL TABLE asset_metadata_fts USING fts5(
+                asset_id UNINDEXED,
+                schema_id UNINDEXED,
+                schema_name UNINDEXED,
+                field_names,
+                field_values,
+                combined_content,
+                content='',
+                contentless_delete=1
+            );
+            INSERT INTO asset_metadata_schemas (id, name, description, schema_json, created_by)
+                VALUES (1, 'PLC Schema', 'Test schema', '{}', 1);
+            "#,
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO asset_metadata (asset_id, schema_id, metadata_values_json, schema_version)
+             VALUES (1, 1, ?, 1)",
+            [&json!({"ip_address": "192.168.1.100"}).to_string()],
+        ).unwrap();
+
+        // Re-initializing upgrades the table and repopulates it from asset_metadata
+        repo.initialize_search_schema().unwrap();
+
+        let sql: String = conn.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'asset_metadata_fts'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(sql.contains("contentless_unindexed"));
+
+        let query = SearchQuery {
+            text_query: Some("192.168.1.100".to_string()),
+            ..Default::default()
+        };
+        let results = repo.search_assets_by_metadata(query).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_name, "PLC-001");
+    }
+
+    #[test]
     fn test_basic_metadata_search() {
         let (_temp_file, conn) = setup_test_db();
         let repo = SqliteMetadataSearchRepository::new(&conn);
@@ -1144,6 +1218,15 @@ mod tests {
         let results = repo.search_assets_by_metadata(query).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].asset_name, "PLC-001");
+
+        // FTS5 operator characters in user input are matched literally, not parsed
+        for text in ["S7-1200", "Siemens \"S7", "model:Siemens", "S7*"] {
+            let query = SearchQuery {
+                text_query: Some(text.to_string()),
+                ..Default::default()
+            };
+            assert!(repo.search_assets_by_metadata(query).is_ok(), "Search for '{}' should not error", text);
+        }
     }
 
     #[test]

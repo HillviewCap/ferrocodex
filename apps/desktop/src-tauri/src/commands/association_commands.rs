@@ -354,98 +354,54 @@ pub async fn get_associations_by_validation_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
-    use tempfile::NamedTempFile;
-    use std::sync::Arc;
+    use crate::users::{SqliteUserRepository, UserRepository};
+    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+    use tauri::Manager;
 
     fn setup_test_db() -> Database {
-        let temp_file = NamedTempFile::new().unwrap();
-        let db = Database::new(temp_file.path().to_str().unwrap()).unwrap();
-        
-        // Initialize schema
-        let conn = db.get_connection().unwrap();
-        
-        // Create required tables for associations
+        let db = Database::new(":memory:".into()).unwrap();
+        let conn = db.get_connection();
+
+        // Seed a user, an asset, and one configuration and firmware file to associate
         conn.execute_batch(
             r#"
-            CREATE TABLE users (
-                id INTEGER PRIMARY KEY,
-                username TEXT NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1
-            );
-            
-            CREATE TABLE assets (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT,
-                asset_type TEXT NOT NULL DEFAULT 'device',
-                parent_id INTEGER,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                created_by INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (created_by) REFERENCES users(id),
-                FOREIGN KEY (parent_id) REFERENCES assets(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE configuration_versions (
-                id INTEGER PRIMARY KEY,
-                asset_id INTEGER NOT NULL,
-                version_number TEXT NOT NULL,
-                file_name TEXT NOT NULL,
-                file_content BLOB NOT NULL,
-                file_size INTEGER NOT NULL,
-                content_hash TEXT NOT NULL,
-                author INTEGER NOT NULL,
-                notes TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author) REFERENCES users(id)
-            );
-
-            CREATE TABLE firmware_versions (
-                id INTEGER PRIMARY KEY,
-                asset_id INTEGER NOT NULL,
-                author_id INTEGER NOT NULL,
-                version TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'Draft',
-                file_path TEXT NOT NULL,
-                file_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
-                FOREIGN KEY (author_id) REFERENCES users(id)
-            );
-            
             INSERT INTO users (id, username, password_hash, role) VALUES (1, 'testuser', 'hash', 'Engineer');
             INSERT INTO assets (id, name, description, created_by) VALUES (1, 'Test Asset', 'Test Description', 1);
-            INSERT INTO configuration_versions (id, asset_id, version_number, file_name, file_content, file_size, content_hash, author) 
+            INSERT INTO configuration_versions (id, asset_id, version_number, file_name, file_content, file_size, content_hash, author)
                 VALUES (1, 1, 'v1', 'config.json', 'test', 4, 'hash1', 1);
-            INSERT INTO firmware_versions (id, asset_id, author_id, version, file_path, file_hash, file_size) 
-                VALUES (1, 1, 1, '1.0.0', '/test/path', 'hash2', 1024);
+            INSERT INTO firmware_versions (id, asset_id, author_id, version, status, file_path, file_hash, file_size)
+                VALUES (1, 1, 1, '1.0.0', 'Draft', '/test/path', 'hash2', 1024);
             "#,
         ).unwrap();
-        
-        // Initialize associations schema
-        let repo = SqliteAssociationRepository::new(&conn);
+
+        // Associations schema isn't part of Database::initialize_schema()
+        let repo = SqliteAssociationRepository::new(conn);
         repo.initialize_schema().unwrap();
-        
+
         db
+    }
+
+    /// Builds a mock Tauri app managing the database and a session manager with an active session.
+    fn setup_test_app() -> tauri::App<MockRuntime> {
+        let db = setup_test_db();
+
+        let session_manager = SessionManager::new();
+        let user = SqliteUserRepository::new(db.get_connection())
+            .find_by_id(1)
+            .unwrap()
+            .unwrap();
+        session_manager.create_session(&user).unwrap();
+
+        mock_builder()
+            .manage(DatabaseState::new(Some(db)))
+            .manage(SessionManagerState::new(session_manager))
+            .build(mock_context(noop_assets()))
+            .unwrap()
     }
 
     #[tokio::test]
     async fn test_create_file_association_command() {
-        let db = setup_test_db();
-        let db_state = Mutex::new(Some(db));
-        
-        // Create a mock session manager with active session
-        let mut session_manager = SessionManager::new();
-        session_manager.create_session(1, "test_role".to_string()).unwrap();
-        let session_state = Mutex::new(session_manager);
+        let app = setup_test_app();
 
         let request = CreateAssociationRequest {
             asset_id: 1,
@@ -457,8 +413,8 @@ mod tests {
 
         let result = create_file_association(
             request,
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            app.state(),
+            app.state(),
         ).await;
 
         assert!(result.is_ok());
@@ -470,13 +426,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_asset_file_associations_command() {
-        let db = setup_test_db();
-        let db_state = Mutex::new(Some(db));
-        
-        // Create a mock session manager with active session
-        let mut session_manager = SessionManager::new();
-        session_manager.create_session(1, "test_role".to_string()).unwrap();
-        let session_state = Mutex::new(session_manager);
+        let app = setup_test_app();
 
         // First create an association
         let request = CreateAssociationRequest {
@@ -489,15 +439,15 @@ mod tests {
 
         create_file_association(
             request,
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            app.state(),
+            app.state(),
         ).await.unwrap();
 
         // Now get associations
         let result = get_asset_file_associations(
             1,
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            app.state(),
+            app.state(),
         ).await;
 
         assert!(result.is_ok());
@@ -508,13 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_search_associations_command() {
-        let db = setup_test_db();
-        let db_state = Mutex::new(Some(db));
-        
-        // Create a mock session manager with active session
-        let mut session_manager = SessionManager::new();
-        session_manager.create_session(1, "test_role".to_string()).unwrap();
-        let session_state = Mutex::new(session_manager);
+        let app = setup_test_app();
 
         // First create an association
         let request = CreateAssociationRequest {
@@ -527,16 +471,16 @@ mod tests {
 
         create_file_association(
             request,
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            app.state(),
+            app.state(),
         ).await.unwrap();
 
         // Search associations
         let result = search_associations(
             "Test".to_string(),
-            Some("Configuration".to_string()),
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            Some("configuration".to_string()),
+            app.state(),
+            app.state(),
         ).await;
 
         assert!(result.is_ok());
@@ -546,18 +490,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_health_status_command() {
-        let db = setup_test_db();
-        let db_state = Mutex::new(Some(db));
-        
-        // Create a mock session manager with active session
-        let mut session_manager = SessionManager::new();
-        session_manager.create_session(1, "test_role".to_string()).unwrap();
-        let session_state = Mutex::new(session_manager);
+        let app = setup_test_app();
 
         let result = get_association_health_status(
             1,
-            tauri::State::from(&db_state),
-            tauri::State::from(&session_state)
+            app.state(),
+            app.state(),
         ).await;
 
         assert!(result.is_ok());

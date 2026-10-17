@@ -228,15 +228,16 @@ impl ErrorClassificationEngine {
             return RecoveryStrategy::ManualRecoverable;
         }
         
+        // Message indicators take precedence over the domain/severity fallbacks
+        // below, so explicit user-fixable or transient errors aren't escalated.
+        
         // Admin recovery indicators
         if message_lower.contains("permission denied") ||
            message_lower.contains("access denied") ||
            message_lower.contains("authorization") ||
            message_lower.contains("administrator") ||
            message_lower.contains("configuration error") ||
-           message_lower.contains("database connection") ||
-           (*domain == ErrorDomain::Auth && *severity == ErrorSeverity::High) ||
-           (*domain == ErrorDomain::System && *severity != ErrorSeverity::Low) {
+           message_lower.contains("database connection") {
             return RecoveryStrategy::AdminRecoverable;
         }
         
@@ -246,9 +247,7 @@ impl ErrorClassificationEngine {
            message_lower.contains("validation failed") ||
            message_lower.contains("invalid input") ||
            message_lower.contains("missing required") ||
-           message_lower.contains("format error") ||
-           (*domain == ErrorDomain::UI) ||
-           (*domain == ErrorDomain::Auth && message_lower.contains("password")) {
+           message_lower.contains("format error") {
             return RecoveryStrategy::UserRecoverable;
         }
         
@@ -257,8 +256,22 @@ impl ErrorClassificationEngine {
            message_lower.contains("retry") ||
            message_lower.contains("temporary") ||
            message_lower.contains("transient") ||
-           message_lower.contains("network") ||
-           (*severity == ErrorSeverity::Low && *domain != ErrorDomain::Auth) {
+           message_lower.contains("network") {
+            return RecoveryStrategy::AutoRecoverable;
+        }
+        
+        // Domain and severity fallbacks
+        if (*domain == ErrorDomain::Auth && *severity == ErrorSeverity::High) ||
+           (*domain == ErrorDomain::System && *severity != ErrorSeverity::Low) {
+            return RecoveryStrategy::AdminRecoverable;
+        }
+        
+        if (*domain == ErrorDomain::UI) ||
+           (*domain == ErrorDomain::Auth && message_lower.contains("password")) {
+            return RecoveryStrategy::UserRecoverable;
+        }
+        
+        if *severity == ErrorSeverity::Low && *domain != ErrorDomain::Auth {
             return RecoveryStrategy::AutoRecoverable;
         }
         

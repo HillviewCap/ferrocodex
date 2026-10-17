@@ -706,6 +706,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "".to_string(),
             description: "Test".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
         assert!(repo.create_asset(request).is_err());
@@ -724,6 +726,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "A".repeat(101),
             description: "Test".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
         assert!(repo.create_asset(request).is_err());
@@ -737,12 +741,16 @@ mod tests {
         let request1 = CreateAssetRequest {
             name: "PLC-Line5".to_string(),
             description: "First PLC".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
         let request2 = CreateAssetRequest {
             name: "PLC-Line5".to_string(),
             description: "Second PLC".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -758,6 +766,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "Test Asset".to_string(),
             description: "Test Description".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -777,11 +787,15 @@ mod tests {
         let request1 = CreateAssetRequest {
             name: "Asset1".to_string(),
             description: "Description1".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
         let request2 = CreateAssetRequest {
             name: "Asset2".to_string(),
             description: "Description2".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -800,6 +814,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "Test Asset".to_string(),
             description: "Test Description".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -818,6 +834,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "Original Name".to_string(),
             description: "Original Description".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -840,6 +858,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "Test Asset".to_string(),
             description: "Test Description".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 
@@ -858,6 +878,8 @@ mod tests {
         let request = CreateAssetRequest {
             name: "Test Asset".to_string(),
             description: "Test Description".to_string(),
+            asset_type: AssetType::Device,
+            parent_id: None,
             created_by: 1,
         };
 

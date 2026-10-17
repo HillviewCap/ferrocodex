@@ -355,17 +355,15 @@ mod tests {
     use crate::assets::AssetService;
     use crate::audit::AuditService;
     use crate::auth::AuthService;
-    use tempfile::NamedTempFile;
 
     async fn create_test_handler() -> WorkflowHandler {
-        let temp_file = NamedTempFile::new().unwrap();
         let db_manager = Arc::new(Mutex::new(
-            DatabaseManager::new(temp_file.path().to_str().unwrap()).unwrap()
+            DatabaseManager::new(":memory:".into()).unwrap()
         ));
         
         let asset_service = Arc::new(AssetService::new(db_manager.clone()));
         let audit_service = Arc::new(AuditService::new(db_manager.clone()));
-        let auth_service = Arc::new(AuthService::new(db_manager.clone()));
+        let auth_service = Arc::new(AuthService::new());
         
         let workflow_service = Arc::new(WorkflowService::new(
             db_manager,

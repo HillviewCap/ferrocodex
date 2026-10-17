@@ -943,10 +943,10 @@ mod tests {
         assert!((stats.average_time_us - 3000.0).abs() < 0.1);
         assert!(stats.meets_requirement); // All under 5ms
         
-        // Add a slow check
+        // Add a slow check: (2 + 3 + 4 + 12) / 4 = 5.25ms average
         {
             let mut state = circuit.state.lock().unwrap();
-            state.track_state_check_time(8000); // 8ms
+            state.track_state_check_time(12000); // 12ms
         }
         
         assert!(!circuit.meets_performance_requirement()); // Now exceeds 5ms average

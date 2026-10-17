@@ -212,7 +212,7 @@ impl OfflineCacheManager {
         };
         
         // Check if data is expired
-        if (now - metadata.cached_at) > metadata.ttl_seconds {
+        if (now - metadata.cached_at) >= metadata.ttl_seconds {
             // Data is expired, remove it
             self.remove(key)?;
             return Ok(None);
@@ -273,7 +273,7 @@ impl OfflineCacheManager {
             .as_secs();
         
         let expired_count = metadata_map.values()
-            .filter(|m| (now - m.cached_at) > m.ttl_seconds)
+            .filter(|m| (now - m.cached_at) >= m.ttl_seconds)
             .count();
         
         let total_accesses: u64 = metadata_map.values()
@@ -301,7 +301,7 @@ impl OfflineCacheManager {
         let mut metadata_map = self.metadata.lock().unwrap();
         
         let expired_keys: Vec<String> = metadata_map.iter()
-            .filter(|(_, meta)| (now - meta.cached_at) > meta.ttl_seconds)
+            .filter(|(_, meta)| (now - meta.cached_at) >= meta.ttl_seconds)
             .map(|(key, _)| key.clone())
             .collect();
         

@@ -602,7 +602,7 @@ impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
             return Ok(existing);
         }
 
-        updates.push("updated_at = CURRENT_TIMESTAMP");
+        // asset_metadata_schemas has no updated_at column
         params.push(Box::new(schema_id));
 
         let query = format!(
@@ -1187,7 +1187,7 @@ mod tests {
         assert_eq!(created_metadata.schema_id, schema_id);
 
         // Test getting asset metadata
-        let asset_metadata = repo.get_asset_metadata(1).unwrap();
+        let asset_metadata = AssetMetadataRepository::get_asset_metadata(&repo, 1).unwrap();
         assert_eq!(asset_metadata.len(), 1);
 
         // Test getting specific metadata by schema
@@ -1198,7 +1198,7 @@ mod tests {
         let mut updated_metadata = created_metadata.clone();
         updated_metadata.metadata_values_json = json!({"ip_address": "192.168.1.101"}).to_string();
         
-        let result = repo.update_asset_metadata(updated_metadata).unwrap();
+        let result = AssetMetadataRepository::update_asset_metadata(&repo, updated_metadata).unwrap();
         assert!(result.metadata_values_json.contains("192.168.1.101"));
     }
 }

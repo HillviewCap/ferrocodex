@@ -348,9 +348,25 @@ impl FileSecurityValidator {
         Ok(issues)
     }
 
+    /// Reject paths containing parent-directory components.
+    /// Splits on both separators so Windows-style paths are caught on every platform.
+    pub fn check_path(&self, file_path: &str) -> Result<(), SecurityError> {
+        if file_path.split(['/', '\\']).any(|component| component == "..") {
+            error!("Path traversal attempt detected: {}", file_path);
+            return Err(SecurityError::PathTraversalAttempt {
+                path: file_path.to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
     /// Comprehensive file security scan
     pub fn scan_file(&self, file_path: &str) -> Result<Vec<String>, SecurityError> {
         let mut all_issues = Vec::new();
+
+        // Validate the path before touching the filesystem
+        self.check_path(file_path)?;
 
         // Check file size
         self.check_file_size(file_path)?;
@@ -361,13 +377,6 @@ impl FileSecurityValidator {
         // Check file content
         let content_issues = self.check_file_content(file_path)?;
         all_issues.extend(content_issues);
-
-        // Additional path validation
-        if file_path.contains("..") {
-            return Err(SecurityError::PathTraversalAttempt {
-                path: file_path.to_string(),
-            });
-        }
 
         info!("File security scan completed: {} ({} issues)", file_path, all_issues.len());
         Ok(all_issues)
@@ -548,6 +557,17 @@ mod tests {
         } else {
             panic!("Expected PathTraversalAttempt error");
         }
+
+        // Windows-style separators and embedded parent components are rejected too
+        for path in ["..\\..\\windows\\system.ini", "configs/../../secret.cfg"] {
+            assert!(matches!(
+                validator.check_path(path),
+                Err(SecurityError::PathTraversalAttempt { .. })
+            ), "Path '{}' should be rejected", path);
+        }
+
+        // Dots inside a file name are not traversal
+        assert!(validator.check_path("configs/backup..cfg").is_ok());
     }
 
     #[test]

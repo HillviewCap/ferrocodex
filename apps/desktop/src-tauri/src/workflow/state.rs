@@ -179,7 +179,7 @@ impl WorkflowStateManager {
             .await?;
 
         // Create new session
-        let session = super::models::WorkflowSession::new(workflow_id.to_string(), user_id);
+        let session = crate::workflow::WorkflowSession::new(workflow_id.to_string(), user_id);
 
         // Add to active state
         self.add_session(session, workflow_state.clone()).await?;
@@ -361,17 +361,15 @@ mod tests {
     use crate::assets::AssetService;
     use crate::audit::AuditService;
     use crate::auth::AuthService;
-    use tempfile::NamedTempFile;
 
     async fn create_test_state_manager() -> WorkflowStateManager {
-        let temp_file = NamedTempFile::new().unwrap();
         let db_manager = Arc::new(Mutex::new(
-            DatabaseManager::new(temp_file.path().to_str().unwrap()).unwrap()
+            DatabaseManager::new(":memory:".into()).unwrap()
         ));
         
         let asset_service = Arc::new(AssetService::new(db_manager.clone()));
         let audit_service = Arc::new(AuditService::new(db_manager.clone()));
-        let auth_service = Arc::new(AuthService::new(db_manager.clone()));
+        let auth_service = Arc::new(AuthService::new());
         
         let workflow_service = Arc::new(WorkflowService::new(
             db_manager,
@@ -387,10 +385,10 @@ mod tests {
     async fn test_session_management() {
         let state_manager = create_test_state_manager().await;
         
-        let session = super::models::WorkflowSession::new("workflow-1".to_string(), 1);
+        let session = crate::workflow::WorkflowSession::new("workflow-1".to_string(), 1);
         let state = super::WorkflowState::new(
             "workflow-1".to_string(),
-            super::WorkflowType::AssetCreation,
+            crate::workflow::WorkflowType::AssetCreation,
             1,
             None,
         );
@@ -415,13 +413,13 @@ mod tests {
         
         let mut state = super::WorkflowState::new(
             "workflow-1".to_string(),
-            super::WorkflowType::AssetCreation,
+            crate::workflow::WorkflowType::AssetCreation,
             1,
             None,
         );
 
         // Add initial state
-        let session = super::models::WorkflowSession::new("workflow-1".to_string(), 1);
+        let session = crate::workflow::WorkflowSession::new("workflow-1".to_string(), 1);
         state_manager.add_session(session, state.clone()).await.unwrap();
 
         // Update step data

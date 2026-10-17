@@ -172,8 +172,10 @@ impl PasswordStrengthAnalyzer {
             feedback.push("Avoid keyboard patterns like 'qwerty'".to_string());
         }
         
-        // Cap score at 100
-        score = score.min(100);
+        // The components above total at most 75 points; scale to the 0-100 range
+        // the thresholds below (and the frontend) use, rounding to nearest
+        score = (score * 100 + 37) / 75;
+        score = score.clamp(0, 100);
         
         // Add positive feedback for strong passwords
         if score >= 80 {
