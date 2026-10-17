@@ -5,7 +5,8 @@ use std::collections::HashMap;
 // Epic 5 import - temporarily disabled
 // use crate::error_handling::{RetryStrategy, CircuitBreakerConfig};
 
-// Temporary placeholder types for disabled Epic 5 modules
+// Temporary placeholder types for disabled Epic 5 modules.
+// Preset values mirror crate::error_handling::{RetryStrategy, CircuitBreakerConfig}.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryStrategy {
     pub max_attempts: u32,
@@ -27,17 +28,17 @@ impl RetryStrategy {
     pub fn aggressive() -> Self {
         Self {
             max_attempts: 5,
-            base_delay_ms: 100,
-            max_delay_ms: 5000,
+            base_delay_ms: 50,
+            max_delay_ms: 10000,
             enabled: true,
         }
     }
     
     pub fn conservative() -> Self {
         Self {
-            max_attempts: 3,
-            base_delay_ms: 500,
-            max_delay_ms: 10000,
+            max_attempts: 2,
+            base_delay_ms: 200,
+            max_delay_ms: 2000,
             enabled: true,
         }
     }
@@ -55,7 +56,12 @@ impl RetryStrategy {
 
 impl Default for RetryStrategy {
     fn default() -> Self {
-        Self::conservative()
+        Self {
+            max_attempts: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10000,
+            enabled: true,
+        }
     }
 }
 
@@ -85,24 +91,24 @@ impl CircuitBreakerConfig {
 
     pub fn aggressive() -> Self {
         Self {
-            failure_threshold: 3,
+            failure_threshold: 10,
             timeout_ms: 5000,
             reset_timeout_ms: 30000,
-            success_threshold: 2,
-            half_open_max_calls: 2,
-            sliding_window_size: 5,
+            success_threshold: 5,
+            half_open_max_calls: 10,
+            sliding_window_size: 20,
             enabled: true,
         }
     }
     
     pub fn conservative() -> Self {
         Self {
-            failure_threshold: 5,
-            timeout_ms: 10000,
+            failure_threshold: 3,
+            timeout_ms: 30000,
             reset_timeout_ms: 60000,
-            success_threshold: 3,
+            success_threshold: 2,
             half_open_max_calls: 3,
-            sliding_window_size: 10,
+            sliding_window_size: 5,
             enabled: true,
         }
     }
@@ -123,7 +129,15 @@ impl CircuitBreakerConfig {
 
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
-        Self::conservative()
+        Self {
+            failure_threshold: 5,
+            timeout_ms: 10000,
+            reset_timeout_ms: 60000,
+            success_threshold: 3,
+            half_open_max_calls: 3,
+            sliding_window_size: 10,
+            enabled: true,
+        }
     }
 }
 

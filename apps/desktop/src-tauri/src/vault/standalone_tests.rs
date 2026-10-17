@@ -94,8 +94,9 @@ mod standalone_credential_tests {
         };
 
         let results = repo.search_standalone_credentials(search_request).unwrap();
-        assert_eq!(results.total_count, 2);
-        assert_eq!(results.credentials.len(), 2);
+        assert_eq!(results.total_count, 1);
+        assert_eq!(results.credentials.len(), 1);
+        assert_eq!(results.credentials[0].credential.name, "DB Password");
 
         // Test search by type
         let search_request = SearchCredentialsRequest {
