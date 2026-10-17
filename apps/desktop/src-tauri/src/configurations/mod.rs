@@ -257,7 +257,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
 
     fn generate_next_version_number(&self, asset_id: i64) -> Result<String> {
         let mut stmt = self.conn.prepare(
-            "SELECT version_number FROM configuration_versions WHERE asset_id = ?1 ORDER BY created_at DESC LIMIT 1"
+            "SELECT version_number FROM configuration_versions WHERE asset_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1"
         )?;
 
         let result = stmt.query_row([asset_id], |row| row.get::<_, String>(0));
@@ -406,7 +406,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
 
     fn get_latest_version_number(&self, asset_id: i64) -> Result<Option<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT version_number FROM configuration_versions WHERE asset_id = ?1 ORDER BY created_at DESC LIMIT 1"
+            "SELECT version_number FROM configuration_versions WHERE asset_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1"
         )?;
 
         let result = stmt.query_row([asset_id], |row| row.get::<_, String>(0));
@@ -471,7 +471,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
              FROM configuration_status_history csh
              JOIN users u ON csh.changed_by = u.id
              WHERE csh.version_id = ?1
-             ORDER BY csh.created_at DESC"
+             ORDER BY csh.created_at DESC, csh.id DESC"
         )?;
 
         let history_iter = stmt.query_map([version_id], Self::row_to_status_change_record)?;
@@ -742,7 +742,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT old_status FROM configuration_status_history 
              WHERE version_id = ?1 AND new_status = 'Archived' 
-             ORDER BY created_at DESC LIMIT 1"
+             ORDER BY created_at DESC, id DESC LIMIT 1"
         )?;
         
         let previous_status_result = stmt.query_row([version_id], |row| {
@@ -1589,16 +1589,53 @@ mod tests {
         // Verify status history
         let history = repo.get_configuration_status_history(config.id).unwrap();
         assert_eq!(history.len(), 3); // Draft->Silver, Silver->Archived, Archived->Silver
-        // history[2] is most recent: Archived->Silver (restore)
-        assert_eq!(history[2].old_status.as_ref().unwrap(), "Archived");
-        assert_eq!(history[2].new_status, "Silver");
-        assert_eq!(history[2].change_reason.as_ref().unwrap(), "Test restore");
+        // Newest first, even when all three share a created_at second
+        // history[0] is most recent: Archived->Silver (restore)
+        assert_eq!(history[0].old_status.as_ref().unwrap(), "Archived");
+        assert_eq!(history[0].new_status, "Silver");
+        assert_eq!(history[0].change_reason.as_ref().unwrap(), "Test restore");
         // history[1] is Silver->Archived (archive)
         assert_eq!(history[1].old_status.as_ref().unwrap(), "Silver");
         assert_eq!(history[1].new_status, "Archived");
-        // history[0] is Draft->Silver (initial status change)
-        assert_eq!(history[0].old_status.as_ref().unwrap(), "Draft");
-        assert_eq!(history[0].new_status, "Silver");
+        // history[2] is Draft->Silver (initial status change)
+        assert_eq!(history[2].old_status.as_ref().unwrap(), "Draft");
+        assert_eq!(history[2].new_status, "Silver");
+    }
+
+    #[test]
+    fn test_status_history_orders_same_second_entries_newest_first() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteConfigurationRepository::new(&conn);
+
+        let config = repo.store_configuration(CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "config.json".to_string(),
+            file_content: b"{}".to_vec(),
+            author: 1,
+            notes: "Test config".to_string(),
+        }).unwrap();
+        repo.update_configuration_status(config.id, ConfigurationStatus::Silver, 1, None).unwrap();
+        repo.archive_version(config.id, 1, None).unwrap();
+
+        // created_at has one-second resolution; force a tie so only the id can order the rows
+        conn.execute(
+            "UPDATE configuration_status_history SET created_at = '2024-01-01 00:00:00' WHERE version_id = ?1",
+            [config.id],
+        ).unwrap();
+
+        let history = repo.get_configuration_status_history(config.id).unwrap();
+        let transitions: Vec<_> = history.iter()
+            .map(|h| (h.old_status.clone().unwrap_or_default(), h.new_status.clone()))
+            .collect();
+        assert_eq!(transitions, vec![
+            ("Silver".to_string(), "Archived".to_string()),
+            ("Draft".to_string(), "Silver".to_string()),
+        ]);
+
+        // Restoring uses the newest archive entry, so it returns to Silver
+        repo.restore_version(config.id, 1, None).unwrap();
+        let versions = repo.get_configuration_versions(1).unwrap();
+        assert_eq!(versions.iter().find(|v| v.id == config.id).unwrap().status, "Silver");
     }
 
     #[test]
