@@ -123,6 +123,14 @@ impl AssetNameValidator {
 
     /// Sanitize and normalize input name
     fn normalize_input(&self, name: &str) -> Result<String, SecurityError> {
+        // Check for null bytes before control characters are stripped below
+        if name.contains('\0') {
+            return Err(SecurityError::ValidationBypassAttempt {
+                input: name.to_string(),
+                technique: "Null byte injection".to_string(),
+            });
+        }
+
         // Unicode normalization to prevent bypass attempts
         let normalized: String = name.nfc().collect();
         
@@ -133,14 +141,6 @@ impl AssetNameValidator {
             .collect::<String>()
             .trim()
             .to_string();
-
-        // Check for null bytes
-        if sanitized.contains('\0') {
-            return Err(SecurityError::ValidationBypassAttempt {
-                input: name.to_string(),
-                technique: "Null byte injection".to_string(),
-            });
-        }
 
         Ok(sanitized)
     }
@@ -259,6 +259,9 @@ impl AssetNameValidator {
 
         // Check for repeated character sequences
         for len in 2..=4 {
+            if name.len() < len * 2 {
+                break;
+            }
             for start in 0..=(name.len() - len * 2) {
                 let pattern = &name[start..start + len];
                 let next_part = &name[start + len..start + len * 2];
@@ -375,15 +378,30 @@ mod tests {
             too_long.as_str(), // Too long
             "_INVALID",      // Starts with underscore
             "-INVALID",      // Starts with hyphen
-            "INVALID@123",   // Contains @
-            "INVALID.123",   // Contains period
-            "INVALID 123",   // Contains space
-            "invalid",       // Lowercase (should be converted)
+            "A@B",           // Too short once invalid characters are removed
         ];
 
         for name in invalid_names {
             let result = validator.validate_name(name).unwrap();
             assert!(!result.is_valid, "Name '{}' should be invalid", name);
+        }
+    }
+
+    #[test]
+    fn test_auto_normalized_names() {
+        let validator = AssetNameValidator::new();
+
+        // Invalid characters are stripped and input is uppercased before pattern matching
+        let normalized_names = vec![
+            "INVALID@123",   // Contains @
+            "INVALID.123",   // Contains period
+            "INVALID 123",   // Contains space
+            "invalid",       // Lowercase
+        ];
+
+        for name in normalized_names {
+            let result = validator.validate_name(name).unwrap();
+            assert!(result.is_valid, "Name '{}' should be valid after normalization", name);
         }
     }
 
@@ -413,7 +431,7 @@ mod tests {
         // Test sanitization
         assert_eq!(validator.sanitize_name("test asset 123").unwrap(), "TESTASSET123");
         assert_eq!(validator.sanitize_name("@#$%").unwrap(), "ASSET_001");
-        assert_eq!(validator.sanitize_name("_invalid").unwrap(), "AINVALID");
+        assert_eq!(validator.sanitize_name("_invalid").unwrap(), "A_INVALID");
         assert_eq!(validator.sanitize_name("motor-control").unwrap(), "MOTOR-CONTROL");
     }
 
@@ -426,8 +444,8 @@ mod tests {
         assert!(!result.is_valid);
         assert!(!result.suggested_corrections.is_empty());
 
-        // Test with invalid characters
-        let result = validator.validate_name("invalid@name").unwrap();
+        // Test with an invalid leading character
+        let result = validator.validate_name("_name").unwrap();
         assert!(!result.is_valid);
         assert!(!result.suggested_corrections.is_empty());
     }

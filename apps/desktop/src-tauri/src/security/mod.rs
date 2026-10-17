@@ -183,8 +183,11 @@ impl SecurityValidator {
     /// Comprehensive file security validation
     pub fn validate_file_upload(&self, file_path: &str) -> Result<FileIntegrityResult, SecurityError> {
         info!("Validating file upload: {}", file_path);
+
+        // Reject traversal before the file is hashed or read
+        self.file_security_validator.check_path(file_path)?;
         
-        // Validate filename first
+        // Validate filename
         let filename = Path::new(file_path)
             .file_name()
             .and_then(|name| name.to_str())

@@ -602,7 +602,7 @@ impl<'a> MetadataRepository for SqliteMetadataRepository<'a> {
             return Ok(existing);
         }
 
-        updates.push("updated_at = CURRENT_TIMESTAMP");
+        // asset_metadata_schemas has no updated_at column
         params.push(Box::new(schema_id));
 
         let query = format!(
