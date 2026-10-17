@@ -110,8 +110,8 @@ impl RetryStrategy {
         let capped_delay = base_delay.min(self.max_delay_ms as f64);
         
         // Add jitter to prevent thundering herd
-        let mut rng = thread_rng();
-        let jitter = rng.gen_range(-self.jitter_factor..=self.jitter_factor);
+        let mut rng = rand::rng();
+        let jitter = rng.random_range(-self.jitter_factor..=self.jitter_factor);
         let jittered_delay = capped_delay * (1.0 + jitter);
         
         let final_delay = jittered_delay.max(0.0) as u64;

@@ -27,23 +27,17 @@ for (const [file, pattern] of regexEdits) {
   writeFileSync(file, text.replace(pattern, `$1${next}$2`));
 }
 
-// Lockfiles are machine-formatted JSON, so a parse/stringify round trip is lossless.
-const lockEdits = [
-  ['package-lock.json', ['', 'apps/desktop']],
-  ['apps/desktop/package-lock.json', ['']],
-];
-
-for (const [file, packageKeys] of lockEdits) {
-  const lock = JSON.parse(readFileSync(file, 'utf8'));
-  lock.version = next;
-  for (const key of packageKeys) {
-    if (!lock.packages?.[key]) {
-      throw new Error(`Missing packages["${key}"] in ${file}`);
-    }
-    lock.packages[key].version = next;
+// The lockfile is machine-formatted JSON, so a parse/stringify round trip is lossless.
+const lockFile = 'package-lock.json';
+const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
+lock.version = next;
+for (const key of ['', 'apps/desktop']) {
+  if (!lock.packages?.[key]) {
+    throw new Error(`Missing packages["${key}"] in ${lockFile}`);
   }
-  writeFileSync(file, JSON.stringify(lock, null, 2) + '\n');
+  lock.packages[key].version = next;
 }
+writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
 
 console.log(`Bumped version ${current} -> ${next}`);
 if (process.env.GITHUB_OUTPUT) {

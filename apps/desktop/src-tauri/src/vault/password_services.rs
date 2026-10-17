@@ -1,7 +1,6 @@
 use anyhow::Result;
 use bcrypt::{hash, DEFAULT_COST};
-use rand::thread_rng;
-use rand::seq::SliceRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 
 use super::{GeneratePasswordRequest, PasswordStrength, PasswordPolicy};
 
@@ -46,7 +45,7 @@ impl PasswordGenerator {
         }
         
         let charset_chars: Vec<char> = charset.chars().collect();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         
         // Ensure minimum length
         if request.length < 8 {

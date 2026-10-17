@@ -7,25 +7,10 @@ version: 2
 updates:
   # Frontend dependencies (npm)
   - package-ecosystem: "npm"
-    directory: "/" # Root package.json for workspaces
+    directory: "/" # Root package.json and lockfile cover the apps/desktop workspace
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "deps"
-      prefix-development: "deps-dev"
-    labels:
-      - "dependencies"
-      - "frontend"
-
-  # Desktop app dependencies (npm)
-  - package-ecosystem: "npm"
-    directory: "/apps/desktop"
-    schedule:
-      interval: "weekly"
-      day: "monday" 
       time: "09:00"
     open-pull-requests-limit: 5
     commit-message:

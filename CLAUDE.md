@@ -10,7 +10,7 @@ Ferrocodex is an offline-first OT (Operational Technology) configuration managem
 
 ```bash
 # From root
-npm install
+npm install            # always from root; the root package-lock.json is the only lockfile
 npm run dev            # turbo → vite dev server only (port 1420, strictPort)
 npm run build          # turbo → vite build
 npm run test           # turbo → runs build first (turbo.json dependsOn), then vitest
@@ -54,7 +54,7 @@ There is no linter configured: `npm run lint` resolves to a turbo task that no p
 
 - The version string is duplicated in `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`.
 - Pushing a `v*` tag runs `release.yml`. It uses `tauri-action` to build Windows, macOS (arm64 and x64), and Linux, and creates a **draft** GitHub release.
-- When a push to `main` contains a Dependabot-authored commit, `post-dependabot-bump.yml` runs `.github/scripts/bump-version.mjs`. The script bumps the patch version in all four files plus both `package-lock.json` files and `Cargo.lock`. The workflow then commits, tags, and pushes, which triggers a release. It pushes with the `RELEASE_TOKEN` secret (an admin PAT), because `GITHUB_TOKEN` can't get past branch protection and its tag pushes don't trigger other workflows.
+- When a push to `main` contains a Dependabot-authored commit, `post-dependabot-bump.yml` runs `.github/scripts/bump-version.mjs`. The script bumps the patch version in all four files plus `package-lock.json` and `Cargo.lock`. The workflow then commits, tags, and pushes, which triggers a release. It pushes with the `RELEASE_TOKEN` secret (an admin PAT), because `GITHUB_TOKEN` can't get past branch protection and its tag pushes don't trigger other workflows.
 
 ## Other Repo Contents
 
