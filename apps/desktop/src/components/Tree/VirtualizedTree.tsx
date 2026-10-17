@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { FixedSizeList as List } from 'react-window';
+import { List, useListRef, type RowComponentProps } from 'react-window';
 import { Typography, Tooltip, Input, Empty } from 'antd';
 import { 
   FolderOutlined, 
@@ -42,6 +42,138 @@ interface FlatTreeItem {
 // Stable fallback so a null hierarchyData doesn't produce a new array each render
 const EMPTY_HIERARCHY: AssetHierarchy[] = [];
 
+interface TreeRowProps {
+  items: FlatTreeItem[];
+  selectedAssetId?: number | null;
+  onSelect?: (asset: AssetHierarchy) => void;
+  onToggleExpand: (assetId: number, isExpanded: boolean) => void;
+}
+
+// Row renderer for react-window's List. It lives at module level because List wraps
+// rowComponent in memo() keyed on its identity; a component recreated on every render
+// would remount every row. Per-render data reaches it through rowProps instead.
+const TreeRow = ({
+  index,
+  style,
+  items,
+  selectedAssetId,
+  onSelect,
+  onToggleExpand,
+}: RowComponentProps<TreeRowProps>) => {
+  const item = items[index];
+  if (!item) return null;
+
+  const { asset, level, isExpanded, hasChildren } = item;
+  const isSelected = selectedAssetId === asset.id;
+  const isFolder = asset.asset_type === 'Folder';
+  const indent = level * 20;
+
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasChildren) {
+      onToggleExpand(asset.id, isExpanded);
+    }
+  };
+
+  const handleSelect = () => {
+    onSelect?.(asset);
+  };
+
+  return (
+    <div
+      style={{
+        ...style,
+        display: 'flex',
+        alignItems: 'center',
+        paddingLeft: 8 + indent,
+        paddingRight: 8,
+        backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
+        borderLeft: isSelected ? '3px solid #1890ff' : '3px solid transparent',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s ease',
+      }}
+      onClick={handleSelect}
+      onMouseEnter={(e) => {
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = '#f5f5f5';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }
+      }}
+      role="treeitem"
+      aria-expanded={hasChildren ? isExpanded : undefined}
+      aria-selected={isSelected}
+      aria-level={level + 1}
+      tabIndex={-1}
+    >
+      {/* Expand/Collapse Button */}
+      <div
+        style={{
+          width: 16,
+          height: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 4,
+          cursor: hasChildren ? 'pointer' : 'default',
+        }}
+        onClick={hasChildren ? handleToggleExpand : undefined}
+      >
+        {hasChildren ? (
+          isExpanded ? (
+            <DownOutlined style={{ fontSize: 10, color: '#666' }} />
+          ) : (
+            <RightOutlined style={{ fontSize: 10, color: '#666' }} />
+          )
+        ) : (
+          <span style={{ width: 10 }} />
+        )}
+      </div>
+
+      {/* Asset Icon */}
+      <div style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
+        {isFolder ? (
+          isExpanded ? (
+            <FolderOpenOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+          ) : (
+            <FolderOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+          )
+        ) : (
+          <ToolOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+        )}
+      </div>
+
+      {/* Asset Name */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <Tooltip title={asset.description || asset.name} placement="topLeft">
+          <Text
+            strong={isFolder}
+            style={{
+              color: isSelected ? '#1890ff' : isFolder ? '#262626' : '#595959',
+              fontSize: 14,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {asset.name}
+          </Text>
+        </Tooltip>
+      </div>
+
+      {/* Item Count for Folders */}
+      {isFolder && asset.children.length > 0 && (
+        <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+          ({asset.children.length})
+        </Text>
+      )}
+    </div>
+  );
+};
+
 const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
   hierarchyData,
   onAssetSelect,
@@ -58,7 +190,7 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [filteredItems, setFilteredItems] = useState<FlatTreeItem[]>([]);
   
-  const listRef = useRef<List>(null);
+  const listRef = useListRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const {
@@ -103,127 +235,16 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
     setFilteredItems(processedItems);
   }, [processedItems]);
 
-  // Tree item renderer for virtualization
-  const TreeItemRenderer = useCallback(({ index, style }: { index: number; style: any }) => {
-    const item = filteredItems[index];
-    if (!item) return null;
-
-    const { asset, level, isExpanded, hasChildren } = item;
-    const isSelected = selectedAssetId === asset.id;
-    const isFolder = asset.asset_type === 'Folder';
-    const indent = level * 20;
-
-    const handleToggleExpand = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (hasChildren) {
-        const newExpandedKeys = new Set(expandedKeys);
-        if (isExpanded) {
-          newExpandedKeys.delete(asset.id);
-        } else {
-          newExpandedKeys.add(asset.id);
-        }
-        setExpandedKeys(newExpandedKeys);
-      }
-    };
-
-    const handleSelect = () => {
-      onAssetSelect?.(asset);
-    };
-
-    return (
-      <div
-        style={{
-          ...style,
-          display: 'flex',
-          alignItems: 'center',
-          paddingLeft: 8 + indent,
-          paddingRight: 8,
-          backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
-          borderLeft: isSelected ? '3px solid #1890ff' : '3px solid transparent',
-          cursor: 'pointer',
-          transition: 'background-color 0.2s ease',
-        }}
-        onClick={handleSelect}
-        onMouseEnter={(e) => {
-          if (!isSelected) {
-            e.currentTarget.style.backgroundColor = '#f5f5f5';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isSelected) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
-        role="treeitem"
-        aria-expanded={hasChildren ? isExpanded : undefined}
-        aria-selected={isSelected}
-        aria-level={level + 1}
-        tabIndex={-1}
-      >
-        {/* Expand/Collapse Button */}
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: 4,
-            cursor: hasChildren ? 'pointer' : 'default',
-          }}
-          onClick={hasChildren ? handleToggleExpand : undefined}
-        >
-          {hasChildren ? (
-            isExpanded ? (
-              <DownOutlined style={{ fontSize: 10, color: '#666' }} />
-            ) : (
-              <RightOutlined style={{ fontSize: 10, color: '#666' }} />
-            )
-          ) : (
-            <span style={{ width: 10 }} />
-          )}
-        </div>
-
-        {/* Asset Icon */}
-        <div style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
-          {isFolder ? (
-            isExpanded ? (
-              <FolderOpenOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-            ) : (
-              <FolderOutlined style={{ color: '#1890ff', fontSize: 16 }} />
-            )
-          ) : (
-            <ToolOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-          )}
-        </div>
-
-        {/* Asset Name */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <Tooltip title={asset.description || asset.name} placement="topLeft">
-            <Text
-              strong={isFolder}
-              style={{
-                color: isSelected ? '#1890ff' : isFolder ? '#262626' : '#595959',
-                fontSize: 14,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {asset.name}
-            </Text>
-          </Tooltip>
-        </div>
-
-        {/* Item Count for Folders */}
-        {isFolder && asset.children.length > 0 && (
-          <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-            ({asset.children.length})
-          </Text>
-        )}
-      </div>
-    );
-  }, [filteredItems, selectedAssetId, expandedKeys, onAssetSelect]);
+  // Expand/collapse a node; passed to rows through rowProps
+  const toggleExpand = useCallback((assetId: number, isExpanded: boolean) => {
+    const newExpandedKeys = new Set(expandedKeys);
+    if (isExpanded) {
+      newExpandedKeys.delete(assetId);
+    } else {
+      newExpandedKeys.add(assetId);
+    }
+    setExpandedKeys(newExpandedKeys);
+  }, [expandedKeys]);
 
   // Handle search
   const handleSearch = useCallback((value: string) => {
@@ -244,7 +265,7 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
         const nextIndex = Math.min(currentIndex + 1, filteredItems.length - 1);
         if (nextIndex >= 0) {
           onAssetSelect?.(filteredItems[nextIndex].asset);
-          listRef.current?.scrollToItem(nextIndex, 'smart');
+          listRef.current?.scrollToRow({ index: nextIndex, align: 'smart' });
         }
         break;
         
@@ -253,7 +274,7 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
         const prevIndex = Math.max(currentIndex - 1, 0);
         if (prevIndex >= 0 && currentIndex > 0) {
           onAssetSelect?.(filteredItems[prevIndex].asset);
-          listRef.current?.scrollToItem(prevIndex, 'smart');
+          listRef.current?.scrollToRow({ index: prevIndex, align: 'smart' });
         }
         break;
         
@@ -345,15 +366,21 @@ const VirtualizedTree: React.FC<VirtualizedTreeProps> = ({
           />
         ) : (
           <List
-            ref={listRef}
-            height={height - (enableSearch ? 48 : 0)}
-            itemCount={filteredItems.length}
-            itemSize={itemHeight}
-            width="100%"
-            itemData={filteredItems}
-          >
-            {TreeItemRenderer}
-          </List>
+            listRef={listRef}
+            rowComponent={TreeRow}
+            rowCount={filteredItems.length}
+            rowHeight={itemHeight}
+            rowProps={{
+              items: filteredItems,
+              selectedAssetId,
+              onSelect: onAssetSelect,
+              onToggleExpand: toggleExpand,
+            }}
+            // A numeric style height is used as-is (no ResizeObserver), matching v1's height prop
+            style={{ height: height - (enableSearch ? 48 : 0) }}
+            // List defaults to role="list", which would sit between role="tree" and the treeitems
+            role="group"
+          />
         )}
       </div>
 
