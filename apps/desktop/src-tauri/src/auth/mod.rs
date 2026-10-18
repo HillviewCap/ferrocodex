@@ -47,7 +47,7 @@ impl SessionToken {
     /// rotation commands and Replace Recovery Key may use this.
     pub fn rotation_key(&self) -> Result<Arc<DataKey>, String> {
         self.data_key.clone().ok_or_else(|| {
-            "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key.".to_string()
+            "Encrypted data is unavailable for this account. Ask an administrator to reset your password in User Management.".to_string()
         })
     }
 }

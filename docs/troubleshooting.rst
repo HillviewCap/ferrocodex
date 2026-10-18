@@ -153,11 +153,11 @@ See :ref:`rotating-the-encryption-key` in the administrator guide for the full p
 Cannot Open Encrypted Data After a Rotation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Issue: "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key."**
+**Issue: "Encrypted data is unavailable for this account. Ask an administrator to reset your password in User Management."**
 
 *Cause:*
 
-The user can log in but has no copy of the active data key. After a rotation this affects active users who had no encryption keypair when it started (for example, accounts that had not logged in since keypairs were introduced),.
+The user can log in but has no copy of the active data key. After a rotation this affects active users who had no encryption keypair when it started (for example, accounts that had not logged in since keypairs were introduced).
 
 *Solution:*
 
