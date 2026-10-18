@@ -77,13 +77,17 @@ describe('ExportRecoveryPackageModal', () => {
 
   // The modal calls get_firmware_list and get_export_options on open, so mock by command
   // rather than by call order
-  const mockCommands = (exportResult: () => Promise<unknown> = () => Promise.resolve(mockManifest)) => {
+  const noVaultOptions = { includeVault: false, vaultAvailable: false, vaultSecretCount: 0 };
+  const mockCommands = (
+    exportResult: () => Promise<unknown> = () => Promise.resolve(mockManifest),
+    exportOptions = noVaultOptions,
+  ) => {
     mockInvoke.mockImplementation((cmd: string) => {
       switch (cmd) {
         case 'get_firmware_list':
           return Promise.resolve([mockFirmware]);
         case 'get_export_options':
-          return Promise.resolve({ includeVault: false, vaultAvailable: false, vaultSecretCount: 0 });
+          return Promise.resolve(exportOptions);
         case 'export_complete_recovery':
           return exportResult();
         default:
@@ -231,6 +235,39 @@ describe('ExportRecoveryPackageModal', () => {
       });
       expect(message.success).toHaveBeenCalledWith('Recovery package exported successfully!');
       expect(mockOnSuccess).toHaveBeenCalledWith('/export/path/recovery_manifest.json');
+    });
+  });
+
+  it('should send the vault passphrase when the vault is included', async () => {
+    const user = userEvent.setup();
+    mockDialog.open.mockResolvedValueOnce('/export/path');
+    mockCommands(undefined, { includeVault: true, vaultAvailable: true, vaultSecretCount: 2 });
+
+    render(
+      <ExportRecoveryPackageModal
+        visible={true}
+        onCancel={mockOnCancel}
+        onSuccess={mockOnSuccess}
+        assetId={1}
+        assetName="Test Asset"
+        configuration={mockConfiguration}
+        linkedFirmwareId={1}
+      />
+    );
+
+    await user.click(screen.getByText('Click to select export directory...'));
+    await waitFor(() => {
+      expectSelectedPath('/export/path');
+    });
+    await user.type(await screen.findByPlaceholderText('Export passphrase'), 'substation-7 recovery');
+    await user.type(screen.getByPlaceholderText('Confirm passphrase'), 'substation-7 recovery');
+    await user.click(screen.getByRole('button', { name: /Export Package/i }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('export_complete_recovery', expect.objectContaining({
+        includeVault: true,
+        vaultPassphrase: 'substation-7 recovery'
+      }));
     });
   });
 

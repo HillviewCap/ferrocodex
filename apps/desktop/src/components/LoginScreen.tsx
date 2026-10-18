@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Space, Checkbox } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import useAuthStore from '../store/auth';
+import RecoveryKeyResetModal from './RecoveryKeyResetModal';
 import ferrocodexLogo from '../assets/ferrocodex-logo.png';
 
 const { Text } = Typography;
@@ -15,6 +16,7 @@ interface LoginFormValues {
 const LoginScreen: React.FC = () => {
   const { login, isLoading, error, clearError } = useAuthStore();
   const [form] = Form.useForm();
+  const [isResetOpen, setIsResetOpen] = useState(false);
 
   const onFinish = async (values: LoginFormValues) => {
     try {
@@ -107,9 +109,14 @@ const LoginScreen: React.FC = () => {
             </Form.Item>
 
             <Form.Item>
-              <Form.Item name="remember" valuePropName="checked" noStyle>
-                <Checkbox>Remember me</Checkbox>
-              </Form.Item>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Form.Item name="remember" valuePropName="checked" noStyle>
+                  <Checkbox>Remember me</Checkbox>
+                </Form.Item>
+                <Button type="link" style={{ padding: 0 }} onClick={() => setIsResetOpen(true)}>
+                  Forgot password?
+                </Button>
+              </div>
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0 }}>
@@ -137,6 +144,8 @@ const LoginScreen: React.FC = () => {
           </div>
         </Space>
       </Card>
+
+      <RecoveryKeyResetModal open={isResetOpen} onClose={() => setIsResetOpen(false)} />
     </div>
   );
 };

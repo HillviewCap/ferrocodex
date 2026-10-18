@@ -112,7 +112,7 @@
         </div>
         <div class="principle">
           <h3>Secrets are encrypted before they are stored</h3>
-          <p>Configuration content, firmware files, and vault credentials are encrypted with AES-256-GCM. Keys are derived from the signed-in user's credentials, so there is no master key sitting on disk.</p>
+          <p>Configuration content, firmware files, and vault credentials are encrypted with AES-256-GCM. The key is stored only wrapped under each user's password and an offline recovery key, so a copied database is unreadable without them.</p>
         </div>
         <div class="principle">
           <h3>Every change is on the record</h3>

@@ -47,9 +47,17 @@ once_cell = "1.19"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.21"
 aes-gcm = "0.10"
-pbkdf2 = { version = "0.12", features = ["simple"] }
+argon2 = "0.5"
+zeroize = { version = "1", features = ["derive"] }
 rand = "0.10"
 async-trait = "0.1"
 csv = "1.3"
 unicode-normalization = "0.1"
 
+# Argon2id runs at every login and unlock. Unoptimized it takes several
+# seconds with the production cost parameters, so optimize it in dev/test too.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

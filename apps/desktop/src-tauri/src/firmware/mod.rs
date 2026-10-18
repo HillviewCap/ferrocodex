@@ -3,7 +3,7 @@ use rusqlite::{Connection, Row, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
-use crate::encryption::{FileEncryption, derive_key_from_user_credentials};
+use crate::encryption::{DataKey, FileEncryption};
 use std::fs;
 use sha2::{Sha256, Digest};
 
@@ -521,8 +521,7 @@ impl FirmwareFileStorage {
         asset_id: i64,
         firmware_id: i64,
         file_data: &[u8],
-        user_id: i64,
-        username: &str,
+        key: &DataKey,
     ) -> Result<(String, String, i64)> {
         // Validate file size (max 2GB as specified in requirements)
         const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2GB
@@ -550,9 +549,7 @@ impl FirmwareFileStorage {
         
         // Encrypt the file data
         tracing::info!("Starting file encryption for {} bytes", file_data.len());
-        let encryption_key = derive_key_from_user_credentials(user_id, username);
-        let encryption = FileEncryption::new(&encryption_key);
-        let encrypted_data = encryption.encrypt(file_data)?;
+        let encrypted_data = FileEncryption::new(key).encrypt(file_data)?;
         tracing::info!("File encryption completed, encrypted size: {} bytes", encrypted_data.len());
         
         // Write encrypted data to file
@@ -571,8 +568,7 @@ impl FirmwareFileStorage {
     pub fn read_firmware_file(
         app_handle: &AppHandle,
         file_path: &str,
-        user_id: i64,
-        username: &str,
+        key: &DataKey,
     ) -> Result<Vec<u8>> {
         // Get firmware storage directory
         let firmware_dir = get_firmware_storage_dir(app_handle)?;
@@ -594,11 +590,7 @@ impl FirmwareFileStorage {
         let encrypted_data = fs::read(&full_path)?;
         
         // Decrypt the file data
-        let encryption_key = derive_key_from_user_credentials(user_id, username);
-        let encryption = FileEncryption::new(&encryption_key);
-        let decrypted_data = encryption.decrypt(&encrypted_data)?;
-        
-        Ok(decrypted_data)
+        FileEncryption::new(key).decrypt(&encrypted_data)
     }
     
     pub fn delete_firmware_file(
@@ -627,11 +619,10 @@ impl FirmwareFileStorage {
         app_handle: &AppHandle,
         file_path: &str,
         expected_hash: &str,
-        user_id: i64,
-        username: &str,
+        key: &DataKey,
     ) -> Result<bool> {
         // Read and decrypt the file
-        let file_data = Self::read_firmware_file(app_handle, file_path, user_id, username)?;
+        let file_data = Self::read_firmware_file(app_handle, file_path, key)?;
         
         // Calculate hash
         let mut hasher = Sha256::new();
@@ -796,16 +787,12 @@ mod tests {
         let test_data = b"This is test firmware data";
         let asset_id = 1;
         let firmware_id = 100;
-        let user_id = 1;
-        let username = "testuser";
-        
         // Create asset directory
         let asset_dir = firmware_dir.join(asset_id.to_string());
         fs::create_dir_all(&asset_dir).unwrap();
         
         // Test encryption
-        let encryption_key = derive_key_from_user_credentials(user_id, username);
-        let encryption = FileEncryption::new(&encryption_key);
+        let encryption = FileEncryption::new(&DataKey::generate());
         let encrypted_data = encryption.encrypt(test_data).unwrap();
         
         // Write encrypted file

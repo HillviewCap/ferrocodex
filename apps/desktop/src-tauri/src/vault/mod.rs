@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::encryption::FileEncryption;
+use crate::encryption::{DataKey, FileEncryption};
 use tracing::{info, debug};
 use chrono;
 
@@ -15,6 +15,9 @@ pub use access_control::VaultAccessControlService;
 pub mod secure_repository;
 
 pub mod rotation;
+
+pub mod export;
+pub use export::{open_vault_export, seal_vault_export};
 
 #[cfg(test)]
 mod password_performance_tests;
@@ -587,7 +590,7 @@ pub trait VaultRepository {
     fn update_vault(&self, vault: &IdentityVault) -> Result<()>;
     fn delete_vault(&self, vault_id: i64) -> Result<()>;
     
-    fn add_secret(&self, request: AddSecretRequest) -> Result<VaultSecret>;
+    fn add_secret(&self, request: AddSecretRequest, key: &DataKey) -> Result<VaultSecret>;
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>>;
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>>;
     fn update_secret(&self, secret: &VaultSecret, author_id: i64) -> Result<()>;
@@ -596,6 +599,7 @@ pub trait VaultRepository {
     fn add_version_history(&self, vault_id: i64, change_type: ChangeType, author: i64, notes: &str, changes: HashMap<String, String>) -> Result<()>;
     fn get_vault_history(&self, vault_id: i64) -> Result<Vec<VaultVersion>>;
     
+    /// Imports a vault whose secrets are already encrypted under this install's data key.
     fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault>;
     fn initialize_schema(&self) -> Result<()>;
     
@@ -603,18 +607,18 @@ pub trait VaultRepository {
     fn add_password_history(&self, secret_id: i64, password_hash: &str) -> Result<()>;
     fn get_password_history(&self, secret_id: i64) -> Result<Vec<PasswordHistory>>;
     fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool>;
-    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()>;
+    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()>;
     fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
     
     // Vault secret update/delete methods
-    fn update_vault_secret(&self, request: UpdateVaultSecretRequest) -> Result<()>;
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: &DataKey) -> Result<()>;
     fn delete_vault_secret(&self, request: DeleteVaultSecretRequest) -> Result<()>;
     
     // Standalone credential methods for Story 4.3
-    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest) -> Result<StandaloneCredential>;
+    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest, key: &DataKey) -> Result<StandaloneCredential>;
     fn get_standalone_credential(&self, credential_id: i64) -> Result<Option<StandaloneCredentialInfo>>;
-    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest) -> Result<()>;
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()>;
     fn delete_standalone_credential(&self, credential_id: i64, author_id: i64) -> Result<()>;
     fn search_standalone_credentials(&self, request: SearchCredentialsRequest) -> Result<SearchCredentialsResponse>;
     fn get_standalone_credential_history(&self, credential_id: i64) -> Result<Vec<StandaloneCredentialHistory>>;
@@ -1261,7 +1265,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(())
     }
 
-    fn add_secret(&self, request: AddSecretRequest) -> Result<VaultSecret> {
+    fn add_secret(&self, request: AddSecretRequest, key: &DataKey) -> Result<VaultSecret> {
         // Validate secret data
         if request.label.trim().is_empty() {
             return Err(anyhow::anyhow!("Secret label cannot be empty"));
@@ -1271,10 +1275,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the secret value
-        let encryption = FileEncryption::new(&format!("vault_{}_{}", request.vault_id, request.author_id));
-        let encrypted_value = encryption.encrypt(request.value.as_bytes())?;
-        use base64::{Engine as _, engine::general_purpose};
-        let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_value);
+        let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Adding {} secret '{}' to vault {}", 
                request.secret_type.to_string(), request.label, request.vault_id);
@@ -1440,22 +1441,12 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         let imported_vault = self.create_vault(create_request)?;
 
-        // Import all secrets (they are already encrypted from export)
+        // Import all secrets; callers have already re-encrypted them under this install's data key
         for secret in &vault_info.secrets {
-            let secret_request = AddSecretRequest {
-                vault_id: imported_vault.id,
-                secret_type: secret.secret_type,
-                label: secret.label.clone(),
-                value: "imported_encrypted_value".to_string(), // Placeholder - we'll set encrypted value directly
-                author_id,
-            };
-
-            // First create the secret with placeholder value
-            let mut imported_secret = self.add_secret(secret_request)?;
-            
-            // Then update with the original encrypted value
-            imported_secret.encrypted_value = secret.encrypted_value.clone();
-            self.update_secret(&imported_secret, author_id)?;
+            self.conn.execute(
+                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) VALUES (?1, ?2, ?3, ?4)",
+                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value),
+            )?;
         }
 
         // Add version history for import
@@ -1523,7 +1514,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(count > 0)
     }
 
-    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32) -> Result<()> {
+    fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()> {
         // First, retire the old password in history if it exists
         self.conn.execute(
             "UPDATE password_history SET retired_at = CURRENT_TIMESTAMP 
@@ -1535,10 +1526,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         self.add_password_history(request.secret_id, password_hash)?;
 
         // Encrypt the new password value
-        let encryption = FileEncryption::new(&format!("vault_{}_{}", request.secret_id, request.author_id));
-        let encrypted_value = encryption.encrypt(request.new_password.as_bytes())?;
-        use base64::{Engine as _, engine::general_purpose};
-        let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_value);
+        let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         // Update the secret with new password and metadata
         self.conn.execute(
@@ -1617,7 +1605,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     // Vault secret update/delete implementations
-    fn update_vault_secret(&self, request: UpdateVaultSecretRequest) -> Result<()> {
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: &DataKey) -> Result<()> {
         // Get the current secret first
         let secret = self.get_secret_by_id(request.secret_id)?
             .ok_or_else(|| anyhow::anyhow!("Secret not found"))?;
@@ -1625,10 +1613,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Handle different update cases based on what fields are provided
         if let (Some(ref label), Some(ref value)) = (&request.label, &request.value) {
             // Both label and value provided
-            let encryption = FileEncryption::new(&format!("vault_{}_{}", secret.vault_id, request.author_id));
-            let encrypted_data = encryption.encrypt(value.as_bytes())?;
-            use base64::{Engine as _, engine::general_purpose};
-            let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
                 "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
@@ -1642,10 +1627,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             )?;
         } else if let Some(ref value) = request.value {
             // Only value provided
-            let encryption = FileEncryption::new(&format!("vault_{}_{}", secret.vault_id, request.author_id));
-            let encrypted_data = encryption.encrypt(value.as_bytes())?;
-            use base64::{Engine as _, engine::general_purpose};
-            let encrypted_value_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
                 "UPDATE vault_secrets SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
@@ -1704,7 +1686,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     // Standalone credential implementations for Story 4.3
-    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest) -> Result<StandaloneCredential> {
+    fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest, key: &DataKey) -> Result<StandaloneCredential> {
         // Validate input
         if request.name.trim().is_empty() {
             return Err(anyhow::anyhow!("Credential name cannot be empty"));
@@ -1720,10 +1702,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the credential value
-        let encryption = FileEncryption::new(&format!("standalone_{}_{}", request.created_by, chrono::Utc::now().timestamp()));
-        let encrypted_data = encryption.encrypt(request.value.as_bytes())?;
-        use base64::{Engine as _, engine::general_purpose};
-        let encrypted_data_base64 = general_purpose::STANDARD.encode(encrypted_data);
+        let encrypted_data_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
 
@@ -1799,7 +1778,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }))
     }
 
-    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest) -> Result<()> {
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()> {
         let mut updates = Vec::new();
         let mut changes = HashMap::new();
 
@@ -1821,10 +1800,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         let encrypted_data_base64 = if let Some(ref value) = request.value {
             // Encrypt the new value
-            let encryption = FileEncryption::new(&format!("standalone_{}_{}", request.id, request.author_id));
-            let encrypted_data = encryption.encrypt(value.as_bytes())?;
-            use base64::{Engine as _, engine::general_purpose};
-            let encrypted_base64 = general_purpose::STANDARD.encode(encrypted_data);
+            let encrypted_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             updates.push("encrypted_data = ?");
             changes.insert("value_updated".to_string(), "true".to_string());
@@ -2072,7 +2048,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     fn get_standalone_credential_history(&self, credential_id: i64) -> Result<Vec<StandaloneCredentialHistory>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, credential_id, change_type, author, timestamp, notes, changes_json 
-             FROM standalone_credential_history WHERE credential_id = ?1 ORDER BY timestamp DESC"
+             FROM standalone_credential_history WHERE credential_id = ?1 ORDER BY timestamp DESC, id DESC"
         )?;
 
         let history_iter = stmt.query_map([credential_id], Self::row_to_standalone_history)?;
@@ -2707,6 +2683,7 @@ impl<'a> SqliteVaultRepository<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::test_key;
     use tempfile::NamedTempFile;
     use rusqlite::Connection;
 
@@ -2800,7 +2777,7 @@ mod tests {
             author_id: 1,
         };
 
-        let secret = repo.add_secret(secret_request).unwrap();
+        let secret = repo.add_secret(secret_request, test_key()).unwrap();
         assert_eq!(secret.vault_id, vault.id);
         assert_eq!(secret.secret_type, SecretType::Password);
         assert_eq!(secret.label, "Admin Password");
@@ -2839,7 +2816,7 @@ mod tests {
             value: "password123".to_string(),
             author_id: 1,
         };
-        repo.add_secret(secret1_request).unwrap();
+        repo.add_secret(secret1_request, test_key()).unwrap();
 
         let secret2_request = AddSecretRequest {
             vault_id: vault.id,
@@ -2848,7 +2825,7 @@ mod tests {
             value: "192.168.1.100".to_string(),
             author_id: 1,
         };
-        repo.add_secret(secret2_request).unwrap();
+        repo.add_secret(secret2_request, test_key()).unwrap();
 
         // Get vault info
         let vault_info = repo.get_vault_by_asset_id(1).unwrap().unwrap();
@@ -2903,4 +2880,46 @@ mod tests {
         };
         assert!(repo.create_vault(request).is_err());
     }
+
+    #[test]
+    fn test_rotated_password_is_encrypted_with_data_key() {
+        use crate::audit::{AuditRepository, SqliteAuditRepository};
+        use rotation::{PasswordRotationRequest, PasswordRotationService};
+
+        let (_temp_file, conn) = setup_test_db();
+        SqliteAuditRepository::new(&conn).initialize_schema().unwrap();
+        let repo = SqliteVaultRepository::new(&conn);
+
+        let vault = repo.create_vault(CreateVaultRequest {
+            asset_id: 1,
+            name: "Test Vault".to_string(),
+            description: "Test Description".to_string(),
+            created_by: 1,
+        }).unwrap();
+        let secret = repo.add_secret(AddSecretRequest {
+            vault_id: vault.id,
+            secret_type: SecretType::Password,
+            label: "HMI admin".to_string(),
+            value: "Old-Password-123".to_string(),
+            author_id: 1,
+        }, test_key()).unwrap();
+
+        let service = PasswordRotationService::new(
+            &conn,
+            Box::new(SqliteVaultRepository::new(&conn)),
+            Box::new(SqliteAuditRepository::new(&conn)),
+        );
+        service.rotate_password(PasswordRotationRequest {
+            secret_id: secret.id,
+            new_password: "New-Password-456".to_string(),
+            rotation_reason: "Scheduled".to_string(),
+            author_id: 1,
+            batch_id: None,
+        }, test_key()).unwrap();
+
+        let rotated = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+        let plaintext = FileEncryption::new(test_key()).decrypt_from_base64(&rotated.encrypted_value).unwrap();
+        assert_eq!(plaintext, b"New-Password-456");
+    }
 }
+

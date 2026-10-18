@@ -212,6 +212,8 @@ pub async fn upload_firmware(
         }
     };
 
+    let data_key = session.data_key()?;
+
     // Only Engineers and Administrators can upload firmware
     if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
         warn!("User without sufficient permissions attempted to upload firmware: {}", session.username);
@@ -347,8 +349,7 @@ pub async fn upload_firmware(
                 asset_id,
                 temp_firmware_id,
                 &file_data,
-                session.user_id,
-                &session.username,
+                &data_key,
             ) {
                 Ok(result) => {
                     info!("Successfully stored firmware file: path={}, hash={}, size={}", result.0, result.1, result.2);
@@ -488,6 +489,7 @@ pub async fn upload_firmware(
                 firmware_id,
                 user_id: session.user_id,
                 username: session.username.clone(),
+                data_key: data_key.clone(),
             };
             
             info!("Attempting to queue firmware analysis for firmware ID: {}", firmware_id);
@@ -692,6 +694,7 @@ pub async fn export_complete_recovery(
     firmware_version_id: i64,
     export_directory: String,
     include_vault: Option<bool>,
+    vault_passphrase: Option<String>,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<RecoveryManifest, String> {
@@ -707,6 +710,8 @@ pub async fn export_complete_recovery(
         }
     };
     drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -742,6 +747,8 @@ pub async fn export_complete_recovery(
                 &session.username,
                 &session.role,
                 &asset.name,
+                &data_key,
+                vault_passphrase.as_deref(),
             ) {
                 Ok(manifest) => Ok(manifest),
                 Err(e) => Err(e.to_string()),
@@ -813,6 +820,8 @@ pub async fn retry_firmware_analysis(
         }
     };
 
+    let data_key = session.data_key()?;
+
     // Only Engineers and Administrators can retry analysis
     if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
         warn!("User without sufficient permissions attempted to retry firmware analysis: {}", session.username);
@@ -824,6 +833,7 @@ pub async fn retry_firmware_analysis(
         firmware_id,
         user_id: session.user_id,
         username: session.username.clone(),
+        data_key: data_key.clone(),
     };
 
     // Get or create the analysis queue

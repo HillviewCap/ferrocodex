@@ -10,6 +10,7 @@ mod validation;
 mod assets;
 mod configurations;
 mod encryption;
+mod keystore;
 mod branches;
 mod firmware;
 mod firmware_analysis;
@@ -69,6 +70,8 @@ pub fn run() {
             // Auth commands
             commands::create_admin_account,
             commands::login,
+            commands::reset_password_with_recovery_key,
+            commands::replace_recovery_key,
             commands::logout,
             commands::check_session,
             

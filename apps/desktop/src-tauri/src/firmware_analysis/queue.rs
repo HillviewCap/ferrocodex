@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::{info, error};
@@ -8,6 +8,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::database::Database;
+use crate::encryption::DataKey;
 use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository, FirmwareFileStorage};
 use crate::firmware_analysis::{
     FirmwareAnalyzer, FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository,
@@ -20,6 +21,8 @@ pub struct AnalysisJob {
     pub firmware_id: i64,
     pub user_id: i64,
     pub username: String,
+    /// The data key of the session that queued the job, used to decrypt the firmware
+    pub data_key: Arc<DataKey>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -168,8 +171,7 @@ impl AnalysisQueue {
         let firmware_data = FirmwareFileStorage::read_firmware_file(
             &app_handle,
             &firmware_path,
-            job.user_id,
-            &job.username
+            &job.data_key,
         )?;
         
         Self::emit_progress_event(&app_handle, &job.firmware_id, AnalysisStatus::InProgress, Some(40), Some("Analyzing firmware"));
@@ -325,6 +327,7 @@ mod tests {
             firmware_id: 1,
             user_id: 1,
             username: "testuser".to_string(),
+            data_key: Arc::new(DataKey::generate()),
         };
         
         sender.send(job.clone()).await.unwrap();
@@ -344,6 +347,7 @@ mod tests {
                 firmware_id: i,
                 user_id: 1,
                 username: format!("user{}", i),
+                data_key: Arc::new(DataKey::generate()),
             };
             sender.send(job).await.unwrap();
         }

@@ -32,7 +32,7 @@ Data Protection
 * Configuration file content is encrypted with AES-256-GCM before it is stored in the database
 * Firmware files are encrypted with AES-256-GCM before they are written to disk
 * Vault secrets are encrypted with AES-256-GCM
-* Encryption keys are derived from user credentials
+* All of these use one random 256-bit data key, which is never written to disk in plaintext. Each user holds a copy wrapped with a key derived from their password (Argon2id), and one more copy is wrapped with the recovery key shown at setup. Copying the database without a password or the recovery key does not expose the data key.
 * User passwords are stored as bcrypt hashes
 
 The SQLite database file itself is not encrypted as a whole. Asset names, metadata, audit entries, and other records are stored in plaintext. Protect the application data directory with operating-system permissions and full-disk encryption.
@@ -41,7 +41,8 @@ The SQLite database file itself is not encrypted as a whole. Asset names, metada
 
 * Ferrocodex does not transmit data over the network
 * Communication between the user interface and the backend stays inside the application process
-* Export bundles carry the encrypted payloads; protect them in transit and at rest
+* Recovery bundles contain the configuration and firmware files in plaintext so they can be loaded onto devices; protect them in transit and at rest
+* Vault secrets in vault exports and recovery bundles are re-encrypted with an export passphrase chosen at export time, and the same passphrase is needed to import them
 
 Access Control
 --------------
@@ -280,8 +281,8 @@ Vault Encryption Architecture
 
 **Encryption Layers:**
 
-1. **Per-Secret Keys**: Each secret is encrypted with a key specific to the vault and the user who stored it
-2. **Key Derivation**: Keys are derived from user credentials with PBKDF2
+1. **Data Key**: A random 256-bit key, generated when the administrator account is created, encrypts every secret
+2. **Key Wrapping**: The data key is stored only in wrapped form, under a key derived with Argon2id from each user's password and under the recovery key. It is unwrapped into memory at login and discarded at logout
 3. **Data Encryption**: All secrets are encrypted with AES-256-GCM
 4. **Access Control**: Vault permissions are checked before any secret is decrypted
 
@@ -400,7 +401,7 @@ Export and Import Security
 1. **Vault Data in Exports**:
 
    * Optional inclusion
-   * Additional encryption layer
+   * Secrets re-encrypted with an export passphrase (Argon2id-derived key); share the passphrase separately from the file
    * Warning dialogs
    * Audit logging
    * Checksum verification

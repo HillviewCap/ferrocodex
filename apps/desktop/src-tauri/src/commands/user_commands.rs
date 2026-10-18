@@ -1,4 +1,5 @@
 use crate::auth::{SessionManager};
+use crate::keystore::{KeyStoreRepository, SqliteKeyStoreRepository};
 use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
 use crate::audit::{AuditRepository, SqliteAuditRepository, create_user_created_event, create_user_deactivated_event, create_user_reactivated_event};
 use crate::validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
@@ -68,13 +69,26 @@ pub async fn create_engineer_user(
 
     drop(session_manager_guard);
 
+    // The new account gets its own copy of the data key, wrapped under its password
+    let data_key = session.data_key()?;
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let user_repo = SqliteUserRepository::new(db.get_connection());
-            
-            match user_repo.create_engineer_account(username, initial_password, session.user_id) {
+            let key_store = SqliteKeyStoreRepository::new(db.get_connection());
+
+            let tx = db.get_connection().unchecked_transaction()
+                .map_err(|e| format!("Failed to start transaction: {}", e))?;
+            let created = user_repo.create_engineer_account(username, initial_password.clone(), session.user_id)
+                .and_then(|user| {
+                    key_store.grant_user(user.id, &initial_password, &data_key)?;
+                    tx.commit()?;
+                    Ok(user)
+                });
+
+            match created {
                 Ok(user) => {
                     // Log audit event
                     let audit_repo = SqliteAuditRepository::new(db.get_connection());

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
-use crate::encryption::{FileEncryption, derive_key_from_user_credentials, validate_file_size, compress_data, decompress_data};
+use crate::encryption::{DataKey, FileEncryption, validate_file_size, compress_data, decompress_data};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigurationVersion {
@@ -119,9 +119,9 @@ pub struct FileMetadata {
 }
 
 pub trait ConfigurationRepository {
-    fn store_configuration(&self, request: CreateConfigurationRequest) -> Result<ConfigurationVersion>;
+    fn store_configuration(&self, request: CreateConfigurationRequest, key: &DataKey) -> Result<ConfigurationVersion>;
     fn get_configuration_versions(&self, asset_id: i64) -> Result<Vec<ConfigurationVersionInfo>>;
-    fn get_configuration_content(&self, version_id: i64) -> Result<Vec<u8>>;
+    fn get_configuration_content(&self, version_id: i64, key: &DataKey) -> Result<Vec<u8>>;
     fn get_configuration_by_id(&self, version_id: i64) -> Result<Option<ConfigurationVersion>>;
     fn get_latest_version_number(&self, asset_id: i64) -> Result<Option<String>>;
     fn delete_configuration_version(&self, version_id: i64) -> Result<()>;
@@ -138,7 +138,7 @@ pub trait ConfigurationRepository {
     fn get_promotion_eligibility(&self, version_id: i64) -> Result<bool>;
     
     // Export methods
-    fn export_configuration_version(&self, version_id: i64, export_path: &str) -> Result<()>;
+    fn export_configuration_version(&self, version_id: i64, export_path: &str, key: &DataKey) -> Result<()>;
     
     // Manual archive/restore methods
     fn archive_version(&self, version_id: i64, archived_by: i64, archive_reason: Option<String>) -> Result<()>;
@@ -255,6 +255,35 @@ impl<'a> SqliteConfigurationRepository<'a> {
         })
     }
 
+    /// Copies a version as a new version of the same asset. The encrypted
+    /// content is copied as-is, so no key is needed.
+    pub fn duplicate_configuration_version(&self, version_id: i64, author: i64, notes: &str) -> Result<ConfigurationVersion> {
+        let source = self.get_configuration_by_id(version_id)?
+            .ok_or_else(|| anyhow::anyhow!("Configuration version not found"))?;
+        let version_number = self.generate_next_version_number(source.asset_id)?;
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO configuration_versions (asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING *"
+        )?;
+
+        let config = stmt.query_row(
+            (
+                &source.asset_id,
+                &version_number,
+                &source.file_name,
+                &source.file_content,
+                &source.file_size,
+                &source.content_hash,
+                &author,
+                &notes,
+            ),
+            Self::row_to_configuration,
+        )?;
+
+        Ok(config)
+    }
+
     fn generate_next_version_number(&self, asset_id: i64) -> Result<String> {
         let mut stmt = self.conn.prepare(
             "SELECT version_number FROM configuration_versions WHERE asset_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1"
@@ -289,7 +318,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
 }
 
 impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
-    fn store_configuration(&self, request: CreateConfigurationRequest) -> Result<ConfigurationVersion> {
+    fn store_configuration(&self, request: CreateConfigurationRequest, key: &DataKey) -> Result<ConfigurationVersion> {
         // Validate input
         if request.file_name.trim().is_empty() {
             return Err(anyhow::anyhow!("File name cannot be empty"));
@@ -317,9 +346,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         };
         
         // Encrypt the file content
-        let encryption_key = derive_key_from_user_credentials(request.author, "ferrocodex");
-        let encryption = FileEncryption::new(&encryption_key);
-        let encrypted_content = encryption.encrypt(&compressed_data)?;
+        let encrypted_content = FileEncryption::new(key).encrypt(&compressed_data)?;
         
         // Store configuration
         let mut stmt = self.conn.prepare(
@@ -365,19 +392,15 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         Ok(configurations)
     }
 
-    fn get_configuration_content(&self, version_id: i64) -> Result<Vec<u8>> {
+    fn get_configuration_content(&self, version_id: i64, key: &DataKey) -> Result<Vec<u8>> {
         let mut stmt = self.conn.prepare(
-            "SELECT file_content, author FROM configuration_versions WHERE id = ?1"
+            "SELECT file_content FROM configuration_versions WHERE id = ?1"
         )?;
 
-        let (encrypted_content, author): (Vec<u8>, i64) = stmt.query_row([version_id], |row| {
-            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?))
-        })?;
+        let encrypted_content: Vec<u8> = stmt.query_row([version_id], |row| row.get(0))?;
 
         // Decrypt the content
-        let encryption_key = derive_key_from_user_credentials(author, "ferrocodex");
-        let encryption = FileEncryption::new(&encryption_key);
-        let compressed_data = encryption.decrypt(&encrypted_content)?;
+        let compressed_data = FileEncryption::new(key).decrypt(&encrypted_content)?;
         
         // Try to decompress, fallback to original if decompression fails
         let content = match decompress_data(&compressed_data) {
@@ -639,7 +662,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         }
     }
 
-    fn export_configuration_version(&self, version_id: i64, export_path: &str) -> Result<()> {
+    fn export_configuration_version(&self, version_id: i64, export_path: &str, key: &DataKey) -> Result<()> {
         use std::fs;
         use std::path::Path;
 
@@ -665,7 +688,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         };
 
         // Get decrypted file content
-        let file_content = self.get_configuration_content(version_id)?;
+        let file_content = self.get_configuration_content(version_id, key)?;
 
         // Write file to export path
         match fs::write(path, &file_content) {
@@ -973,6 +996,7 @@ pub mod file_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::test_key;
     use tempfile::NamedTempFile;
     use rusqlite::Connection;
 
@@ -1031,7 +1055,7 @@ mod tests {
             notes: "Initial configuration".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         assert_eq!(config.asset_id, 1);
         assert_eq!(config.file_name, "config.json");
         assert_eq!(config.version_number, "v1");
@@ -1054,7 +1078,7 @@ mod tests {
             notes: "Version 1".to_string(),
         };
 
-        let config1 = repo.store_configuration(request1).unwrap();
+        let config1 = repo.store_configuration(request1, test_key()).unwrap();
         assert_eq!(config1.version_number, "v1");
 
         // Second version should be v2
@@ -1066,7 +1090,7 @@ mod tests {
             notes: "Version 2".to_string(),
         };
 
-        let config2 = repo.store_configuration(request2).unwrap();
+        let config2 = repo.store_configuration(request2, test_key()).unwrap();
         assert_eq!(config2.version_number, "v2");
     }
 
@@ -1083,7 +1107,7 @@ mod tests {
             author: 1,
             notes: "Test".to_string(),
         };
-        assert!(repo.store_configuration(request).is_err());
+        assert!(repo.store_configuration(request, test_key()).is_err());
 
         // Test empty content
         let request = CreateConfigurationRequest {
@@ -1093,7 +1117,7 @@ mod tests {
             author: 1,
             notes: "Test".to_string(),
         };
-        assert!(repo.store_configuration(request).is_err());
+        assert!(repo.store_configuration(request, test_key()).is_err());
     }
 
     #[test]
@@ -1118,8 +1142,8 @@ mod tests {
             notes: "Version 2".to_string(),
         };
 
-        repo.store_configuration(request1).unwrap();
-        repo.store_configuration(request2).unwrap();
+        repo.store_configuration(request1, test_key()).unwrap();
+        repo.store_configuration(request2, test_key()).unwrap();
 
         let versions = repo.get_configuration_versions(1).unwrap();
         assert_eq!(versions.len(), 2);
@@ -1143,8 +1167,8 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
-        let retrieved_content = repo.get_configuration_content(config.id).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
+        let retrieved_content = repo.get_configuration_content(config.id, test_key()).unwrap();
         assert_eq!(retrieved_content, content);
     }
 
@@ -1163,7 +1187,7 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        repo.store_configuration(request).unwrap();
+        repo.store_configuration(request, test_key()).unwrap();
         assert_eq!(repo.get_configuration_count(1).unwrap(), 1);
     }
 
@@ -1180,7 +1204,7 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         repo.delete_configuration_version(config.id).unwrap();
 
         let result = repo.get_configuration_by_id(config.id).unwrap();
@@ -1201,7 +1225,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Initially should not be eligible for golden promotion (Draft status)
         assert!(!repo.get_promotion_eligibility(config.id).unwrap());
@@ -1241,7 +1265,7 @@ mod tests {
             notes: "First config".to_string(),
         };
 
-        let config1 = repo.store_configuration(request1).unwrap();
+        let config1 = repo.store_configuration(request1, test_key()).unwrap();
 
         // Create second configuration
         let request2 = CreateConfigurationRequest {
@@ -1252,7 +1276,7 @@ mod tests {
             notes: "Second config".to_string(),
         };
 
-        let config2 = repo.store_configuration(request2).unwrap();
+        let config2 = repo.store_configuration(request2, test_key()).unwrap();
 
         // Approve both configurations
         repo.update_configuration_status(config1.id, ConfigurationStatus::Approved, 1, None).unwrap();
@@ -1291,7 +1315,7 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Should fail to promote draft to golden
         let result = repo.promote_to_golden(config.id, 1, None);
@@ -1316,7 +1340,7 @@ mod tests {
             notes: "Export test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Create a temporary export file
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1324,7 +1348,7 @@ mod tests {
         let export_path_str = export_path.to_str().unwrap();
 
         // Test successful export
-        let result = repo.export_configuration_version(config.id, export_path_str);
+        let result = repo.export_configuration_version(config.id, export_path_str, test_key());
         assert!(result.is_ok());
 
         // Verify exported file exists and has correct content
@@ -1343,7 +1367,7 @@ mod tests {
         let export_path_str = export_path.to_str().unwrap();
 
         // Test export of non-existent version
-        let result = repo.export_configuration_version(99999, export_path_str);
+        let result = repo.export_configuration_version(99999, export_path_str, test_key());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Configuration version not found"));
     }
@@ -1362,10 +1386,10 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Test directory traversal protection
-        let result = repo.export_configuration_version(config.id, "../malicious.json");
+        let result = repo.export_configuration_version(config.id, "../malicious.json", test_key());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Invalid export path detected"));
 
@@ -1375,7 +1399,7 @@ mod tests {
         let short_name_dir = temp_dir.path().join("RUNNER~1");
         std::fs::create_dir(&short_name_dir).unwrap();
         let export_path = short_name_dir.join("exported.json");
-        let result = repo.export_configuration_version(config.id, export_path.to_str().unwrap());
+        let result = repo.export_configuration_version(config.id, export_path.to_str().unwrap(), test_key());
         assert!(result.is_ok(), "{:?}", result);
     }
 
@@ -1393,10 +1417,10 @@ mod tests {
             notes: "Test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Test export to non-existent directory
-        let result = repo.export_configuration_version(config.id, "/nonexistent/directory/file.json");
+        let result = repo.export_configuration_version(config.id, "/nonexistent/directory/file.json", test_key());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Export directory does not exist"));
     }
@@ -1416,7 +1440,7 @@ mod tests {
             notes: "Performance test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Create a temporary export file
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1425,7 +1449,7 @@ mod tests {
 
         // Measure export time
         let start = std::time::Instant::now();
-        let result = repo.export_configuration_version(config.id, export_path_str);
+        let result = repo.export_configuration_version(config.id, export_path_str, test_key());
         let duration = start.elapsed();
 
         assert!(result.is_ok());
@@ -1455,7 +1479,7 @@ mod tests {
             notes: "Large file performance test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Create a temporary export file
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1464,7 +1488,7 @@ mod tests {
 
         // Measure export time
         let start = std::time::Instant::now();
-        let result = repo.export_configuration_version(config.id, export_path_str);
+        let result = repo.export_configuration_version(config.id, export_path_str, test_key());
         let duration = start.elapsed();
 
         assert!(result.is_ok());
@@ -1493,7 +1517,7 @@ mod tests {
             notes: "Integrity validation test".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Create a temporary export file
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1501,7 +1525,7 @@ mod tests {
         let export_path_str = export_path.to_str().unwrap();
 
         // Test successful export with integrity validation
-        let result = repo.export_configuration_version(config.id, export_path_str);
+        let result = repo.export_configuration_version(config.id, export_path_str, test_key());
         assert!(result.is_ok());
 
         // Verify exported file content matches original
@@ -1528,7 +1552,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Initially should not be archived
         let versions = repo.get_configuration_versions(1).unwrap();
@@ -1565,7 +1589,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Change status to Silver first
         repo.update_configuration_status(config.id, ConfigurationStatus::Silver, 1, Some("Test silver".to_string())).unwrap();
@@ -1613,7 +1637,7 @@ mod tests {
             file_content: b"{}".to_vec(),
             author: 1,
             notes: "Test config".to_string(),
-        }).unwrap();
+        }, test_key()).unwrap();
         repo.update_configuration_status(config.id, ConfigurationStatus::Silver, 1, None).unwrap();
         repo.archive_version(config.id, 1, None).unwrap();
 
@@ -1652,7 +1676,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         repo.archive_version(config.id, 1, Some("First archive".to_string())).unwrap();
 
         // Try to archive again - should fail
@@ -1675,7 +1699,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
 
         // Try to restore a non-archived version - should fail
         let result = repo.restore_version(config.id, 1, Some("Test restore".to_string()));
@@ -1697,7 +1721,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
 
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Archive directly from Draft (simulating a direct archive)
         repo.archive_version(config.id, 1, Some("Direct archive".to_string())).unwrap();
@@ -1731,7 +1755,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
         
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Link firmware to configuration
         let result = repo.link_firmware_to_configuration(config.id, 1);
@@ -1770,7 +1794,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
         
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Try to link firmware from asset 2 to configuration from asset 1 - should fail
         let result = repo.link_firmware_to_configuration(config.id, 1);
@@ -1799,7 +1823,7 @@ mod tests {
             notes: "Test config".to_string(),
         };
         
-        let config = repo.store_configuration(request).unwrap();
+        let config = repo.store_configuration(request, test_key()).unwrap();
         
         // Link firmware to configuration
         repo.link_firmware_to_configuration(config.id, 1).unwrap();
@@ -1843,8 +1867,8 @@ mod tests {
             notes: "Test config 2".to_string(),
         };
         
-        let config1 = repo.store_configuration(request1).unwrap();
-        let config2 = repo.store_configuration(request2).unwrap();
+        let config1 = repo.store_configuration(request1, test_key()).unwrap();
+        let config2 = repo.store_configuration(request2, test_key()).unwrap();
         
         // Link both configurations to the same firmware
         repo.link_firmware_to_configuration(config1.id, 1).unwrap();

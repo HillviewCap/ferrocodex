@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
+use crate::encryption::DataKey;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Branch {
@@ -112,10 +113,10 @@ pub trait BranchRepository {
     fn validate_branch_name(&self, asset_id: i64, name: &str, exclude_id: Option<i64>) -> Result<bool>;
     
     // Branch version methods
-    fn import_version_to_branch(&self, request: CreateBranchVersionRequest) -> Result<BranchVersion>;
+    fn import_version_to_branch(&self, request: CreateBranchVersionRequest, key: &DataKey) -> Result<BranchVersion>;
     fn get_branch_versions(&self, branch_id: i64, page: Option<i32>, limit: Option<i32>) -> Result<Vec<BranchVersionInfo>>;
     fn get_branch_latest_version(&self, branch_id: i64) -> Result<Option<BranchVersionInfo>>;
-    fn compare_branch_versions(&self, branch_id: i64, version1_id: i64, version2_id: i64) -> Result<Vec<u8>>;
+    fn compare_branch_versions(&self, branch_id: i64, version1_id: i64, version2_id: i64, key: &DataKey) -> Result<Vec<u8>>;
     fn get_branch_version_count(&self, branch_id: i64) -> Result<i64>;
 }
 
@@ -319,33 +320,20 @@ impl<'a> SqliteBranchRepository<'a> {
     }
 
     fn copy_parent_version_to_branch(&self, branch_id: i64, parent_version_id: i64, created_by: i64) -> Result<BranchVersion> {
-        use crate::configurations::{SqliteConfigurationRepository, ConfigurationRepository, CreateConfigurationRequest};
+        use crate::configurations::{SqliteConfigurationRepository, ConfigurationRepository};
         
-        // Get the parent version details and content
+        // Get the parent version details
         let config_repo = SqliteConfigurationRepository::new(self.conn);
         
         let parent_config = config_repo.get_configuration_by_id(parent_version_id)?
             .ok_or_else(|| anyhow::anyhow!("Parent version not found"))?;
         
-        let parent_content = config_repo.get_configuration_content(parent_version_id)?;
-        
-        // Get the asset_id from the branch
-        let asset_id: i64 = self.conn.query_row(
-            "SELECT asset_id FROM branches WHERE id = ?1",
-            [branch_id],
-            |row| row.get(0)
-        )?;
-        
         // Create a new configuration version as a copy of the parent
-        let config_request = CreateConfigurationRequest {
-            asset_id,
-            file_name: parent_config.file_name.clone(),
-            file_content: parent_content,
-            author: created_by,
-            notes: format!("Initial branch version created from parent version {}", parent_config.version_number),
-        };
-        
-        let new_config = config_repo.store_configuration(config_request)?;
+        let new_config = config_repo.duplicate_configuration_version(
+            parent_version_id,
+            created_by,
+            &format!("Initial branch version created from parent version {}", parent_config.version_number),
+        )?;
         
         // Create the branch version entry
         let branch_version_number = self.generate_next_branch_version_number(branch_id)?;
@@ -568,7 +556,7 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
         Ok(count == 0)
     }
 
-    fn import_version_to_branch(&self, request: CreateBranchVersionRequest) -> Result<BranchVersion> {
+    fn import_version_to_branch(&self, request: CreateBranchVersionRequest, key: &DataKey) -> Result<BranchVersion> {
         // Validate that branch exists and get its asset_id
         let mut branch_stmt = self.conn.prepare(
             "SELECT asset_id FROM branches WHERE id = ?1 AND is_active = 1"
@@ -598,7 +586,7 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
             notes: request.notes,
         };
         
-        let config_version = config_repo.store_configuration(config_request)?;
+        let config_version = config_repo.store_configuration(config_request, key)?;
 
         // Generate branch version number
         let branch_version_number = self.generate_next_branch_version_number(request.branch_id)?;
@@ -679,7 +667,7 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
         }
     }
 
-    fn compare_branch_versions(&self, branch_id: i64, version1_id: i64, version2_id: i64) -> Result<Vec<u8>> {
+    fn compare_branch_versions(&self, branch_id: i64, version1_id: i64, version2_id: i64, key: &DataKey) -> Result<Vec<u8>> {
         // Verify both versions belong to the branch
         let mut stmt = self.conn.prepare(
             "SELECT COUNT(*) FROM branch_versions WHERE branch_id = ?1 AND version_id IN (?2, ?3)"
@@ -695,8 +683,8 @@ impl<'a> BranchRepository for SqliteBranchRepository<'a> {
         use crate::configurations::{SqliteConfigurationRepository, ConfigurationRepository};
         let config_repo = SqliteConfigurationRepository::new(self.conn);
         
-        let content1 = config_repo.get_configuration_content(version1_id)?;
-        let content2 = config_repo.get_configuration_content(version2_id)?;
+        let content1 = config_repo.get_configuration_content(version1_id, key)?;
+        let content2 = config_repo.get_configuration_content(version2_id, key)?;
 
         // Convert to strings for diff comparison
         let content1_str = String::from_utf8_lossy(&content1);
@@ -1111,8 +1099,42 @@ mod tests {
         let branch = repo.create_branch(branch_request).unwrap();
 
         // Test comparing versions that don't belong to the branch
-        let result = repo.compare_branch_versions(branch.id, 1, 999);
+        let result = repo.compare_branch_versions(branch.id, 1, 999, crate::encryption::test_key());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("do not belong to the specified branch"));
     }
+
+    #[test]
+    fn test_branch_creation_copies_parent_content() {
+        use crate::configurations::{ConfigurationRepository, CreateConfigurationRequest, SqliteConfigurationRepository};
+        use crate::encryption::test_key;
+
+        let (_temp_file, conn) = setup_test_db();
+        let config_repo = SqliteConfigurationRepository::new(&conn);
+        let parent = config_repo.store_configuration(CreateConfigurationRequest {
+            asset_id: 1,
+            file_name: "plc.json".to_string(),
+            file_content: br#"{"setpoint": 42}"#.to_vec(),
+            author: 1,
+            notes: "Parent".to_string(),
+        }, test_key()).unwrap();
+
+        let repo = SqliteBranchRepository::new(&conn);
+        let branch = repo.create_branch(CreateBranchRequest {
+            name: "tuning".to_string(),
+            description: None,
+            asset_id: 1,
+            parent_version_id: parent.id,
+            created_by: 1,
+        }).unwrap();
+
+        let initial = repo.get_branch_latest_version(branch.id).unwrap()
+            .expect("branch should start with a copy of its parent version");
+        assert_ne!(initial.version_id, parent.id);
+        assert_eq!(
+            config_repo.get_configuration_content(initial.version_id, test_key()).unwrap(),
+            br#"{"setpoint": 42}"#.to_vec()
+        );
+    }
 }
+

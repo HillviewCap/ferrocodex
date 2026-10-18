@@ -14,7 +14,8 @@ import {
   Tooltip,
   Tag,
   Progress,
-  Result
+  Result,
+  Input
 } from 'antd';
 import {
   UploadOutlined,
@@ -149,6 +150,16 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
       return;
     }
 
+    const importVault = includeVault && !!manifest.vault;
+    let vaultPassphrase: string | undefined;
+    if (importVault) {
+      try {
+        ({ vaultPassphrase } = await form.validateFields(['vaultPassphrase']));
+      } catch {
+        return;
+      }
+    }
+
     setImporting(true);
     setImportStep({ step: 'Importing', progress: 0, message: 'Starting import...' });
 
@@ -166,7 +177,8 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
         token: token!,
         bundlePath: selectedPath,
         targetAssetId: selectedAssetId,
-        importVault: includeVault && !!manifest.vault
+        importVault,
+        vaultPassphrase
       });
 
       clearInterval(progressInterval);
@@ -182,7 +194,7 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
       console.error('Failed to import recovery bundle:', err);
       setImportStep({ 
         step: 'Error', 
-        message: `Import failed: ${(err as Error).message}` 
+        message: `Import failed: ${err instanceof Error ? err.message : err}` 
       });
       message.error(`Failed to import recovery bundle: ${(err as Error).message}`);
     } finally {
@@ -335,6 +347,17 @@ const ImportRecoveryPackageModal: React.FC<ImportRecoveryPackageModalProps> = ({
                       </Tooltip>
                     </Space>
                   </Checkbox>
+                </Form.Item>
+              )}
+
+              {manifest?.vault && includeVault && (
+                <Form.Item
+                  label="Vault Export Passphrase"
+                  name="vaultPassphrase"
+                  extra="The passphrase chosen when this package was exported"
+                  rules={[{ required: true, message: 'Please enter the export passphrase' }]}
+                >
+                  <Input.Password placeholder="Export passphrase" />
                 </Form.Item>
               )}
             </Form>

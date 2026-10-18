@@ -47,6 +47,8 @@ pub async fn import_configuration(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate inputs
     let asset_name = InputSanitizer::sanitize_string(&asset_name);
     let notes = InputSanitizer::sanitize_string(&notes);
@@ -126,7 +128,7 @@ pub async fn import_configuration(
                 notes,
             };
             
-            match config_repo.store_configuration(config_request) {
+            match config_repo.store_configuration(config_request, &data_key) {
                 Ok(_) => {
                     let duration = start_time.elapsed();
                     
@@ -183,6 +185,8 @@ pub async fn import_configuration_for_asset(
         }
     };
     drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     // Validate inputs
     let version_notes = InputSanitizer::sanitize_string(&version_notes);
@@ -247,7 +251,7 @@ pub async fn import_configuration_for_asset(
                 notes: version_notes,
             };
             
-            match config_repo.store_configuration(config_request) {
+            match config_repo.store_configuration(config_request, &data_key) {
                 Ok(_) => {
                     let duration = start_time.elapsed();
                     
@@ -559,6 +563,8 @@ pub async fn promote_branch_to_silver(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Both Engineers and Administrators can promote branches to Silver
     if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
         warn!("User without sufficient permissions attempted to promote branch to Silver: {}", session.username);
@@ -606,7 +612,7 @@ pub async fn promote_branch_to_silver(
             };
             
             // Get the configuration content
-            let content = match config_repo.get_configuration_content(latest_version.version_id) {
+            let content = match config_repo.get_configuration_content(latest_version.version_id, &data_key) {
                 Ok(c) => c,
                 Err(e) => {
                     error!("Failed to get configuration content: {}", e);
@@ -631,7 +637,7 @@ pub async fn promote_branch_to_silver(
             };
             
             // Store the new configuration
-            let new_config = match config_repo.store_configuration(config_request) {
+            let new_config = match config_repo.store_configuration(config_request, &data_key) {
                 Ok(config) => config,
                 Err(e) => {
                     error!("Failed to create Silver configuration: {}", e);
@@ -764,6 +770,8 @@ pub async fn export_configuration_version(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate export path
     let export_path = export_path.trim();
     
@@ -785,7 +793,7 @@ pub async fn export_configuration_version(
             
             let start_time = std::time::Instant::now();
             
-            match config_repo.export_configuration_version(version_id, &export_path) {
+            match config_repo.export_configuration_version(version_id, &export_path, &data_key) {
                 Ok(_) => {
                     let duration = start_time.elapsed();
                     

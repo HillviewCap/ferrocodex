@@ -183,6 +183,7 @@ pub async fn import_recovery_bundle(
     bundle_path: String,
     target_asset_id: i64,
     import_vault: bool,
+    vault_passphrase: Option<String>,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<RecoveryManifest, String> {
@@ -198,6 +199,8 @@ pub async fn import_recovery_bundle(
         }
     };
     drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -222,6 +225,8 @@ pub async fn import_recovery_bundle(
                 session.user_id,
                 &session.username,
                 &session.role,
+                &data_key,
+                vault_passphrase.as_deref(),
             ) {
                 Ok(manifest) => Ok(manifest),
                 Err(e) => Err(e.to_string()),

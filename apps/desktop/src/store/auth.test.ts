@@ -35,7 +35,8 @@ describe('useAuthStore', () => {
       token: null,
       isAuthenticated: false,
       isLoading: false,
-      error: null
+      error: null,
+      pendingRecoveryCode: null
     });
   });
 
@@ -182,6 +183,51 @@ describe('useAuthStore', () => {
       });
 
       expect(invoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recovery code', () => {
+    it('should hold the recovery code returned when the encryption key is created', async () => {
+      (invoke as any).mockResolvedValue({ ...mockLoginResponse, recovery_code: 'AAAA-BBBB' });
+
+      const { result } = renderHook(() => useAuthStore());
+
+      await act(async () => {
+        await result.current.createAdminAccount('admin', 'adminpass');
+      });
+
+      expect(result.current.pendingRecoveryCode).toBe('AAAA-BBBB');
+
+      act(() => {
+        result.current.dismissRecoveryCode();
+      });
+
+      expect(result.current.pendingRecoveryCode).toBeNull();
+    });
+
+    it('should not set a recovery code on an ordinary login', async () => {
+      (invoke as any).mockResolvedValue(mockLoginResponse);
+
+      const { result } = renderHook(() => useAuthStore());
+
+      await act(async () => {
+        await result.current.login('testuser', 'password');
+      });
+
+      expect(result.current.pendingRecoveryCode).toBeNull();
+    });
+
+    it('should clear a pending recovery code on logout', async () => {
+      (invoke as any).mockResolvedValue(undefined);
+      useAuthStore.setState({ token: 'test-token-123', pendingRecoveryCode: 'AAAA-BBBB' });
+
+      const { result } = renderHook(() => useAuthStore());
+
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      expect(result.current.pendingRecoveryCode).toBeNull();
     });
   });
 

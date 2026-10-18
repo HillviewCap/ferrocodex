@@ -10,6 +10,7 @@ import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import EulaModal from './components/EulaModal';
+import RecoveryCodeModal from './components/RecoveryCodeModal';
 
 function App() {
   const [appState, setAppState] = useState<'initializing' | 'ready' | 'error'>('initializing');
@@ -113,6 +114,7 @@ function App() {
       }}
     >
       <AntApp>
+        <RecoveryCodeModal />
         <Router>
           <Routes>
           {/* First launch - admin setup */}

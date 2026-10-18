@@ -63,3 +63,11 @@ test('shows remember me checkbox', () => {
   
   expect(screen.getByLabelText('Remember me')).toBeInTheDocument();
 });
+test('opens the recovery key reset dialog from "Forgot password?"', async () => {
+  render(<LoginScreen />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+
+  expect(await screen.findByText('Reset password with recovery key')).toBeInTheDocument();
+  expect(screen.getByLabelText('Recovery Key')).toBeInTheDocument();
+});

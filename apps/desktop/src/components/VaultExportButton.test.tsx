@@ -61,15 +61,38 @@ describe('VaultExportButton', () => {
     expect(screen.getByText('PLC Vault')).toBeInTheDocument();
     expect(screen.getByText('2 secrets • 2 items')).toBeInTheDocument();
 
+    fireEvent.change(screen.getByPlaceholderText('Export passphrase'), { target: { value: 'substation-7 recovery' } });
+    fireEvent.change(screen.getByPlaceholderText('Confirm passphrase'), { target: { value: 'substation-7 recovery' } });
     const buttons = screen.getAllByRole('button', { name: /Export Vault/ });
     fireEvent.click(buttons[buttons.length - 1]);
 
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('export_vault', { token: 'test-token', vaultId: 5 }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('export_vault', { token: 'test-token', vaultId: 5, passphrase: 'substation-7 recovery' }),
+    );
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith('write_file', { path: '/tmp/PLC_Vault_vault_export.json', contents: '{"vault":"data"}' }),
     );
     expect(await screen.findByText('Vault Exported')).toBeInTheDocument();
     expect(onExportComplete).toHaveBeenCalled();
+  });
+
+  it('requires a long enough, confirmed passphrase before exporting', async () => {
+    mockAccess(true, true);
+    render(<VaultExportButton vault={vault} />);
+
+    const trigger = screen.getByRole('button', { name: /Export Vault/ });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    await screen.findByText('Security Warning');
+
+    fireEvent.change(screen.getByPlaceholderText('Export passphrase'), { target: { value: 'short' } });
+    fireEvent.change(screen.getByPlaceholderText('Confirm passphrase'), { target: { value: 'different' } });
+    const buttons = screen.getAllByRole('button', { name: /Export Vault/ });
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    expect(await screen.findByText('Passphrase must be at least 12 characters')).toBeInTheDocument();
+    expect(await screen.findByText('Passphrases do not match')).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('export_vault', expect.anything());
   });
 
   it('disables the button when the user cannot export', async () => {

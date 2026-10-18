@@ -8,6 +8,7 @@ use uuid::Uuid;
 use rusqlite::{Connection, params};
 use crate::audit::{AuditRepository, AuditEventRequest, AuditEventType};
 use super::VaultRepository;
+use crate::encryption::{DataKey, FileEncryption};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordRotationRequest {
@@ -154,7 +155,7 @@ impl<'a> PasswordRotationService<'a> {
     }
 
     // Task 2.1 & 2.2: Guided workflow for individual password rotation
-    pub fn rotate_password(&self, request: PasswordRotationRequest) -> Result<()> {
+    pub fn rotate_password(&self, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
         debug!("Rotating password for secret {}", request.secret_id);
 
         // Begin transaction
@@ -195,8 +196,7 @@ impl<'a> PasswordRotationService<'a> {
         let rotation_interval = secret.rotation_interval_days.unwrap_or(90);
         let next_rotation_due = now + Duration::days(rotation_interval as i64);
 
-        // Encrypt the new password (in real implementation, use proper encryption)
-        let encrypted_value = new_password_hash.clone(); // Placeholder - should encrypt
+        let encrypted_value = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         tx.execute(
             "UPDATE vault_secrets 
@@ -307,14 +307,14 @@ impl<'a> PasswordRotationService<'a> {
     }
 
     // Emergency rotation capability
-    pub fn emergency_rotate_password(&self, request: PasswordRotationRequest) -> Result<()> {
+    pub fn emergency_rotate_password(&self, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
         info!("Emergency password rotation initiated for secret {}", request.secret_id);
         
         // Skip normal validation for emergency rotation
         self.rotate_password(PasswordRotationRequest {
             rotation_reason: format!("EMERGENCY: {}", request.rotation_reason),
             ..request
-        })
+        }, key)
     }
 }
 
@@ -647,7 +647,7 @@ impl<'a> BatchRotationService<'a> {
     }
 
     // Task 4.2 & 4.3: Execute batch rotation with progress tracking
-    pub fn execute_batch_rotation(&self, request: BatchRotationRequest) -> Result<()> {
+    pub fn execute_batch_rotation(&self, request: BatchRotationRequest, key: &DataKey) -> Result<()> {
         info!("Executing batch rotation {} with {} items", request.batch_id, request.items.len());
 
         // Begin transaction for atomic operation
@@ -673,7 +673,7 @@ impl<'a> BatchRotationService<'a> {
                         rotation_reason: item.rotation_reason.clone(),
                         author_id: request.author_id,
                         batch_id: Some(request.batch_id),
-                    }) {
+                    }, key) {
                         Ok(_) => successful_count += 1,
                         Err(e) => {
                             warn!("Failed to rotate password for secret {}: {}", item.secret_id, e);
