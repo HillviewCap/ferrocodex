@@ -1,5 +1,6 @@
 pub mod auth_commands;
 pub mod user_commands;
+pub mod key_rotation_commands;
 pub mod asset_commands;
 pub mod configuration_commands;
 pub mod branch_commands;
@@ -17,6 +18,7 @@ pub mod bulk_commands;
 
 pub use auth_commands::*;
 pub use user_commands::*;
+pub use key_rotation_commands::*;
 pub use asset_commands::*;
 pub use configuration_commands::*;
 pub use branch_commands::*;

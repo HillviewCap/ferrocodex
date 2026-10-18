@@ -81,6 +81,12 @@ pub fn run() {
             commands::deactivate_user,
             commands::reactivate_user,
             commands::admin_reset_user_password,
+
+            // Data-key rotation commands
+            commands::begin_data_key_rotation,
+            commands::continue_data_key_rotation,
+            commands::finalize_data_key_rotation,
+            commands::get_key_rotation_status,
             
             // Asset management commands
             commands::create_asset,
