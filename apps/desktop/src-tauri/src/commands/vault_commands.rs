@@ -816,6 +816,14 @@ pub async fn delete_vault_secret(
 }
 
 // Standalone credential commands for Story 4.3
+//
+// Authorization model (deliberate, see PR #187): standalone credentials are shared
+// across the organization. They have no vault and no per-credential grants, so any
+// authenticated user may list, search, view the history of, and decrypt any of them.
+// Only the creator or an Administrator may update or delete a credential. Credential
+// categories have no owner, so updating or deleting one is Administrator-only, while
+// any user may create one. Every decryption is written to the audit trail
+// (`VaultSecretAccessed`).
 
 #[tauri::command]
 pub async fn create_standalone_credential(
@@ -995,7 +1003,7 @@ pub async fn manage_credential_categories(
     // Validate session
     let session_manager_guard = session_manager.lock()
         .map_err(|_| "Failed to acquire session lock".to_string())?;
-    let _session = match session_manager_guard.validate_session(&token) {
+    let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
         Err(e) => {
@@ -1003,6 +1011,12 @@ pub async fn manage_credential_categories(
             return Err("Session validation error".to_string());
         }
     };
+
+    // Categories have no owner: anyone may create one, only administrators may change or remove one
+    if matches!(action.as_str(), "update" | "delete") && session.role != UserRole::Administrator {
+        warn!("User {} denied '{}' on credential category", session.username, action);
+        return Err("Only administrators can update or delete credential categories".to_string());
+    }
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1326,6 +1340,30 @@ pub async fn decrypt_standalone_credential(
                     let decrypted_value = String::from_utf8(decrypted_bytes)
                         .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?;
                     
+                    let audit_event = AuditEventRequest {
+                        event_type: AuditEventType::VaultSecretAccessed,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: Some(credential_info.credential.created_by),
+                        target_username: None,
+                        description: format!("Decrypted standalone credential '{}'", credential_info.credential.name),
+                        metadata: Some(serde_json::json!({
+                            "standalone_credential_id": credential_id,
+                            "name": credential_info.credential.name,
+                            "credential_type": credential_info.credential.credential_type.to_string(),
+                            "created_by": credential_info.credential.created_by,
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    SqliteAuditRepository::new(db.get_connection()).log_event(&audit_event)
+                        .map_err(|e| {
+                            error!("Failed to record credential access audit event: {}", e);
+                            "Failed to record audit event".to_string()
+                        })?;
+
                     info!("Decrypted standalone credential {} for user {}", credential_id, session.username);
                     Ok(decrypted_value)
                 }
@@ -2234,6 +2272,82 @@ mod tests {
             let result = decrypt_standalone_credential(token, credential_id, app.state(), app.state()).await;
             assert_eq!(result, Ok("secret".to_string()));
         }
+    }
+
+    fn access_audit_events(app: &tauri::App<MockRuntime>) -> Vec<crate::audit::AuditEvent> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteAuditRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_events_by_type(&AuditEventType::VaultSecretAccessed)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_decrypting_standalone_credential_is_audited() {
+        let (app, credential_id, [admin_token, _, other_token]) = setup_test_app();
+
+        decrypt_standalone_credential(other_token, credential_id, app.state(), app.state()).await.unwrap();
+        decrypt_standalone_credential(admin_token, credential_id, app.state(), app.state()).await.unwrap();
+
+        let events = access_audit_events(&app);
+        assert_eq!(events.len(), 2);
+        let users: Vec<_> = events.iter().map(|e| e.user_id).collect();
+        assert!(users.contains(&Some(OTHER_ID)) && users.contains(&Some(ADMIN_ID)));
+        assert!(events[0].description.contains("PLC Login"));
+        // The secret itself never reaches the audit trail
+        assert!(events.iter().all(|e| !e.description.contains("secret\"") && !e.metadata.clone().unwrap_or_default().contains("\"secret\"")));
+    }
+
+    #[tokio::test]
+    async fn test_failed_decrypt_is_not_audited() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let result = decrypt_standalone_credential(owner_token, credential_id + 1, app.state(), app.state()).await;
+
+        assert_eq!(result, Err("Credential not found".to_string()));
+        assert!(access_audit_events(&app).is_empty());
+    }
+
+    fn category_request(name: &str) -> Option<CreateCategoryRequest> {
+        Some(CreateCategoryRequest {
+            name: name.to_string(),
+            description: None,
+            parent_category_id: None,
+            color_code: None,
+            icon: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_any_user_can_create_but_only_admin_can_change_categories() {
+        let (app, _, [admin_token, _, other_token]) = setup_test_app();
+
+        let created = manage_credential_categories(
+            other_token.clone(), "create".into(), None, category_request("Vendors"), app.state(), app.state(),
+        ).await;
+        assert!(created.is_ok(), "{:?}", created);
+        let category_id = {
+            let categories = get_credential_categories(other_token.clone(), app.state(), app.state()).await.unwrap();
+            categories.iter().find(|c| c.category.name == "Vendors").unwrap().category.id
+        };
+
+        let denied_update = manage_credential_categories(
+            other_token.clone(), "update".into(), Some(category_id), category_request("Renamed"), app.state(), app.state(),
+        ).await;
+        assert!(denied_update.unwrap_err().contains("Only administrators"));
+        let denied_delete = manage_credential_categories(
+            other_token, "delete".into(), Some(category_id), None, app.state(), app.state(),
+        ).await;
+        assert!(denied_delete.unwrap_err().contains("Only administrators"));
+
+        let updated = manage_credential_categories(
+            admin_token.clone(), "update".into(), Some(category_id), category_request("Renamed"), app.state(), app.state(),
+        ).await;
+        assert!(updated.is_ok(), "{:?}", updated);
+        let deleted = manage_credential_categories(
+            admin_token, "delete".into(), Some(category_id), None, app.state(), app.state(),
+        ).await;
+        assert!(deleted.is_ok(), "{:?}", deleted);
     }
 
     #[tokio::test]

@@ -52,6 +52,8 @@ pub enum AuditEventType {
     VaultPermissionExpired,
     // Password rotation event for Story 4.6
     VaultSecretRotated,
+    // Standalone credential reads
+    VaultSecretAccessed,
     // Metadata schema events for Story 5.2A
     MetadataSchemaCreated,
     MetadataSchemaUpdated,
@@ -107,6 +109,7 @@ impl fmt::Display for AuditEventType {
             AuditEventType::VaultPermissionDenied => write!(f, "VAULT_014"),
             AuditEventType::VaultPermissionExpired => write!(f, "VAULT_015"),
             AuditEventType::VaultSecretRotated => write!(f, "VAULT_016"),
+            AuditEventType::VaultSecretAccessed => write!(f, "VAULT_017"),
             // Metadata schema events
             AuditEventType::MetadataSchemaCreated => write!(f, "META_001"),
             AuditEventType::MetadataSchemaUpdated => write!(f, "META_002"),
@@ -282,6 +285,7 @@ impl<'a> SqliteAuditRepository<'a> {
             "VAULT_014" => AuditEventType::VaultPermissionDenied,
             "VAULT_015" => AuditEventType::VaultPermissionExpired,
             "VAULT_016" => AuditEventType::VaultSecretRotated,
+            "VAULT_017" => AuditEventType::VaultSecretAccessed,
             _ => return Err(rusqlite::Error::InvalidColumnType(0, "event_type".to_string(), rusqlite::types::Type::Text)),
         };
 
