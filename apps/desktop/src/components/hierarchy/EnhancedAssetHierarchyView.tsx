@@ -90,9 +90,10 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
   // Load vault info when asset is selected
   useEffect(() => {
     const loadVaultInfo = async () => {
-      if (selectedAsset) {
+      if (selectedAsset && token) {
         try {
           const vault = await invoke<VaultInfo | null>('get_vault_by_asset_id', { 
+            token,
             assetId: selectedAsset.id 
           });
           setVaultInfo(vault);
@@ -106,7 +107,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
     };
 
     loadVaultInfo();
-  }, [selectedAsset]);
+  }, [selectedAsset, token]);
 
   // Handle asset selection - integrate with bulk operations
   const handleAssetSelect = (asset: AssetHierarchy | null) => {
