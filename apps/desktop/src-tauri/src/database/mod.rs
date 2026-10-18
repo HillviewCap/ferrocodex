@@ -28,6 +28,8 @@ pub const KEY_VERSIONED_TABLES: [&str; 5] = [
 
 pub struct Database {
     conn: Connection,
+    #[cfg(test)]
+    checkpoint_busy_for_tests: std::cell::Cell<bool>,
 }
 
 // Type alias for compatibility with workflow module
@@ -35,6 +37,14 @@ pub type DatabaseManager = Database;
 pub type DatabaseError = anyhow::Error;
 
 impl Database {
+    fn wrap(conn: Connection) -> Self {
+        Database {
+            conn,
+            #[cfg(test)]
+            checkpoint_busy_for_tests: std::cell::Cell::new(false),
+        }
+    }
+
     pub fn new(db_path: PathBuf) -> Result<Self> {
         info!("Initializing database at: {:?}", db_path);
         
@@ -47,7 +57,7 @@ impl Database {
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )?;
 
-        let db = Database { conn };
+        let db = Database::wrap(conn);
         db.initialize_schema()?;
 
         info!("Database initialized successfully");
@@ -58,7 +68,7 @@ impl Database {
     /// the schema initializers and migrations on it.
     #[cfg(test)]
     pub fn from_connection(conn: Connection) -> Result<Self> {
-        let db = Database { conn };
+        let db = Database::wrap(conn);
         db.initialize_schema()?;
         Ok(db)
     }
@@ -149,6 +159,10 @@ impl Database {
 
         // Run data migrations
         self.run_data_migrations()?;
+
+        // Write-time key-version checks; after the migrations, which add the
+        // key_version columns on old installs
+        crate::keystore::install_key_version_guards(&self.conn)?;
 
         info!("Database schema initialized");
         Ok(())
@@ -306,6 +320,11 @@ impl Database {
             )?;
             self.set_metadata(revoke_key, "applied")?;
             info!("Revoked data key wraps of inactive users");
+            // Push the deleted wraps out of the WAL and overwrite their pages
+            // in the main file (secure_delete zeroed them)
+            if let Err(e) = self.checkpoint_wal() {
+                tracing::warn!("Failed to checkpoint the WAL after revoking inactive users' key wraps: {}", e);
+            }
         }
 
         // Every ciphertext and key wrap records the data-key version it was
@@ -359,11 +378,32 @@ impl Database {
         Ok(())
     }
 
-    /// Truncates the WAL so deleted pages (for example revoked key wraps) don't
-    /// linger in the -wal file.
+    /// Copies every committed WAL frame into the main database file, syncs
+    /// it, and truncates the WAL, so deleted pages (for example revoked key
+    /// wraps) don't linger in the -wal file and every committed transaction
+    /// is durable in the main file.
+    ///
+    /// Errors when SQLite reports the checkpoint as busy (another connection
+    /// holds a read or write transaction): then not every frame was copied and
+    /// the WAL was not truncated, so callers must not treat earlier commits as
+    /// checkpointed.
     pub fn checkpoint_wal(&self) -> Result<()> {
-        self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+        #[cfg(test)]
+        if self.checkpoint_busy_for_tests.get() {
+            return Err(anyhow::anyhow!("WAL checkpoint did not complete: the database is busy"));
+        }
+        // Returns (busy, wal frames, frames checkpointed)
+        let busy: i64 = self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| row.get(0))?;
+        if busy != 0 {
+            return Err(anyhow::anyhow!("WAL checkpoint did not complete: the database is busy"));
+        }
         Ok(())
+    }
+
+    /// Makes [`Database::checkpoint_wal`] report a busy checkpoint.
+    #[cfg(test)]
+    pub fn set_checkpoint_busy_for_tests(&self, busy: bool) {
+        self.checkpoint_busy_for_tests.set(busy);
     }
 }
 
@@ -734,5 +774,59 @@ mod tests {
         let secure: i64 = db.conn.query_row("PRAGMA secure_delete", [], |r| r.get(0)).unwrap();
         assert_eq!(secure, 1);
         db.checkpoint_wal().unwrap();
+    }
+
+    /// A checkpoint that SQLite reports as busy did not copy every frame or
+    /// truncate the WAL, so it must not count as a success.
+    #[test]
+    fn test_busy_checkpoint_is_an_error() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::new(temp_file.path().to_path_buf()).unwrap();
+        db.conn.busy_timeout(std::time::Duration::ZERO).unwrap();
+        db.set_metadata("before", "1").unwrap();
+
+        // Another connection holds a read transaction on the current snapshot
+        let reader = Connection::open(temp_file.path()).unwrap();
+        reader.execute_batch("BEGIN; SELECT COUNT(*) FROM app_metadata;").unwrap();
+        db.set_metadata("after", "2").unwrap();
+
+        assert!(db.checkpoint_wal().is_err());
+        reader.execute_batch("COMMIT;").unwrap();
+        db.checkpoint_wal().unwrap();
+    }
+
+    /// The migration that deletes inactive users' key wraps checkpoints the
+    /// WAL, so the wraps' old pages don't survive in the main database file.
+    #[test]
+    fn test_revoke_inactive_wraps_migration_checkpoints() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+        let marker: Vec<u8> = (0..64u8).map(|i| i.wrapping_mul(37).wrapping_add(11)).collect();
+        {
+            let db = Database::new(path.clone()).unwrap();
+            db.conn.execute_batch(
+                "INSERT INTO users (id, username, password_hash, role, is_active) VALUES (7, 'gone', 'x', 'Engineer', 0);",
+            ).unwrap();
+            db.conn.execute(
+                "INSERT INTO data_key_wraps (kind, user_id, salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism)
+                 VALUES ('user', 7, X'00', ?1, 8, 1, 1)",
+                [&marker],
+            ).unwrap();
+            db.conn.execute("DELETE FROM app_metadata WHERE key = 'revoke_inactive_user_wraps_20261019'", []).unwrap();
+        } // closing checkpoints, so the wrap sits in the main file
+
+        let contains = |bytes: &[u8]| bytes.windows(marker.len()).any(|w| w == marker.as_slice());
+        assert!(contains(&std::fs::read(&path).unwrap()));
+
+        let db = Database::new(path.clone()).unwrap();
+        let wraps: i64 = db.conn.query_row("SELECT COUNT(*) FROM data_key_wraps", [], |r| r.get(0)).unwrap();
+        assert_eq!(wraps, 0);
+        // While the database is still open, neither file holds the wrap
+        assert!(!contains(&std::fs::read(&path).unwrap()), "the deleted wrap is still in the main file");
+        let mut wal = path.clone().into_os_string();
+        wal.push("-wal");
+        if let Ok(bytes) = std::fs::read(&wal) {
+            assert!(!contains(&bytes), "the deleted wrap is still in the WAL");
+        }
     }
 }

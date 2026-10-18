@@ -353,6 +353,9 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
             _ => request.file_content.clone(),
         };
         
+        // Refuse a key a rotation has replaced (or is replacing)
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
+
         // Encrypt the file content
         let encrypted_content = FileEncryption::new(key).encrypt(&compressed_data)?;
         

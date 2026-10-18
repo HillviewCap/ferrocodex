@@ -1289,6 +1289,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the secret value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Adding {} secret '{}' to vault {}", 
@@ -1361,6 +1362,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     fn update_secret(&self, secret: &VaultSecret, author_id: i64, key_version: u32) -> Result<()> {
+        crate::keystore::ensure_key_version_is_current(self.conn, key_version)?;
         let rows_affected = self.conn.execute(
             "UPDATE vault_secrets
              SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP
@@ -1449,6 +1451,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     fn import_vault(&self, vault_info: &VaultInfo, author_id: i64, key_version: u32) -> Result<IdentityVault> {
+        crate::keystore::ensure_key_version_is_current(self.conn, key_version)?;
         debug!("Importing vault '{}' for asset {}", vault_info.vault.name, vault_info.vault.asset_id);
 
         // Create the vault
@@ -1525,6 +1528,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         self.add_password_history(request.secret_id, password_hash)?;
 
         // Encrypt the new password value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         // Update the secret with new password and metadata
@@ -1612,6 +1616,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Handle different update cases based on what fields are provided
         if let (Some(ref label), Some(ref value)) = (&request.label, &request.value) {
             // Both label and value provided
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
@@ -1626,6 +1631,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             )?;
         } else if let Some(ref value) = request.value {
             // Only value provided
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
@@ -1701,6 +1707,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the credential value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_data_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
@@ -1801,6 +1808,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         let encrypted_data_base64 = if let Some(ref value) = request.value {
             // Encrypt the new value
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             updates.push(encrypted_data_clause.as_str());

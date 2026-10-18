@@ -193,6 +193,19 @@ impl AnalysisQueue {
                 }
             };
             
+            // The job holds the key of the session that queued it, maybe from
+            // before a data-key rotation began (begin's count of active jobs
+            // is only a preflight and can race a new upload). Fail closed:
+            // never use a key that is not the active one, or any key while a
+            // rotation is in progress.
+            if let Err(e) = crate::keystore::ensure_key_is_current(db.get_connection(), &job.data_key) {
+                let message = format!("Analysis failed: {}", e);
+                let _ = analysis_repo.update_analysis_status(analysis_id, AnalysisStatus::Failed, Some(message.clone()));
+                drop(db_guard);
+                Self::emit_progress_event(&app_handle, &job.firmware_id, AnalysisStatus::Failed, None, Some(&message));
+                return Err(anyhow::anyhow!(message));
+            }
+
             // Get firmware path
             let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
             let firmware = firmware_repo.get_firmware_by_id(job.firmware_id)?

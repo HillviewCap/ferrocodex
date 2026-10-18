@@ -16,6 +16,93 @@ pub const DATA_KEY_STATUS_ACTIVE: &str = "active";
 pub const DATA_KEY_STATUS_RETIRING: &str = "retiring";
 pub const DATA_KEY_STATUS_RETIRED: &str = "retired";
 
+/// Error for a write with a data key that is no longer the active one.
+pub const STALE_KEY_ERROR: &str =
+    "Your session holds an outdated encryption key; log in again";
+
+/// Tables holding data-key ciphertext, with the column(s) whose change means
+/// "new ciphertext is being written". Names never come from input.
+const GUARDED_CIPHERTEXT_COLUMNS: [(&str, &str); 4] = [
+    ("configuration_versions", "file_content"),
+    ("vault_secrets", "encrypted_value"),
+    ("standalone_credentials", "encrypted_data"),
+    ("firmware_versions", "file_path"),
+];
+
+/// Refuses a write encrypted under `key` unless `key` is the active data key
+/// and no rotation is in progress.
+///
+/// The session gate (`SessionToken::data_key`) is checked when a command
+/// fetches the key, which can be long before it writes: a firmware upload
+/// reads up to 2 GB first, and analysis jobs hold a key while queued. Every
+/// ciphertext writer calls this under the DB lock, right before (or inside the
+/// transaction of) its write, so a key fetched before a rotation began can't
+/// be used to store data the rotation would then never find. The triggers
+/// from [`install_key_version_guards`] enforce the version part of the rule
+/// for every writer, including any that forget to call this.
+///
+/// An install with no `data_keys` row has no key to rotate, so anything goes.
+pub fn ensure_key_is_current(conn: &Connection, key: &DataKey) -> Result<()> {
+    ensure_key_version_is_current(conn, key.version())
+}
+
+/// [`ensure_key_is_current`] for a key version.
+pub fn ensure_key_version_is_current(conn: &Connection, version: u32) -> Result<()> {
+    // Repository unit tests run on partial schemas without the key store
+    let has_key_store: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'data_keys')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_key_store {
+        return Ok(());
+    }
+    let (active, retiring): (Option<u32>, bool) = conn.query_row(
+        "SELECT (SELECT version FROM data_keys WHERE status = ?1),
+                EXISTS (SELECT 1 FROM data_keys WHERE status = ?2)",
+        params![DATA_KEY_STATUS_ACTIVE, DATA_KEY_STATUS_RETIRING],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    if retiring {
+        return Err(anyhow::anyhow!(crate::auth::KEY_ROTATION_IN_PROGRESS_ERROR));
+    }
+    match active {
+        Some(active) if active != version => Err(anyhow::anyhow!(STALE_KEY_ERROR)),
+        _ => Ok(()),
+    }
+}
+
+/// Creates triggers that abort any insert, or any update of the ciphertext
+/// or `key_version`, that would leave a ciphertext row recorded under a key
+/// version other than the active one. This is the write-time half of the
+/// rotation gate: the check runs inside the writing statement, so no command
+/// can race a rotation by holding an old key across `begin` or `finalize`.
+///
+/// A rotation's own updates set `key_version` to the active version, so they
+/// pass. Rows still at the old version (not yet re-encrypted, or discarded as
+/// unreadable) can't be updated or copied: only re-encryption moves them.
+///
+/// Runs after the migrations, since old installs only get the `key_version`
+/// columns there. Idempotent.
+pub fn install_key_version_guards(conn: &Connection) -> Result<()> {
+    for (table, column) in GUARDED_CIPHERTEXT_COLUMNS {
+        let condition = "EXISTS (SELECT 1 FROM data_keys)
+              AND NEW.key_version IS NOT (SELECT version FROM data_keys WHERE status = 'active')";
+        let message = STALE_KEY_ERROR.replace('\'', "''");
+        conn.execute_batch(&format!(
+            "CREATE TRIGGER IF NOT EXISTS key_version_guard_insert_{table}
+                 BEFORE INSERT ON {table}
+                 WHEN {condition}
+             BEGIN SELECT RAISE(ABORT, '{message}'); END;
+             CREATE TRIGGER IF NOT EXISTS key_version_guard_update_{table}
+                 BEFORE UPDATE OF {column}, key_version ON {table}
+                 WHEN {condition}
+             BEGIN SELECT RAISE(ABORT, '{message}'); END;"
+        ))?;
+    }
+    Ok(())
+}
+
 /// The result of unlocking a user's copy of the data key.
 #[derive(Debug)]
 pub struct UserUnlock {
