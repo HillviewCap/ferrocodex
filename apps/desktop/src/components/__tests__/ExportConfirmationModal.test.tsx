@@ -42,6 +42,18 @@ describe('ExportConfirmationModal', () => {
     vi.clearAllMocks();
   });
 
+  it('associates the Export Location label with its input and shows a compact details table', () => {
+    render(<ExportConfirmationModal {...defaultProps} />);
+
+    expect(screen.getByLabelText('Export Location')).toHaveAttribute('readonly');
+    // Details are rendered as a single compact Descriptions table, not stacked cards
+    expect(document.querySelectorAll('.ant-descriptions').length).toBe(1);
+    expect(screen.getByText('Author')).toBeInTheDocument();
+    expect(screen.getByText('Size')).toBeInTheDocument();
+    // No dividers between sections
+    expect(document.querySelectorAll('.ant-divider').length).toBe(0);
+  });
+
   it('renders export modal with version information', () => {
     render(<ExportConfirmationModal {...defaultProps} />);
     
