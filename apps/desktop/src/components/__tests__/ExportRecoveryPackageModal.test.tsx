@@ -77,7 +77,7 @@ describe('ExportRecoveryPackageModal', () => {
 
   // The modal calls get_firmware_list and get_export_options on open, so mock by command
   // rather than by call order
-  const noVaultOptions = { includeVault: false, vaultAvailable: false, vaultSecretCount: 0 };
+  const noVaultOptions = { include_vault: false, vault_available: false, vault_secret_count: 0 };
   const mockCommands = (
     exportResult: () => Promise<unknown> = () => Promise.resolve(mockManifest),
     exportOptions = noVaultOptions,
@@ -241,7 +241,7 @@ describe('ExportRecoveryPackageModal', () => {
   it('should send the vault passphrase when the vault is included', async () => {
     const user = userEvent.setup();
     mockDialog.open.mockResolvedValueOnce('/export/path');
-    mockCommands(undefined, { includeVault: true, vaultAvailable: true, vaultSecretCount: 2 });
+    mockCommands(undefined, { include_vault: true, vault_available: true, vault_secret_count: 2 });
 
     render(
       <ExportRecoveryPackageModal

@@ -33,9 +33,9 @@ import ExportPassphraseFields from './ExportPassphraseFields';
 const { Text, Title } = Typography;
 
 interface ExportOptions {
-  includeVault: boolean;
-  vaultAvailable: boolean;
-  vaultSecretCount: number;
+  include_vault: boolean;
+  vault_available: boolean;
+  vault_secret_count: number;
 }
 
 interface ExportRecoveryPackageModalProps {
@@ -110,7 +110,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
       });
       
       setExportOptions(options);
-      setIncludeVault(options.includeVault);
+      setIncludeVault(options.include_vault);
     } catch (err) {
       console.error('Failed to fetch export options:', err);
     } finally {
@@ -147,7 +147,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
       return;
     }
 
-    const exportVault = includeVault && !!exportOptions?.vaultAvailable;
+    const exportVault = includeVault && !!exportOptions?.vault_available;
     let vaultPassphrase: string | undefined;
     if (exportVault) {
       try {
@@ -272,7 +272,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
               </div>
             </div>
 
-            {exportOptions?.vaultAvailable && (
+            {exportOptions?.vault_available && (
               <>
                 <Divider style={{ margin: '12px 0' }} />
                 <div>
@@ -285,7 +285,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
                   </Space>
                   <div style={{ marginLeft: 24 }}>
                     <Space wrap>
-                      <Tag color="orange">{exportOptions.vaultSecretCount} secrets</Tag>
+                      <Tag color="orange">{exportOptions.vault_secret_count} secrets</Tag>
                       <Text type="secondary">Encrypted credentials and passwords</Text>
                     </Space>
                   </div>
@@ -324,7 +324,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
             </Button>
           </Form.Item>
 
-          {exportOptions?.vaultAvailable && (
+          {exportOptions?.vault_available && (
             <Form.Item>
               <Checkbox
                 checked={includeVault}
@@ -341,7 +341,7 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
             </Form.Item>
           )}
 
-          {exportOptions?.vaultAvailable && includeVault && <ExportPassphraseFields />}
+          {exportOptions?.vault_available && includeVault && <ExportPassphraseFields />}
         </Form>
 
         {selectedPath && (
