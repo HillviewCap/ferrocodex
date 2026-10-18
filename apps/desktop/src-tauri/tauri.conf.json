@@ -39,9 +39,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "homepage": "https://ferrocodex.com",
     "category": "Productivity",
-    "shortDescription": "Secure password management and encrypted storage",
-    "longDescription": "A cross-platform desktop application for secure password management with local encrypted storage.",
+    "shortDescription": "Secure, offline-first configuration management for operational technology",
+    "longDescription": "Ferrocodex keeps PLC and HMI configurations, firmware, and equipment credentials in one encrypted database on a single workstation. No server, no account, no network connection.",
     "linux": {
       "deb": {
         "depends": ["libwebkit2gtk-4.0-37", "libgtk-3-0"]

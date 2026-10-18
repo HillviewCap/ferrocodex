@@ -24,6 +24,10 @@ jobs:
             args: ''
 
     runs-on: ${{ matrix.platform }}
+    env:
+      # Windows builds are signed with Azure Artifact Signing once the AZURE_* secrets exist.
+      # Until then they build unsigned, so releases keep working while setup is in progress.
+      WINDOWS_SIGNING: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -45,6 +49,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Warn about unsigned Windows build
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_SIGNING != 'true'
+        run: echo "::warning::AZURE_CLIENT_ID is not set, so the Windows installers will be unsigned."
+
+      - name: Set up Windows code signing
+        if: env.WINDOWS_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          cargo install artifact-signing-cli --version 0.11.0 --locked
+          # artifact-signing-cli defaults to one hard-coded SDK version; point it at the newest signtool on the runner.
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Where-Object { $_.Directory.Parent.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found in the Windows SDK' }
+          "SIGNTOOL_PATH=$($signtool.FullName)" >> $env:GITHUB_ENV
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -52,11 +73,53 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only the Windows job gets the signing credentials.
+          AZURE_CLIENT_ID: ${{ env.WINDOWS_SIGNING == 'true' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ env.WINDOWS_SIGNING == 'true' && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TENANT_ID: ${{ env.WINDOWS_SIGNING == 'true' && secrets.AZURE_TENANT_ID || '' }}
         with:
-          tagName: ${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          # Tag pushes create the draft release. Manual runs only build and upload workflow artifacts,
+          # so a branch can be test-built (e.g. to check signing) without creating a release.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }} # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          uploadWorkflowArtifacts: ${{ github.ref_type != 'tag' }}
           releaseName: 'Ferrocodex v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          # The signing config is kept out of tauri.conf.json so local Windows builds don't need Azure credentials.
+          args: ${{ matrix.args }}${{ env.WINDOWS_SIGNING == 'true' && ' --config src-tauri/tauri.windows-signing.conf.json' || '' }}
           projectPath: 'apps/desktop'
+
+      - name: Verify Windows signatures
+        if: env.WINDOWS_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          $bundle = 'apps/desktop/src-tauri/target/release/bundle'
+          $files = @(Get-ChildItem $bundle -Recurse -Include *.exe, *.msi)
+          if ($files.Count -eq 0) { throw 'No Windows installers found to verify' }
+          # Tauri restores the unsigned main binary in target/release after bundling,
+          # so check the signed copy packed inside each installer instead.
+          $extract = Join-Path $env:RUNNER_TEMP 'installer-contents'
+          foreach ($msi in Get-ChildItem $bundle -Recurse -Filter *.msi) {
+            $dir = Join-Path $extract $msi.BaseName
+            $proc = Start-Process msiexec.exe -ArgumentList "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$dir`"" -Wait -PassThru
+            if ($proc.ExitCode -ne 0) { throw "msiexec /a failed for $($msi.Name) with exit code $($proc.ExitCode)" }
+            $inner = @(Get-ChildItem $dir -Recurse -Filter ferrocodex.exe)
+            if ($inner.Count -eq 0) { throw "ferrocodex.exe not found in $($msi.Name)" }
+            $files += $inner
+          }
+          foreach ($nsis in Get-ChildItem $bundle -Recurse -Filter *-setup.exe) {
+            $dir = Join-Path $extract $nsis.BaseName
+            7z x $nsis.FullName "-o$dir" -y | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "7z could not unpack $($nsis.Name)" }
+            $inner = @(Get-ChildItem $dir -Recurse -Filter ferrocodex.exe)
+            if ($inner.Count -eq 0) { throw "ferrocodex.exe not found in $($nsis.Name)" }
+            $files += $inner
+          }
+          $unsigned = @()
+          foreach ($file in $files) {
+            $sig = Get-AuthenticodeSignature $file.FullName
+            Write-Output "$($sig.Status)  $($sig.SignerCertificate.Subject)  $($file.FullName)"
+            if ($sig.Status -ne 'Valid') { $unsigned += $file.FullName }
+          }
+          if ($unsigned.Count -gt 0) { throw "Not validly signed: $($unsigned -join ', ')" }

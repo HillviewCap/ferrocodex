@@ -54,6 +54,7 @@ There is no linter configured: `npm run lint` resolves to a turbo task that no p
 
 - The version string is duplicated in `package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`.
 - Pushing a `v*` tag runs `release.yml`. It uses `tauri-action` to build Windows, macOS (arm64 and x64), and Linux, and creates a **draft** GitHub release.
+- Windows installers are signed with Azure Artifact Signing (`artifact-signing-cli`) when the `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` secrets exist; otherwise the Windows build is unsigned and the job logs a warning. The `signCommand` lives in `src-tauri/tauri.windows-signing.conf.json`, which only `release.yml` loads (via `--config`), so local builds don't need Azure credentials. Manual `workflow_dispatch` runs of `release.yml` build only and upload workflow artifacts (no release), which is how to test signing on a branch: `gh workflow run release.yml --ref <branch>`.
 - When a push to `main` contains a Dependabot-authored commit, `post-dependabot-bump.yml` runs `.github/scripts/bump-version.mjs`. The script bumps the patch version in all four files plus `package-lock.json` and `Cargo.lock`. The workflow then commits, tags, and pushes, which triggers a release. It pushes with the `RELEASE_TOKEN` secret (an admin PAT), because `GITHUB_TOKEN` can't get past branch protection and its tag pushes don't trigger other workflows.
 
 ## Other Repo Contents
