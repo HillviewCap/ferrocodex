@@ -25,6 +25,7 @@ use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 use tracing::{error, info, warn};
+use zeroize::Zeroizing;
 use serde::{Serialize, Deserialize};
 
 type DatabaseState = Mutex<Option<Database>>;
@@ -410,7 +411,8 @@ pub async fn decrypt_vault_secret(
             // Decrypt the secret value
             let decrypted = FileEncryption::new(&data_key)
                 .decrypt_from_base64(&secret.encrypted_value)
-                .and_then(|bytes| Ok(String::from_utf8(bytes)?));
+                .map(Zeroizing::new)
+                .and_then(|bytes| Ok(std::str::from_utf8(&bytes)?.to_owned()));
             match decrypted {
                 Ok(decrypted_value) => {
                     info!("Secret decrypted for user {}: {} ({})",
@@ -1338,12 +1340,17 @@ pub async fn decrypt_standalone_credential(
             match vault_repo.get_standalone_credential(credential_id) {
                 Ok(Some(credential_info)) => {
                     // Decrypt the credential value
-                    let decrypted_bytes = FileEncryption::new(&data_key)
-                        .decrypt_from_base64(&credential_info.credential.encrypted_data)
-                        .map_err(|e| format!("Failed to decrypt credential: {}", e))?;
-                    
-                    let decrypted_value = String::from_utf8(decrypted_bytes)
-                        .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?;
+                    // The plaintext bytes are wiped on drop, including on the error path.
+                    // Only the returned String (handed to the IPC layer) outlives this scope.
+                    let decrypted_bytes = Zeroizing::new(
+                        FileEncryption::new(&data_key)
+                            .decrypt_from_base64(&credential_info.credential.encrypted_data)
+                            .map_err(|e| format!("Failed to decrypt credential: {}", e))?,
+                    );
+
+                    let decrypted_value = std::str::from_utf8(&decrypted_bytes)
+                        .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?
+                        .to_owned();
                     
                     let audit_event = AuditEventRequest {
                         event_type: AuditEventType::VaultSecretAccessed,

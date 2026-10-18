@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 use std::collections::HashMap;
 use std::str::FromStr;
+use zeroize::Zeroizing;
 use tracing::{info, debug, warn};
 use uuid::Uuid;
 use rusqlite::{Connection, params};
@@ -231,14 +232,17 @@ impl<'a> PasswordRotationService<'a> {
         // Add to password history for reuse prevention. The outgoing password is recorded
         // too (secrets created before rotation have no history entry), then history is
         // trimmed to the depth used by update_password.
-        let old_plaintext = FileEncryption::new(key).decrypt_from_base64(old_encrypted_value)
+        // Both the decrypted bytes and the string copy are wiped when they go out of scope.
+        let old_plaintext: Option<Zeroizing<String>> = FileEncryption::new(key)
+            .decrypt_from_base64(old_encrypted_value)
             .ok()
-            .and_then(|b| String::from_utf8(b).ok());
+            .map(Zeroizing::new)
+            .and_then(|bytes| std::str::from_utf8(&bytes).ok().map(|s| Zeroizing::new(s.to_owned())));
         if let Some(old_plaintext) = old_plaintext {
             let history = self.vault_repo.get_password_history(request.secret_id)?;
             let hashes: Vec<String> = history.into_iter().map(|h| h.password_hash).collect();
-            if !super::password_services::PasswordReuseChecker::is_password_reused(&old_plaintext, &hashes) {
-                let old_hash = bcrypt::hash(&old_plaintext, super::password_services::HISTORY_BCRYPT_COST)
+            if !super::password_services::PasswordReuseChecker::is_password_reused(old_plaintext.as_str(), &hashes) {
+                let old_hash = bcrypt::hash(old_plaintext.as_str(), super::password_services::HISTORY_BCRYPT_COST)
                     .map_err(|e| anyhow::anyhow!("Failed to hash previous password for history: {}", e))?;
                 self.vault_repo.add_password_history(request.secret_id, &old_hash)?;
             }
