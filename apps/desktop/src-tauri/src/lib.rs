@@ -44,6 +44,9 @@ pub type DatabaseState = Mutex<Option<Database>>;
 pub type SessionManagerState = Mutex<SessionManager>;
 pub type LoginAttemptTrackerState = Mutex<LoginAttemptTracker>;
 pub type RateLimiterState = Mutex<RateLimiter>;
+/// Held for the whole of every data-key rotation command (begin, continue,
+/// finalize, retry), so they never run concurrently.
+pub type KeyRotationLockState = tokio::sync::Mutex<()>;
 
 
 // Main application entry point
@@ -59,6 +62,7 @@ pub fn run() {
         .manage(SessionManagerState::default())
         .manage(LoginAttemptTrackerState::default())
         .manage(RateLimiterState::new(RateLimiter::new(10, Duration::from_secs(60))))
+        .manage(KeyRotationLockState::default())
         .invoke_handler(tauri::generate_handler![
             // System commands
             commands::greet,
@@ -86,6 +90,7 @@ pub fn run() {
             commands::begin_data_key_rotation,
             commands::continue_data_key_rotation,
             commands::finalize_data_key_rotation,
+            commands::retry_key_rotation_failures,
             commands::get_key_rotation_status,
             
             // Asset management commands

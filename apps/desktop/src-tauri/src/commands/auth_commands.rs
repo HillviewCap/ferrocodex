@@ -50,6 +50,8 @@ pub async fn create_admin_account(
                 .map_err(|e| format!("Failed to create encryption key: {}", e))?;
             tx.commit()
                 .map_err(|e| format!("Failed to create admin account: {}", e))?;
+            // Never hold the DB lock while taking the session lock (lock order)
+            drop(db_guard);
 
             let session_manager = session_manager.lock()
                 .map_err(|_| "Failed to acquire session manager lock".to_string())?;
@@ -77,88 +79,120 @@ pub async fn login(
     session_manager: State<'_, SessionManagerState>,
     attempt_tracker: State<'_, LoginAttemptTrackerState>,
 ) -> Result<LoginResponse, String> {
-    let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            // Check if account is locked
+    // Never hold the DB lock while taking the session lock: other commands
+    // take them in the opposite order, and holding both here could deadlock
+    // (ABBA). So the database work happens first, under the DB lock alone,
+    // and the session is created afterwards under the session lock alone.
+    //
+    // The rotation state read from the database can go stale in between, if
+    // a key rotation begins or finishes. The session manager's rotation epoch
+    // detects that, and the database part is then repeated (a rotation that
+    // began also changed the key this user opens).
+    const ATTEMPTS: usize = 3;
+    for _ in 0..ATTEMPTS {
+        let epoch = session_manager.lock()
+            .map_err(|_| "Failed to acquire session manager lock".to_string())?
+            .rotation_epoch();
+
+        let unlocked = {
+            let db_guard = db_state.lock()
+                .map_err(|_| "Failed to acquire database lock".to_string())?;
+            let db = db_guard.as_ref().ok_or_else(|| "Database not initialized".to_string())?;
+            authenticate_and_unlock(db, &username, &password, &attempt_tracker)?
+        };
+
+        let session_manager = session_manager.lock()
+            .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+        // A retiring key means a rotation is unfinished, possibly from before
+        // a restart: gate encrypted data until an administrator finishes it
+        if !session_manager.sync_rotation_gate(epoch, unlocked.key_rotation_in_progress) {
+            info!("Encryption key state changed during login of {}; retrying", username);
+            continue;
+        }
+        let session = session_manager.create_session_with_key(&unlocked.user, unlocked.data_key)
+            .map_err(|e| format!("Failed to create session: {}", e))?;
+
+        info!("Successful login for user: {}", username);
+        return Ok(LoginResponse {
+            token: session.token,
+            user: unlocked.user.into(),
+            recovery_code: unlocked.recovery_code,
+            key_rotation_in_progress: unlocked.key_rotation_in_progress,
+        });
+    }
+    Err("The encryption key changed while you were logging in; please try again".to_string())
+}
+
+/// What the database part of a login produced.
+struct LoginUnlock {
+    user: User,
+    data_key: Option<DataKey>,
+    recovery_code: Option<String>,
+    key_rotation_in_progress: bool,
+}
+
+/// Checks the lockout and the password, records the attempt, and opens the
+/// user's copy of the data key. Call under the DB lock (and not the session lock).
+fn authenticate_and_unlock(
+    db: &Database,
+    username: &str,
+    password: &str,
+    attempt_tracker: &LoginAttemptTrackerState,
+) -> Result<LoginUnlock, String> {
+    // Check if account is locked
+    let tracker = attempt_tracker.lock()
+        .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
+    if tracker.is_locked(username).map_err(|e| e.to_string())? {
+        warn!("Login attempt for locked account: {}", username);
+        return Err("Account is temporarily locked due to too many failed attempts".to_string());
+    }
+    drop(tracker);
+
+    let user_repo = SqliteUserRepository::new(db.get_connection());
+    match user_repo.find_by_username(username) {
+        Ok(Some(user)) => match verify_password(password, &user.password_hash) {
+            Ok(true) => {
+                // Successful login
+                let tracker = attempt_tracker.lock()
+                    .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
+                tracker.record_successful_attempt(username)
+                    .map_err(|e| e.to_string())?;
+                drop(tracker);
+
+                let (data_key, recovery_code) = unlock_data_key(db, &user, password)?;
+                let key_rotation_in_progress = SqliteKeyStoreRepository::new(db.get_connection())
+                    .retiring_key_version()
+                    .map_err(|e| format!("Failed to check encryption key state: {}", e))?
+                    .is_some();
+                Ok(LoginUnlock { user, data_key, recovery_code, key_rotation_in_progress })
+            }
+            Ok(false) => {
+                // Wrong password
+                let tracker = attempt_tracker.lock()
+                    .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
+                tracker.record_failed_attempt(username)
+                    .map_err(|e| e.to_string())?;
+                warn!("Invalid password for user: {}", username);
+                Err("Invalid credentials".to_string())
+            }
+            Err(e) => {
+                error!("Password verification error: {}", e);
+                Err("Authentication error".to_string())
+            }
+        },
+        Ok(None) => {
+            // User not found
             let tracker = attempt_tracker.lock()
                 .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-            if tracker.is_locked(&username).map_err(|e| e.to_string())? {
-                warn!("Login attempt for locked account: {}", username);
-                return Err("Account is temporarily locked due to too many failed attempts".to_string());
-            }
-            drop(tracker);
-
-            let user_repo = SqliteUserRepository::new(db.get_connection());
-            
-            match user_repo.find_by_username(&username) {
-                Ok(Some(user)) => {
-                    match verify_password(&password, &user.password_hash) {
-                        Ok(true) => {
-                            // Successful login
-                            let tracker = attempt_tracker.lock()
-                                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-                            tracker.record_successful_attempt(&username)
-                                .map_err(|e| e.to_string())?;
-                            drop(tracker);
-
-                            let (data_key, recovery_code) = unlock_data_key(db, &user, &password)?;
-
-                            // A retiring key means a rotation is unfinished, possibly
-                            // from before a restart: gate encrypted data until an
-                            // administrator finishes it
-                            let key_rotation_in_progress = SqliteKeyStoreRepository::new(db.get_connection())
-                                .retiring_key_version()
-                                .map_err(|e| format!("Failed to check encryption key state: {}", e))?
-                                .is_some();
-
-                            let session_manager = session_manager.lock()
-                                .map_err(|_| "Failed to acquire session manager lock".to_string())?;
-                            session_manager.set_rotation_in_progress(key_rotation_in_progress);
-                            let session = session_manager.create_session_with_key(&user, data_key)
-                                .map_err(|e| format!("Failed to create session: {}", e))?;
-
-                            info!("Successful login for user: {}", username);
-
-                            Ok(LoginResponse {
-                                token: session.token,
-                                user: user.into(),
-                                recovery_code,
-                                key_rotation_in_progress,
-                            })
-                        }
-                        Ok(false) => {
-                            // Wrong password
-                            let tracker = attempt_tracker.lock()
-                                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-                            tracker.record_failed_attempt(&username)
-                                .map_err(|e| e.to_string())?;
-                            warn!("Invalid password for user: {}", username);
-                            Err("Invalid credentials".to_string())
-                        }
-                        Err(e) => {
-                            error!("Password verification error: {}", e);
-                            Err("Authentication error".to_string())
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // User not found
-                    let tracker = attempt_tracker.lock()
-                        .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-                    tracker.record_failed_attempt(&username)
-                        .map_err(|e| e.to_string())?;
-                    warn!("Login attempt for non-existent user: {}", username);
-                    Err("Invalid credentials".to_string())
-                }
-                Err(e) => {
-                    error!("Database error during login: {}", e);
-                    Err("Authentication error".to_string())
-                }
-            }
+            tracker.record_failed_attempt(username)
+                .map_err(|e| e.to_string())?;
+            warn!("Login attempt for non-existent user: {}", username);
+            Err("Invalid credentials".to_string())
         }
-        None => Err("Database not initialized".to_string()),
+        Err(e) => {
+            error!("Database error during login: {}", e);
+            Err("Authentication error".to_string())
+        }
     }
 }
 

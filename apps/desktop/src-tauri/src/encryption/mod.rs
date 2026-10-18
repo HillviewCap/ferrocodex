@@ -163,10 +163,13 @@ impl FileEncryption {
     /// The output has the same layout as `encrypt` (fresh random nonce, then
     /// ciphertext and tag) and the same length as the input, so `decrypt` with
     /// `to` reads it. If the blob does not authenticate under `from`, `buf` is
-    /// left unchanged.
+    /// left unchanged and the error is an [`AuthenticationFailed`] (check with
+    /// `error.is::<AuthenticationFailed>()`); any other error means encrypting
+    /// under `to` failed.
     pub fn reencrypt_in_place(from: &DataKey, to: &DataKey, buf: &mut [u8]) -> Result<()> {
         if buf.len() < NONCE_LEN + TAG_LEN {
-            return Err(anyhow::anyhow!("Invalid encrypted data: too short"));
+            // Too short to be a ciphertext: it can't authenticate under any key
+            return Err(anyhow::Error::new(AuthenticationFailed));
         }
 
         let (nonce_bytes, rest) = buf.split_at_mut(NONCE_LEN);
@@ -181,7 +184,7 @@ impl FileEncryption {
                 body,
                 Tag::from_slice(tag_bytes),
             )
-            .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))?;
+            .map_err(|_| anyhow::Error::new(AuthenticationFailed))?;
 
         let new_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         match FileEncryption::new(to).cipher.encrypt_in_place_detached(&new_nonce, b"", body) {
@@ -198,6 +201,40 @@ impl FileEncryption {
         }
     }
 }
+
+impl FileEncryption {
+    /// Whether a blob produced by [`FileEncryption::encrypt`] authenticates
+    /// under `key`, checked in place without a second copy. On success `buf`
+    /// is wiped (it held plaintext); on failure it is left unchanged, so it
+    /// can be tried with another key.
+    pub fn authenticates_in_place(key: &DataKey, buf: &mut [u8]) -> bool {
+        if buf.len() < NONCE_LEN + TAG_LEN {
+            return false;
+        }
+        let (nonce_bytes, rest) = buf.split_at_mut(NONCE_LEN);
+        let (body, tag_bytes) = rest.split_at_mut(rest.len() - TAG_LEN);
+        let ok = FileEncryption::new(key).cipher
+            .decrypt_in_place_detached(Nonce::from_slice(nonce_bytes), b"", body, Tag::from_slice(tag_bytes))
+            .is_ok();
+        if ok {
+            body.zeroize();
+        }
+        ok
+    }
+}
+
+/// A ciphertext did not authenticate under the key it was opened with: it
+/// was encrypted under another key, or it is corrupted or truncated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthenticationFailed;
+
+impl fmt::Display for AuthenticationFailed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Decryption failed: the data does not authenticate under this key")
+    }
+}
+
+impl std::error::Error for AuthenticationFailed {}
 
 /// Argon2id cost parameters. They are stored with each salt so the defaults
 /// can be raised later without breaking existing wrapped keys.

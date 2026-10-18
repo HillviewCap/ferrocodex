@@ -2,7 +2,7 @@ use anyhow::Result;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
@@ -77,6 +77,10 @@ pub struct SessionManager {
     sessions: Mutex<HashMap<String, SessionToken>>,
     session_duration: u64, // in seconds
     rotation_gate: Arc<AtomicBool>,
+    /// Bumped every time begin or finalize sets or clears the gate. Login
+    /// reads the database without holding the session lock, so it uses this
+    /// to tell whether the state it read is still current.
+    rotation_epoch: AtomicU64,
 }
 
 impl SessionManager {
@@ -85,15 +89,45 @@ impl SessionManager {
             sessions: Mutex::new(HashMap::new()),
             session_duration: 24 * 60 * 60, // 24 hours
             rotation_gate: Arc::new(AtomicBool::new(false)),
+            rotation_epoch: AtomicU64::new(0),
         }
     }
 
-    /// Opens or closes the rotation gate for every session, current and future.
+    /// Opens or closes the rotation gate for every session, current and
+    /// future. For the rotation commands (begin and finalize), right after
+    /// they commit; it also bumps the rotation epoch.
     pub fn set_rotation_in_progress(&self, in_progress: bool) {
+        self.rotation_epoch.fetch_add(1, Ordering::SeqCst);
         let was = self.rotation_gate.swap(in_progress, Ordering::SeqCst);
         if was != in_progress {
             info!("Data-key rotation gate {}", if in_progress { "set" } else { "cleared" });
         }
+    }
+
+    /// The current rotation epoch; read before looking up the rotation state
+    /// in the database, and pass it to [`SessionManager::sync_rotation_gate`].
+    pub fn rotation_epoch(&self) -> u64 {
+        self.rotation_epoch.load(Ordering::SeqCst)
+    }
+
+    /// For login: sets the gate to the rotation state read from the database
+    /// after `epoch` was taken (a retiring key exists or not), so a restart
+    /// in the middle of a rotation gates every session again.
+    ///
+    /// Login does not hold the session lock while it reads the database (that
+    /// lock order could deadlock). If begin or finalize changed the gate since
+    /// `epoch`, what login read may be stale (and so may the key it opened):
+    /// nothing is changed and this returns false, and the caller must read the
+    /// database again before creating a session.
+    pub fn sync_rotation_gate(&self, epoch: u64, in_progress: bool) -> bool {
+        if self.rotation_epoch.load(Ordering::SeqCst) != epoch {
+            return false;
+        }
+        let was = self.rotation_gate.swap(in_progress, Ordering::SeqCst);
+        if was != in_progress {
+            info!("Data-key rotation gate {} at login", if in_progress { "set" } else { "cleared" });
+        }
+        true
     }
 
     pub fn rotation_in_progress(&self) -> bool {
@@ -582,6 +616,27 @@ pub mod tests {
         manager.set_rotation_in_progress(false);
         assert!(before.data_key().is_ok());
         assert!(after.data_key().is_ok());
+    }
+
+    /// Login reads the rotation state without the session lock. A begin or
+    /// finalize in between must win: login may not undo the gate it set.
+    #[test]
+    fn test_login_cannot_overwrite_a_gate_changed_meanwhile() {
+        let manager = SessionManager::new();
+        let epoch = manager.rotation_epoch();
+        // begin commits and sets the gate after login read "no rotation"
+        manager.set_rotation_in_progress(true);
+        assert!(!manager.sync_rotation_gate(epoch, false));
+        assert!(manager.rotation_in_progress());
+
+        // A login that read the current state applies it
+        let epoch = manager.rotation_epoch();
+        assert!(manager.sync_rotation_gate(epoch, true));
+        assert!(manager.rotation_in_progress());
+        // finalize clears it after login read "rotation in progress"
+        manager.set_rotation_in_progress(false);
+        assert!(!manager.sync_rotation_gate(epoch, true));
+        assert!(!manager.rotation_in_progress());
     }
 
     #[test]

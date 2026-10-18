@@ -36,7 +36,8 @@ use super::{
     DATA_KEY_STATUS_RETIRING,
 };
 use crate::audit::{AuditEventRequest, AuditEventType, AuditRepository, SqliteAuditRepository};
-use crate::encryption::{seal_to_public_key, DataKey, FileEncryption, KdfParams};
+use crate::encryption::{seal_to_public_key, AuthenticationFailed, DataKey, FileEncryption, KdfParams};
+use crate::firmware::FirmwareRecord;
 
 /// DB rows re-encrypted per `continue` call. Configuration files can be a few
 /// MB each, so keep a batch small enough to hold the DB lock only briefly.
@@ -82,6 +83,17 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
             error TEXT NOT NULL,
             attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(table_name, row_id, from_version)
+        );
+
+        -- Firmware files a rotation replaced. They are deleted only once the
+        -- DB change pointing away from them is durable (after a WAL
+        -- checkpoint at finalize): a non-durable commit can roll back at a
+        -- power cut, and the row would then point at a deleted file.
+        CREATE TABLE IF NOT EXISTS key_rotation_superseded_files (
+            file_path TEXT PRIMARY KEY,
+            firmware_id INTEGER NOT NULL,
+            from_version INTEGER NOT NULL,
+            recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         "#,
     )?;
@@ -200,6 +212,11 @@ pub struct BeginKeyRotationResponse {
     /// Active users who had no keypair and so did not get the new key. An
     /// administrator password reset gives them access again.
     pub users_without_access: Vec<UserKeyAccess>,
+    /// Problems after the rotation was committed that did not stop it, for
+    /// example the session could not be switched to the new key (log in
+    /// again). The recovery code above is valid either way.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 impl fmt::Debug for BeginKeyRotationResponse {
@@ -209,6 +226,7 @@ impl fmt::Debug for BeginKeyRotationResponse {
             .field("from_version", &self.from_version)
             .field("to_version", &self.to_version)
             .field("users_without_access", &self.users_without_access)
+            .field("warnings", &self.warnings)
             .finish()
     }
 }
@@ -220,8 +238,16 @@ pub struct KeyRotationFinalized {
     pub active_version: u32,
     /// Unreadable rows and files left behind (still under the retired key).
     pub discarded: i64,
-    /// Leftover firmware files deleted by the sweep.
+    /// Replaced and leftover firmware files deleted after the rotation.
     pub orphaned_files_removed: usize,
+    /// The rotation had already been finalized (for example automatically by
+    /// the last `continue`); this call only retried the file cleanup.
+    #[serde(default)]
+    pub already_finalized: bool,
+    /// Problems that did not stop finalizing, for example old firmware files
+    /// kept because the database could not be checkpointed yet.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 /// What [`KeyRotation::begin`] produced: the new key for the admin's session
@@ -253,22 +279,37 @@ pub struct FinalizeOutcome {
     pub discarded: i64,
 }
 
-/// Why re-encrypting one value failed. The message never contains data.
-fn reencrypt_value(value: Value, encoding: Encoding, keys: &RotationKeys) -> std::result::Result<Value, String> {
+const NOT_DECRYPTABLE: &str = "Could not be decrypted with the old key";
+
+fn reencrypt_bytes(bytes: &mut [u8], keys: &RotationKeys) -> std::result::Result<(), String> {
+    FileEncryption::reencrypt_in_place(&keys.old, &keys.new, bytes).map_err(|e| {
+        if e.is::<AuthenticationFailed>() {
+            NOT_DECRYPTABLE.to_string()
+        } else {
+            e.to_string()
+        }
+    })
+}
+
+/// The raw ciphertext bytes of a stored value, if it has the expected shape.
+fn stored_bytes(value: Value, encoding: Encoding) -> std::result::Result<Vec<u8>, String> {
     match (encoding, value) {
-        (Encoding::Blob, Value::Blob(mut bytes)) => {
-            FileEncryption::reencrypt_in_place(&keys.old, &keys.new, &mut bytes).map_err(|e| e.to_string())?;
-            Ok(Value::Blob(bytes))
-        }
-        (Encoding::Base64, Value::Text(text)) => {
-            let mut bytes = general_purpose::STANDARD
-                .decode(text.as_bytes())
-                .map_err(|_| "Stored value is not valid base64".to_string())?;
-            FileEncryption::reencrypt_in_place(&keys.old, &keys.new, &mut bytes).map_err(|e| e.to_string())?;
-            Ok(Value::Text(general_purpose::STANDARD.encode(bytes)))
-        }
+        (Encoding::Blob, Value::Blob(bytes)) => Ok(bytes),
+        (Encoding::Base64, Value::Text(text)) => general_purpose::STANDARD
+            .decode(text.as_bytes())
+            .map_err(|_| "Stored value is not valid base64".to_string()),
         _ => Err("Stored value has an unexpected type".to_string()),
     }
+}
+
+/// Why re-encrypting one value failed. The message never contains data.
+fn reencrypt_value(value: Value, encoding: Encoding, keys: &RotationKeys) -> std::result::Result<Value, String> {
+    let mut bytes = stored_bytes(value, encoding)?;
+    reencrypt_bytes(&mut bytes, keys)?;
+    Ok(match encoding {
+        Encoding::Blob => Value::Blob(bytes),
+        Encoding::Base64 => Value::Text(general_purpose::STANDARD.encode(bytes)),
+    })
 }
 
 fn commit(tx: Option<rusqlite::Transaction<'_>>) -> Result<()> {
@@ -494,7 +535,7 @@ impl<'a> KeyRotation<'a> {
 
         Ok(BeginOutcome {
             new_key,
-            response: BeginKeyRotationResponse { recovery_code, from_version, to_version, users_without_access },
+            response: BeginKeyRotationResponse { recovery_code, from_version, to_version, users_without_access, warnings: Vec::new() },
         })
     }
 
@@ -578,14 +619,98 @@ impl<'a> KeyRotation<'a> {
 
     /// Points a firmware row at its re-encrypted file, only if the row is
     /// still the one that was read (same version and path). Returns whether
-    /// it was updated.
+    /// it was updated. In the same transaction, records the old file as
+    /// superseded so finalize deletes it once this change is durable.
     pub fn commit_firmware(&self, item: &FirmwareItem, new_path: &str, keys: &RotationKeys) -> Result<bool> {
+        let tx = self.begin_tx()?;
         let updated = self.conn.execute(
             "UPDATE firmware_versions SET file_path = ?1, key_version = ?2
              WHERE id = ?3 AND key_version = ?4 AND file_path = ?5",
             params![new_path, keys.to_version(), item.id, keys.from_version(), item.file_path],
-        )?;
-        Ok(updated == 1)
+        )? == 1;
+        if updated && item.file_path != new_path {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO key_rotation_superseded_files (file_path, firmware_id, from_version) VALUES (?1, ?2, ?3)",
+                params![item.file_path, item.id, keys.from_version()],
+            )?;
+        }
+        commit(tx)?;
+        Ok(updated)
+    }
+
+    /// Firmware files replaced by a rotation and not deleted yet.
+    pub fn superseded_files(&self) -> Result<Vec<String>> {
+        Ok(self.conn
+            .prepare("SELECT file_path FROM key_rotation_superseded_files ORDER BY file_path")?
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Stops tracking superseded files (deleted, or found to be in use).
+    pub fn forget_superseded(&self, paths: &[String]) -> Result<()> {
+        let tx = self.begin_tx()?;
+        for path in paths {
+            self.conn.execute("DELETE FROM key_rotation_superseded_files WHERE file_path = ?1", [path])?;
+        }
+        commit(tx)
+    }
+
+    /// Deletes the recorded failures of the rotation in progress, so the
+    /// next batches try those rows and files again. Returns how many.
+    pub fn clear_failures(&self, from_version: u32) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM key_rotation_failures WHERE from_version = ?1", [from_version])?)
+    }
+
+    /// Failed DB rows that do decrypt under the retiring key now (for
+    /// example restored from a backup since). Discarding them would lose
+    /// them, so finalize refuses while any exist.
+    pub fn failed_rows_now_readable(&self, keys: &RotationKeys) -> Result<Vec<(String, i64)>> {
+        let from = keys.from_version();
+        let mut readable = Vec::new();
+        for column in &DB_COLUMNS {
+            let select = format!(
+                "SELECT t.id, t.{col} FROM {table} t
+                 JOIN key_rotation_failures f ON f.row_id = t.id AND f.table_name = ?1 AND f.from_version = ?2
+                 WHERE t.key_version = ?2",
+                col = column.column,
+                table = column.table,
+            );
+            let rows: Vec<(i64, Value)> = self.conn
+                .prepare(&select)?
+                .query_map(params![column.table, from], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?;
+            for (id, value) in rows {
+                if let Ok(mut bytes) = stored_bytes(value, column.encoding) {
+                    if FileEncryption::authenticates_in_place(&keys.old, &mut bytes)
+                        || FileEncryption::authenticates_in_place(&keys.new, &mut bytes)
+                    {
+                        readable.push((column.table.to_string(), id));
+                    }
+                }
+            }
+        }
+        Ok(readable)
+    }
+
+    /// Firmware files recorded as failures that are still at the retiring version.
+    pub fn failed_firmware(&self, from_version: u32) -> Result<Vec<FirmwareItem>> {
+        Ok(self.conn
+            .prepare(
+                "SELECT v.id, v.file_path FROM firmware_versions v
+                 JOIN key_rotation_failures f ON f.row_id = v.id AND f.table_name = ?1 AND f.from_version = ?2
+                 WHERE v.key_version = ?2 ORDER BY v.id",
+            )?
+            .query_map(params![FIRMWARE_TABLE, from_version], |row| Ok(FirmwareItem { id: row.get(0)?, file_path: row.get(1)? }))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// The most recently retired key version, if any.
+    pub fn latest_retired_version(&self) -> Result<Option<u32>> {
+        Ok(self.conn.query_row(
+            "SELECT MAX(version) FROM data_keys WHERE status = ?1",
+            [DATA_KEY_STATUS_RETIRED],
+            |row| row.get(0),
+        )?)
     }
 
     /// The stored path of a firmware row, if the row exists.
@@ -597,11 +722,12 @@ impl<'a> KeyRotation<'a> {
         ).optional()?)
     }
 
-    /// Every firmware record's id and stored path, for the finalize sweep.
-    pub fn firmware_records(&self) -> Result<Vec<(i64, String)>> {
+    /// Every firmware record's id, stored path, and key version, for the
+    /// finalize sweep.
+    pub fn firmware_records(&self) -> Result<Vec<FirmwareRecord>> {
         Ok(self.conn
-            .prepare("SELECT id, file_path FROM firmware_versions")?
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .prepare("SELECT id, file_path, key_version FROM firmware_versions")?
+            .query_map([], |row| Ok(FirmwareRecord { id: row.get(0)?, file_path: row.get(1)?, key_version: row.get(2)? }))?
             .collect::<rusqlite::Result<_>>()?)
     }
 
@@ -690,7 +816,7 @@ impl<'a> KeyRotation<'a> {
         let discarded = self.failure_count(from_version)?;
         if discarded > 0 && !discard_unreadable {
             return Err(anyhow!(
-                "{} item(s) could not be decrypted with the old key. Finalizing leaves them unreadable for good; confirm to discard them.",
+                "{} item(s) could not be decrypted with the old key and were recorded as failures. If you have fixed the cause (for example restored a missing file), retry the failed items. Finalizing discards them: they stay unreadable for good. Confirm to discard them.",
                 discarded
             ));
         }
@@ -1087,5 +1213,63 @@ mod tests {
         assert!(store(conn).unlock_with_recovery_code(&f.recovery_code).is_err());
         let current = store(conn).unlock_for_user(f.admin, ADMIN_PASSWORD).unwrap().unwrap();
         assert!(same_key(&current, &k2));
+    }
+
+    fn store_config(conn: &Connection, author: i64, key: &DataKey) -> Result<i64> {
+        use crate::configurations::{ConfigurationRepository, CreateConfigurationRequest, SqliteConfigurationRepository};
+        Ok(SqliteConfigurationRepository::new(conn).store_configuration(CreateConfigurationRequest {
+            asset_id: 1, file_name: "a.cfg".into(), file_content: b"config".to_vec(), author, notes: String::new(),
+        }, key)?.id)
+    }
+
+    /// M3: a command can fetch the key before a rotation begins and write
+    /// after it began (or even after it finished). Such data would be under a
+    /// key nobody holds any more, and no rotation would ever pick it up. Every
+    /// write is checked against the active key when it happens.
+    #[test]
+    fn test_writes_under_a_replaced_key_are_refused() {
+        let f = setup();
+        let conn = f.db.get_connection();
+        let cred = insert_credential(conn, f.admin, 0, &f.k1);
+        assert!(store_config(conn, f.admin, &f.k1).is_ok());
+
+        let k2 = rotation(conn).begin(f.admin, "admin", &f.k1, 0, false).unwrap().new_key;
+
+        // While the rotation runs: the repositories refuse, even with K2
+        let err = store_config(conn, f.admin, &f.k1).unwrap_err();
+        assert_eq!(err.to_string(), crate::auth::KEY_ROTATION_IN_PROGRESS_ERROR);
+        assert!(store_config(conn, f.admin, &k2).is_err());
+        assert!(crate::keystore::ensure_key_is_current(conn, &k2).is_err());
+
+        // Writers that bypass the repositories are stopped by the database
+        let stale = FileEncryption::new(&f.k1).encrypt_to_base64(b"late").unwrap();
+        let err = conn.execute(
+            "INSERT INTO standalone_credentials (name, credential_type, encrypted_data, created_by, key_version)
+             VALUES ('late', 'password', ?1, ?2, 1)",
+            params![stale, f.admin],
+        ).unwrap_err();
+        assert!(err.to_string().contains("outdated encryption key"), "{}", err);
+        assert!(conn.execute(
+            "UPDATE standalone_credentials SET encrypted_data = ?1 WHERE id = ?2", params![stale, cred],
+        ).is_err());
+        // Other columns of a row still at the old version can change
+        conn.execute("UPDATE standalone_credentials SET name = 'renamed' WHERE id = ?1", [cred]).unwrap();
+
+        let keys = rotation(conn).rotation_keys(&k2).unwrap();
+        while rotation(conn).process_db_batch(&keys).unwrap().is_some() {}
+        rotation(conn).finalize(f.admin, "admin", false).unwrap();
+
+        // After the rotation, K1 stays refused and K2 works
+        let err = store_config(conn, f.admin, &f.k1).unwrap_err();
+        assert_eq!(err.to_string(), crate::keystore::STALE_KEY_ERROR);
+        let id = store_config(conn, f.admin, &k2).unwrap();
+        assert_eq!(version_of(conn, "configuration_versions", id), 2);
+        let late = conn.execute(
+            "INSERT INTO vault_entries (asset_id, name, description, created_by) VALUES (1, 'v', '', ?1)", [f.admin],
+        ).and_then(|_| conn.execute(
+            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version) VALUES (?1, 'password', 'pw', ?2, 1)",
+            params![conn.last_insert_rowid(), stale],
+        ));
+        assert!(late.is_err());
     }
 }
