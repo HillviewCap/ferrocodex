@@ -467,6 +467,57 @@ impl<'a> RecoveryImporter<'a> {
         }
     }
 
+    /// Stores imported firmware as `<asset>/<id>.enc` and records it with
+    /// that path, like an upload. The file is written under a unique
+    /// temporary name first (the id is only known after the insert), then
+    /// renamed; each import gets its own file, and the record always points
+    /// at a file that exists.
+    fn store_imported_firmware(
+        &self,
+        firmware_dir: &Path,
+        asset_id: i64,
+        firmware_request: CreateFirmwareRequest,
+        user_id: i64,
+        firmware_data: &[u8],
+        file_size: i64,
+        key: &DataKey,
+    ) -> Result<crate::firmware::FirmwareVersion> {
+        let temp_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as i64)
+            .unwrap_or_default()
+            .max(1);
+        let (temp_path, file_hash, _) = FirmwareFileStorage::store_firmware_file_in(
+            firmware_dir, asset_id, temp_id, firmware_data, key,
+        )?;
+
+        let firmware = match self.firmware_repo.create_firmware(
+            firmware_request, user_id, temp_path.clone(), file_hash, file_size, key.version(),
+        ) {
+            Ok(firmware) => firmware,
+            Err(e) => {
+                let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &temp_path);
+                return Err(e);
+            }
+        };
+
+        let final_path = std::path::PathBuf::from(asset_id.to_string())
+            .join(format!("{}.enc", firmware.id))
+            .to_string_lossy()
+            .to_string();
+        if let Err(e) = std::fs::rename(firmware_dir.join(&temp_path), firmware_dir.join(&final_path)) {
+            let _ = self.firmware_repo.delete_firmware(firmware.id);
+            let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &temp_path);
+            return Err(anyhow::anyhow!("Failed to store imported firmware: {}", e));
+        }
+        if let Err(e) = self.firmware_repo.update_firmware_file_path(firmware.id, final_path.clone()) {
+            let _ = self.firmware_repo.delete_firmware(firmware.id);
+            let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &final_path);
+            return Err(e);
+        }
+        Ok(crate::firmware::FirmwareVersion { file_path: final_path, ..firmware })
+    }
+
     pub fn validate_bundle_integrity(bundle_path: &str) -> Result<RecoveryManifest> {
         let bundle_dir = Path::new(bundle_path);
         if !bundle_dir.exists() || !bundle_dir.is_dir() {
@@ -547,6 +598,21 @@ impl<'a> RecoveryImporter<'a> {
         key: &DataKey,
         vault_passphrase: Option<&str>,
     ) -> Result<RecoveryManifest> {
+        let firmware_dir = crate::firmware::get_firmware_storage_dir(app)?;
+        self.import_recovery_bundle_in(&firmware_dir, request, user_id, username, user_role, key, vault_passphrase)
+    }
+
+    /// [`RecoveryImporter::import_recovery_bundle`] for an explicit firmware directory.
+    pub fn import_recovery_bundle_in(
+        &self,
+        firmware_dir: &Path,
+        request: RecoveryImportRequest,
+        user_id: i64,
+        username: &str,
+        user_role: &UserRole,
+        key: &DataKey,
+        vault_passphrase: Option<&str>,
+    ) -> Result<RecoveryManifest> {
         // Validate user permissions
         if *user_role != UserRole::Engineer && *user_role != UserRole::Administrator {
             return Err(anyhow::anyhow!("Only Engineers and Administrators can import recovery packages"));
@@ -594,38 +660,17 @@ impl<'a> RecoveryImporter<'a> {
         let firmware_path = bundle_dir.join(&manifest.firmware.filename);
         let firmware_data = std::fs::read(&firmware_path)?;
 
-        // Store firmware file - need to create a temporary firmware ID
-        // This will be replaced with the actual ID after creation
-        let temp_firmware_id = 0;
-        let (firmware_storage_path, _, _) = FirmwareFileStorage::store_firmware_file(
-            app,
-            request.target_asset_id,
-            temp_firmware_id,
-            &firmware_data,
-            key,
-        )?;
-
         let firmware_request = CreateFirmwareRequest {
             asset_id: request.target_asset_id,
             version: manifest.firmware.version.clone(),
             vendor: Some(manifest.firmware.vendor.clone()),
             model: Some(manifest.firmware.model.clone()),
-            notes: Some(format!("Imported from recovery bundle by {} on {}", 
+            notes: Some(format!("Imported from recovery bundle by {} on {}",
                 username, chrono::Utc::now().to_rfc3339())),
         };
-
-        // Calculate firmware file hash
-        let mut hasher = Sha256::new();
-        hasher.update(&firmware_data);
-        let file_hash = format!("{:x}", hasher.finalize());
-
-        let imported_firmware = self.firmware_repo.create_firmware(
-            firmware_request,
-            user_id,
-            firmware_storage_path,
-            file_hash,
-            manifest.firmware.file_size,
-            key.version(),
+        let imported_firmware = self.store_imported_firmware(
+            firmware_dir, request.target_asset_id, firmware_request, user_id, &firmware_data,
+            manifest.firmware.file_size, key,
         )?;
 
         // Import vault if requested and available
