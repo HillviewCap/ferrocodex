@@ -529,6 +529,8 @@ Administrators control who can access each vault through granular permissions.
 * **Export**: Include in recovery bundles
 * **Share**: Grant access to others
 
+You always have Read, Write, and Export on a vault you created. Share, and every permission on vaults other people created, need a grant from an administrator. If you try something you are not allowed to do, Ferrocodex shows "Access denied" and records the attempt; ask an administrator for the permission you need.
+
 **Granting Access (Administrators):**
 
 1. Go to **User Management**

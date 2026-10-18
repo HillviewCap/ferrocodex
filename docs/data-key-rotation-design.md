@@ -1,6 +1,6 @@
 # Design: data-key rotation with per-user X25519 keypairs
 
-Status: approved (Option A), in progress on `fix/vault-security-bugs`.
+Status: approved (Option A). Chunks 0-5 are implemented on `fix/vault-security-bugs`; chunk 6 (frontend) and chunk 7 (documentation) follow. See "Deviations from this design" at the end.
 
 Paths are relative to `apps/desktop/src-tauri/src` unless they start with `apps/` or `src/types`.
 
@@ -329,3 +329,18 @@ Other changes in this chunk:
 - This would protect the plaintext metadata and the audit log. Its page key could be derived from the data key with HKDF.
 - The blocker: the DB has to be opened before login, but users and wraps live in it. The fix is a small unencrypted `keystore.db` alongside an encrypted main DB.
 - This is a separate project.
+
+## 6. Deviations from this design
+
+What shipped in chunks 0-5 differs from the plan above in these ways:
+
+- **Analysis-job check.** `begin` takes a count of firmware-analysis jobs from an in-memory counter (`AnalysisQueue::active_jobs`), not from a database query. The count resets when the app restarts.
+- **Auto-finalize happens inside `continue`.** The `continue_data_key_rotation` call that finds nothing left and no failures also finalizes the rotation and reports `finalized: true`. `finalize_data_key_rotation` is only needed to discard unreadable items.
+- **Discard leaves unreadable rows in place.** Finalizing with `discard_unreadable` does not delete the failed rows from their tables. They stay at the old key version, unreadable for good. Only the `key_rotation_failures` entries are removed.
+- **New version is `MAX(version) + 1`.** `begin` computes the new version from the highest row in `data_keys`, not from the active version.
+- **Begin also deletes inactive users' keypairs.** Besides the old public wraps and the legacy user wraps, `begin` deletes `user_keypairs` rows of deactivated users.
+- **Extra migration.** `key_version_indexes_20261020` exists (indexes on the `key_version` columns, used by the rotation queries) in addition to the migrations named in this document.
+- **Blocked actions while rotating.** Create engineer, reactivate, and admin password reset call `session.data_key()`, which errors during rotation, so they are blocked. Password reset with the recovery code still works, as do deactivation and Replace Recovery Key (which uses `rotation_key()`).
+- **`seal_to_public_key` takes an explicit `key_version`.** Its signature is `(&DataKey, &[u8; 32], user_id, key_version)`. The version is bound into the wrap's AAD and is stated by the caller instead of being read from the key.
+- **`grant_user` was removed** in favour of `KeyStoreRepository::set_user_keys`.
+- **`VaultSecret.key_version` is `#[serde(skip)]`.** The value is not serialized to the frontend and defaults to the initial version when deserialized, so the TypeScript type is unchanged.

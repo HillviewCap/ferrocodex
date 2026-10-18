@@ -100,7 +100,8 @@ Forgotten Password
 **Engineer Password:**
 
 1. Contact your administrator
-2. The administrator can deactivate the account and create a new one for you
+2. The administrator uses **Reset password** on your row in **User Management** to set a temporary password
+3. Log in with the temporary password
 
 **Administrator Password:**
 
@@ -123,6 +124,76 @@ Session Timeout
 1. Sessions expire 24 hours after login
 2. Logging out ends the session immediately
 3. Log in again to continue working
+
+Encryption and Key Rotation
+---------------------------
+
+Rotation in Progress
+^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Encryption key rotation in progress; an administrator must finish it"**
+
+*Cause:*
+
+An administrator started a data-key rotation and it has not finished. While it runs, nobody can read or write encrypted data (configuration content, firmware, vault secrets, standalone credentials). The block also applies after a restart if the rotation was interrupted.
+
+*Solution (engineers):*
+
+1. Wait, or ask an administrator to finish the rotation
+2. Retry after it completes; no new login is needed
+
+*Solution (administrators):*
+
+1. Log in and open **User Management**
+2. Click **Rotate Encryption Key** to resume the rotation
+3. Let it run until it finishes. If it stops with a list of failed items, see :ref:`rotating-the-encryption-key`
+
+See :ref:`rotating-the-encryption-key` in the administrator guide for the full procedure.
+
+Cannot Open Encrypted Data After a Rotation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key."**
+
+*Cause:*
+
+The user can log in but has no copy of the active data key. After a rotation this affects active users who had no encryption keypair when it started (for example, accounts that had not logged in since keypairs were introduced),.
+
+*Solution:*
+
+1. Wait until the rotation has finished
+2. An administrator opens **User Management** and uses **Reset password** on the user's row, entering a temporary password
+3. The user logs in with the temporary password.
+
+If the affected user is the only administrator, use **Forgot password?** on the login screen with the recovery key shown when the rotation started. The recovery key from before the rotation no longer works.
+
+Rotation Refused: Analysis Jobs Running
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N firmware analysis job(s) are queued or running; wait for them to finish before rotating the encryption key"**
+
+*Cause:*
+
+Each firmware analysis job holds a copy of the current key. Rotating while one runs would leave a job working with a key that is being replaced.
+
+*Solution:*
+
+1. Wait for the analysis jobs to finish
+2. If none appear to be running, restart Ferrocodex to clear the job count, then log in and try again
+
+Rotation Refused: Users Without Keypairs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N active user(s) have no encryption keypair and will lose access to encrypted data until an administrator resets their password... Acknowledge this to continue."**
+
+*Cause:*
+
+Those users have no keypair to seal the new key to. They get one the next time they log in with their own password, or when an administrator resets their password.
+
+*Solutions:*
+
+1. To avoid any loss of access, ask those users to log in once, then start the rotation again
+2. Or tick the acknowledgement checkbox and rotate now, then use **Reset password** for each listed user afterwards
 
 Performance Issues
 ------------------
@@ -453,13 +524,24 @@ Password Generation Problems
 Vault Access Denied
 ^^^^^^^^^^^^^^^^^^^
 
-**Issue: "Access Denied" when opening vault**
+**Issue: "Access denied" on a vault operation (open, add or edit a secret, view a secret, export, share)**
+
+*Cause:*
+
+Vault permissions are enforced by the backend on every operation. You do not hold the permission the operation needs:
+
+* Administrators hold every permission
+* The creator of a vault holds Read, Write, and Export on it
+* Everyone else needs an explicit, unexpired grant for that permission on that vault
+* Share is administrator-only
+
+A Read grant does not allow editing or exporting, so a user can open a vault and still be denied when they try to change it. The denial is recorded in the vault access log and the audit log.
 
 *Solutions:*
 
 1. Verify you have vault permissions:
 
-   * Ask administrator for access
+   * Ask an administrator to grant the specific permission you need
    * Check permission expiration
    * Review audit log for changes
 

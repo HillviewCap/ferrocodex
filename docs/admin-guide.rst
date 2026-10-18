@@ -29,7 +29,7 @@ Exclusive Capabilities
 
 Administrators have access to functions not available to Engineers:
 
-* Create, modify, and delete user accounts
+* Create and modify user accounts, and deactivate or reactivate them
 * View all audit logs (not just their own)
 * Manage vault permissions for all users
 * Configure system-wide settings
@@ -84,26 +84,28 @@ Managing Existing Users
    * Modify account settings
    * Add administrative notes
 
-2. **Reset Password**:
+2. **Reset Password** (row action in **User Management**):
 
-   * Generate new temporary password
-   * Force change on next login
-   * Notify user via email
-   * Document reason in audit log
+   * Available for active accounts other than your own
+   * Enter a temporary password that meets the password policy and give it to the user through a secure channel
+   * The account gets a new encryption keypair holding the current data key, so it can open encrypted data again
+   * The user's open sessions end immediately
+   * The reset is recorded in the audit log
+   * This is also how you restore access for a user who lost it after a key rotation (see :ref:`rotation-lost-access`)
 
-3. **Lock/Unlock Account**:
+3. **Deactivate**:
 
-   * Temporarily disable access
-   * Preserves user data and permissions
-   * Useful for leave of absence
-   * Automatic unlock option
+   * Available for engineer accounts; administrator accounts cannot be deactivated
+   * The user's sessions end immediately
+   * Their access to encrypted data is revoked at once: their keypair and every copy of the data key they hold are deleted, so their password opens nothing in the current database
+   * User data, audit history, and permissions records are kept
+   * Deactivation does not change the data key. Backups made earlier stay readable with the old key. To cut off a copy of the key someone may already hold, follow it with a key rotation (see :ref:`rotating-the-encryption-key`)
 
-4. **Delete Account**:
+4. **Reactivate** (shown in place of Deactivate for inactive accounts):
 
-   * Permanent removal (use cautiously)
-   * Audit history retained
-   * Cannot be undone
-   * Consider locking instead
+   * Requires you to enter a temporary password, because the old password no longer opens anything
+   * Gives the account a new keypair and a fresh copy of the data key
+   * Give the temporary password to the user through a secure channel
 
 User Role Management
 ^^^^^^^^^^^^^^^^^^^^
@@ -148,6 +150,85 @@ User Role Management
 3. Review vault access after change
 4. Notify user of new capabilities
 5. Update training if needed
+
+.. _rotating-the-encryption-key:
+
+Encryption Key Rotation
+-----------------------
+
+Rotation replaces the data key that encrypts configurations, firmware, and vault secrets, and re-encrypts all of it under the new key. Read :ref:`data-key-rotation` in the security guide first: it explains when to rotate and what rotation does not protect (in particular, backups made before the rotation stay readable with the old key).
+
+Before You Start
+^^^^^^^^^^^^^^^^
+
+* Pick a quiet time. While a rotation runs, nobody can read or write encrypted data, and large firmware libraries can take several minutes.
+* Make sure no firmware analysis is running. Rotation is refused while analysis jobs are queued or running.
+* Have your administrator password ready.
+* Have a safe place ready to store the new recovery key. The old one stops working.
+* Tell engineers beforehand. Their sessions end when the rotation starts.
+
+Rotating the Key
+^^^^^^^^^^^^^^^^
+
+1. Go to **User Management** and click **Rotate Encryption Key**.
+2. Read the preflight summary. It lists any active users who have no encryption keypair. Those users cannot be given the new key and will lose access to encrypted data until you reset their password. Tick the acknowledgement checkbox to proceed with them. Ferrocodex refuses to start without it.
+3. Enter your administrator password. Ferrocodex checks it and uses it to open your own copy of the key.
+4. Click to start. Ferrocodex generates the new key, gives it to every active user who has a keypair, and replaces the recovery key.
+5. **Store the new recovery key.** It is shown once, in the same dialog as at setup. Write it down or print it and keep it offline, away from the workstation. Do not continue until you have saved it, because it cannot be shown again. Anyone holding it can reset any account's password.
+6. Watch the progress bar. Ferrocodex re-encrypts configuration versions, vault secrets, standalone credentials, and firmware files in turn. Keep the application open until it reports that it has finished.
+7. When nothing is left to re-encrypt and nothing failed, the rotation finishes on its own: the old key is retired and encrypted data becomes available again. The audit log records when the rotation started and when it completed.
+
+.. note::
+   Starting a rotation ends every other session, including other administrators. Your own session carries on with the new key.
+
+If the Application Closes Part-Way
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A rotation survives a restart, a crash, or a power cut. The old key is kept encrypted under the new one until the rotation finishes, and re-encryption can safely be repeated.
+
+1. Start Ferrocodex and log in as an administrator with your normal password. The login reports that a rotation is in progress, and encrypted data stays blocked for everyone.
+2. Open **User Management** and click **Rotate Encryption Key** again. It picks up where it stopped, without asking for a new recovery key.
+3. Let it run to the end.
+
+Any administrator who has a keypair can resume it, not only the one who started it.
+
+If Items Cannot Be Re-Encrypted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If some items cannot be decrypted with the old key (for example, a corrupted record), Ferrocodex records them as failures, finishes everything else, and then stops with the failures listed. It does not finish on its own.
+
+* Review the list. Each item is shown with the reason it could not be decrypted under the old key.
+* If you can restore them another way, do that first (for example, re-upload the configuration), then continue.
+* To complete the rotation anyway, click **Finalize and discard unreadable items**. The old key is then destroyed, so those items stay unreadable permanently. The rows are left in place but cannot be opened. This cannot be undone.
+
+If an error appears while writing a re-encrypted firmware file (for example, the disk is full), fix the problem and click **Rotate Encryption Key** again to resume.
+
+What Engineers See During a Rotation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Their sessions end when the rotation starts, so they must log in again.
+* They can log in, and the dashboard shows that a rotation is in progress.
+* Anything that reads or writes encrypted data (configuration content, firmware, vault secrets, standalone credentials) fails with "Encryption key rotation in progress; an administrator must finish it".
+* Once the rotation is finished, sessions opened during it work again without logging in again. Engineers who have no copy of the new key (see below) stay without access.
+
+While a rotation is in progress, these administrator actions are blocked because they need the data key: creating an engineer account, reactivating a user, and **Reset password**. Resetting a password with the recovery key from the login screen still works, as do deactivating a user and **Replace Recovery Key**.
+
+.. _rotation-lost-access:
+
+Users Who Lose Access After a Rotation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An active user who had no keypair when the rotation started (typically an account that had not logged in since keypairs were introduced) has no copy of the new key. They can log in, but encrypted data is unavailable to them. The preflight listed them.
+
+To restore a user:
+
+1. Wait until the rotation has finished.
+2. In **User Management**, click **Reset password** on the user's row and enter a temporary password.
+3. Give them the temporary password. They log in with it and have access again.
+
+If every administrator lost access, use **Forgot password?** on the login screen with the new recovery key. The old recovery key no longer works.
+
+Rotation also deletes the keypairs of deactivated users. They get new ones when you reactivate them with a temporary password.
 
 Identity Vault Administration
 -----------------------------
