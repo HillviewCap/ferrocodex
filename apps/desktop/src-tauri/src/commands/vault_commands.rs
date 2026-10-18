@@ -2439,7 +2439,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_creator_can_read_and_write_own_vault_but_not_export() {
+        async fn test_creator_can_read_write_and_export_own_vault() {
             let f = setup();
 
             assert_eq!(f.decrypt(&f.owner, f.owner_secret, f.owner_vault).await, Ok("owner-vault-pw".to_string()));
@@ -2451,9 +2451,10 @@ mod tests {
                 author_id: 0,
             }, f.app.state(), f.app.state()).await;
             assert!(added.is_ok(), "{:?}", added);
-            assert_denied(f.export(&f.owner, f.owner_vault).await);
+            assert!(f.export(&f.owner, f.owner_vault).await.is_ok());
             // Creating one vault gives no access to another
             assert_denied(f.decrypt(&f.owner, f.admin_secret, f.admin_vault).await);
+            assert_denied(f.export(&f.owner, f.admin_vault).await);
         }
 
         #[tokio::test]

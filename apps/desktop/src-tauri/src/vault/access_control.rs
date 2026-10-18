@@ -25,10 +25,10 @@ impl<'a> VaultAccessControlService<'a> {
 
     /// Decide whether a user holds a permission on a vault, without logging.
     ///
-    /// Administrators hold every permission. The vault's creator holds Read and
-    /// Write on it, matching the UI, which lets creators manage their own vault's
-    /// secrets. Export and Share, and any access to other users' vaults, need an
-    /// active, unexpired grant.
+    /// Administrators hold every permission. The vault's creator holds Read,
+    /// Write and Export on it, so they can manage and back up their own vault's
+    /// secrets. Share, and any access to other users' vaults, need an active,
+    /// unexpired grant.
     pub fn evaluate_access(&self, user_id: i64, role: &UserRole, vault_id: i64, permission_type: PermissionType) -> Result<VaultAccessInfo> {
         if *role == UserRole::Administrator {
             return Ok(VaultAccessInfo {
@@ -54,9 +54,10 @@ impl<'a> VaultAccessControlService<'a> {
         Ok(access_info)
     }
 
-    /// Permissions a vault's creator holds on it without a grant
+    /// Permissions a vault's creator holds on it without a grant. Share stays
+    /// with administrators, who are the only ones who can grant access.
     fn creator_holds(permission_type: PermissionType) -> bool {
-        matches!(permission_type, PermissionType::Read | PermissionType::Write)
+        matches!(permission_type, PermissionType::Read | PermissionType::Write | PermissionType::Export)
     }
 
     /// Check access like `evaluate_access`, and record the attempt in the vault
@@ -300,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_creator_holds_read_and_write_only() {
+    fn test_creator_holds_read_write_and_export() {
         let (_temp_file, db_conn) = setup_test_db();
         let conn_guard = db_conn.lock().unwrap();
         let conn = &*conn_guard;
@@ -322,10 +323,11 @@ mod tests {
 
         assert!(has(2, PermissionType::Read));
         assert!(has(2, PermissionType::Write));
-        assert!(!has(2, PermissionType::Export));
+        assert!(has(2, PermissionType::Export));
         assert!(!has(2, PermissionType::Share));
         assert!(!has(3, PermissionType::Read));
         assert!(!has(3, PermissionType::Write));
+        assert!(!has(3, PermissionType::Export));
 
         // evaluate_access logs nothing; check_access logs every engineer check
         let repo = SqliteVaultRepository::new(conn);
