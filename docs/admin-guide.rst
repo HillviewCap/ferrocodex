@@ -195,13 +195,15 @@ Any administrator who has a keypair can resume it, not only the one who started 
 If Items Cannot Be Re-Encrypted
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If some items cannot be decrypted with the old key (for example, a corrupted record), Ferrocodex records them as failures, finishes everything else, and then stops with the failures listed. It does not finish on its own.
+Ferrocodex records an item as a failure only when it is really unreadable: the data does not decrypt with the old key (for example, a corrupted record or a file encrypted under some other key), a firmware file is missing, or a firmware path points outside the firmware folder. It finishes everything else and then stops with the failures listed. It does not finish on its own.
 
-* Review the list. Each item is shown with the reason it could not be decrypted under the old key.
-* If you can restore them another way, do that first (for example, re-upload the configuration), then continue.
-* To complete the rotation anyway, click **Finalize and discard unreadable items**. The old key is then destroyed, so those items stay unreadable permanently. The rows are left in place but cannot be opened. This cannot be undone.
+* Review the list. Each item is shown with the reason it failed, for example "could not be decrypted with the old key" or "Firmware file is missing".
+* If you can fix the cause, do that first (for example, restore a missing firmware file from a backup to the same place), then click **Retry failed items**. Ferrocodex forgets the recorded failures and tries those items again. Items that are still unreadable are recorded again.
+* To complete the rotation anyway, click **Finalize and discard unreadable items**. Before discarding, Ferrocodex checks every failed item again. If any of them can now be decrypted, or was already re-encrypted, it refuses and asks you to retry the failed items instead. Otherwise the old key is destroyed, so those items stay unreadable permanently. The rows are left in place but cannot be opened. This cannot be undone.
 
-If an error appears while writing a re-encrypted firmware file (for example, the disk is full), fix the problem and click **Rotate Encryption Key** again to resume.
+Read errors and write errors (for example, a firmware file that another program has locked, missing permissions, or a full disk) are not recorded as failures, because the data itself is fine. The rotation stops with the error instead. Fix the problem and click **Rotate Encryption Key** again to resume.
+
+Ferrocodex keeps the old firmware files until the rotation is finalized and the database has been safely written to disk, so a crash or power cut part-way never leaves a record pointing at a deleted file. If the database is busy at that moment, the old files are kept and the finish message says so; finalizing again later removes them.
 
 What Engineers See During a Rotation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

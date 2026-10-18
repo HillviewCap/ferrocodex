@@ -150,6 +150,68 @@ An administrator started a data-key rotation and it has not finished. While it r
 
 See :ref:`rotating-the-encryption-key` in the administrator guide for the full procedure.
 
+Rotation Stops With Failed Items
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N item(s) could not be decrypted with the old key and were recorded as failures..."**
+
+*Cause:*
+
+Some items did not decrypt with the old key, a firmware file is missing, or a firmware path points outside the firmware folder. The rotation re-encrypted everything else and is waiting for a decision.
+
+*Solution:*
+
+1. Read the reason shown for each failed item
+2. If you can fix it (for example, restore a missing firmware file from a backup to the same place), do so and click **Retry failed items**, then let the rotation run again
+3. Only if the items are truly lost, click **Finalize and discard unreadable items**. This destroys the old key, so they stay unreadable permanently
+
+**Issue: "N item(s) recorded as unreadable can be decrypted now. Retry the failed items instead of discarding them."**
+
+*Cause:*
+
+Before discarding, Ferrocodex checks every failed item again. At least one of them now decrypts with the old key (for example, a restored file), or was already re-encrypted. Discarding would destroy data that can still be saved.
+
+*Solution:*
+
+Click **Retry failed items** and let the rotation run until it finishes.
+
+**Issue: "Some failed items could not be checked before discarding (...)"**
+
+*Cause:*
+
+A failed firmware file could not be read during the check (for example, missing permissions or a locked file), so Ferrocodex cannot confirm it is unreadable.
+
+*Solution:*
+
+Fix the access problem named in the message and try again.
+
+Rotation Stops With a Read or Write Error
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Failed to re-encrypt firmware N: ... Fix the problem and continue the rotation."**
+
+*Cause:*
+
+A firmware file could not be read or the re-encrypted copy could not be written (another program has the file open, missing permissions, a full disk). The data is not damaged and nothing was recorded as a failure.
+
+*Solution:*
+
+1. Fix the problem named in the message
+2. Click **Rotate Encryption Key** again to resume
+
+Writes Refused With an Outdated Key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Your session holds an outdated encryption key; log in again"**
+
+*Cause:*
+
+The data key was rotated after this session (or a running task, such as a firmware upload or analysis) obtained its key. Ferrocodex refuses to store anything under the old key, because it would be unreadable.
+
+*Solution:*
+
+Log in again and repeat the action.
+
 Cannot Open Encrypted Data After a Rotation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -174,7 +236,7 @@ Rotation Refused: Analysis Jobs Running
 
 *Cause:*
 
-Each firmware analysis job holds a copy of the current key. Rotating while one runs would leave a job working with a key that is being replaced.
+Each firmware analysis job holds a copy of the current key. Rotating while one runs would leave a job working with a key that is being replaced. (A job queued just after the rotation starts does not use its old key: it fails with "Analysis failed: Encryption key rotation in progress" and can be retried once the rotation has finished.)
 
 *Solution:*
 
