@@ -922,6 +922,7 @@ pub async fn search_credentials(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -972,6 +973,7 @@ pub async fn get_credential_categories(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1011,6 +1013,7 @@ pub async fn manage_credential_categories(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     // Categories have no owner: anyone may create one, only administrators may change or remove one
     if matches!(action.as_str(), "update" | "delete") && session.role != UserRole::Administrator {
@@ -1096,6 +1099,7 @@ pub async fn get_credential_history(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1282,6 +1286,7 @@ pub async fn get_standalone_credential(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -2348,6 +2353,51 @@ mod tests {
             admin_token, "delete".into(), Some(category_id), None, app.state(), app.state(),
         ).await;
         assert!(deleted.is_ok(), "{:?}", deleted);
+    }
+
+    /// Runs `$call` on another thread while this one holds the DB lock, so the command
+    /// blocks waiting for the DB. A command that still holds the session-manager guard at
+    /// that point would invert the lock order used elsewhere (DB first, then session).
+    macro_rules! assert_session_lock_released_while_waiting_for_db {
+        ($app:expr, |$db:ident, $sm:ident| $call:expr) => {{
+            let db_state = $app.state::<DatabaseState>();
+            let sm_state = $app.state::<SessionManagerState>();
+            let db_guard = db_state.lock().unwrap();
+            std::thread::scope(|scope| {
+                let (thread_db, thread_sm) = (db_state.clone(), sm_state.clone());
+                let handle = scope.spawn(move || {
+                    let $db = thread_db;
+                    let $sm = thread_sm;
+                    let _ = tauri::async_runtime::block_on($call);
+                });
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                let session_lock_free = sm_state.try_lock().is_ok();
+                drop(db_guard);
+                handle.join().unwrap();
+                assert!(session_lock_free, "session manager lock is held while waiting for the database lock");
+            });
+        }};
+    }
+
+    #[test]
+    fn test_standalone_read_commands_do_not_hold_session_lock_while_taking_db_lock() {
+        let (app, credential_id, [admin_token, _, _]) = setup_test_app();
+        let admin_token = &admin_token;
+
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| search_credentials(
+            admin_token.clone(),
+            SearchCredentialsRequest {
+                query: None, credential_type: None, category_id: None, tags: None,
+                created_after: None, created_before: None, limit: None, offset: None,
+            },
+            db, sm,
+        ));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_credential_categories(admin_token.clone(), db, sm));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| manage_credential_categories(
+            admin_token.clone(), "create".into(), None, category_request("Locks"), db, sm,
+        ));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_credential_history(admin_token.clone(), credential_id, db, sm));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_standalone_credential(admin_token.clone(), credential_id, db, sm));
     }
 
     #[tokio::test]
