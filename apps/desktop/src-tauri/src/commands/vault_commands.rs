@@ -574,22 +574,13 @@ pub async fn check_password_reuse(
     };
     drop(session_manager_guard);
 
-    // Hash the password for comparison
-    let password_hash = match PasswordGenerator::hash_password(&password) {
-        Ok(hash) => hash,
-        Err(e) => {
-            error!("Failed to hash password for reuse check: {}", e);
-            return Err("Failed to process password".to_string());
-        }
-    };
-
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
             
-            match vault_repo.check_password_reuse(&password_hash, exclude_secret_id) {
+            match vault_repo.check_password_reuse(&password, exclude_secret_id) {
                 Ok(is_reused) => {
                     info!("Password reuse check by {}: {}", session.username, is_reused);
                     Ok(is_reused)
@@ -693,7 +684,7 @@ pub async fn update_credential_password(
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
 
             // Check for password reuse
-            match vault_repo.check_password_reuse(&password_hash, Some(request.secret_id)) {
+            match vault_repo.check_password_reuse(&request.new_password, Some(request.secret_id)) {
                 Ok(is_reused) => {
                     if is_reused {
                         return Err("Password has been used before on another credential".to_string());

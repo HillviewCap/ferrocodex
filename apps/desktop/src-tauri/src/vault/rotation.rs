@@ -138,6 +138,9 @@ pub struct BatchRotationRequest {
     pub author_id: i64,
 }
 
+/// Number of previous passwords remembered per secret (matches update_password).
+const PASSWORD_HISTORY_DEPTH: usize = 5;
+
 // Password Rotation Service
 pub struct PasswordRotationService<'a> {
     conn: &'a Connection,
@@ -179,7 +182,7 @@ impl<'a> PasswordRotationService<'a> {
         }
 
         // Hash the new password
-        let new_password_hash = bcrypt::hash(&request.new_password, bcrypt::DEFAULT_COST)
+        let new_password_hash = bcrypt::hash(&request.new_password, super::password_services::HISTORY_BCRYPT_COST)
             .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
 
         // Task 2.3: Archive the current password in rotation history
@@ -223,8 +226,23 @@ impl<'a> PasswordRotationService<'a> {
             ],
         )?;
 
-        // Add to password history for reuse prevention
+        // Add to password history for reuse prevention. The outgoing password is recorded
+        // too (secrets created before rotation have no history entry), then history is
+        // trimmed to the depth used by update_password.
+        let old_plaintext = FileEncryption::new(key).decrypt_from_base64(old_encrypted_value)
+            .ok()
+            .and_then(|b| String::from_utf8(b).ok());
+        if let Some(old_plaintext) = old_plaintext {
+            let history = self.vault_repo.get_password_history(request.secret_id)?;
+            let hashes: Vec<String> = history.into_iter().map(|h| h.password_hash).collect();
+            if !super::password_services::PasswordReuseChecker::is_password_reused(&old_plaintext, &hashes) {
+                let old_hash = bcrypt::hash(&old_plaintext, super::password_services::HISTORY_BCRYPT_COST)
+                    .map_err(|e| anyhow::anyhow!("Failed to hash previous password for history: {}", e))?;
+                self.vault_repo.add_password_history(request.secret_id, &old_hash)?;
+            }
+        }
         self.vault_repo.add_password_history(request.secret_id, &new_password_hash)?;
+        self.vault_repo.cleanup_password_history(request.secret_id, PASSWORD_HISTORY_DEPTH)?;
 
         // Task 2.6: Audit logging
         let audit_event = AuditEventRequest {
@@ -273,11 +291,10 @@ impl<'a> PasswordRotationService<'a> {
             return Err(anyhow::anyhow!("Password must be at least 12 characters long"));
         }
 
-        // Check password reuse
-        let password_hash = bcrypt::hash(new_password, bcrypt::DEFAULT_COST)
-            .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
-
-        if self.vault_repo.check_password_reuse(&password_hash, Some(secret_id))? {
+        // Check password reuse against this secret's history (bcrypt hashes are salted, so verify).
+        let hashes: Vec<String> = self.vault_repo.get_password_history(secret_id)?
+            .into_iter().map(|h| h.password_hash).collect();
+        if super::password_services::PasswordReuseChecker::is_password_reused(new_password, &hashes) {
             return Err(anyhow::anyhow!("Password has been used before. Please choose a different password."));
         }
 
@@ -407,6 +424,54 @@ mod tests {
         conn.query_row(sql, [id], |r| r.get(0)).unwrap()
     }
 
+    fn rotation_service(conn: &Connection) -> PasswordRotationService<'_> {
+        PasswordRotationService::new(
+            conn,
+            Box::new(SqliteVaultRepository::new(conn)),
+            Box::new(SqliteAuditRepository::new(conn)),
+        )
+    }
+
+    fn rotate_to(svc: &PasswordRotationService, secret_id: i64, pw: &str) {
+        svc.rotate_password(PasswordRotationRequest {
+            secret_id, new_password: pw.into(), rotation_reason: "scheduled".into(),
+            author_id: 1, batch_id: None,
+        }, crate::encryption::test_key()).unwrap();
+    }
+
+    #[test]
+    fn test_validate_rotation_rejects_reuse_of_previous_passwords() {
+        let (conn, vault_id) = setup_batch_db();
+        // Initial value is "OldPassword-1234" (A); rotate A -> B.
+        let id = add_secret(&conn, vault_id, SecretType::Password, "pw");
+        let svc = rotation_service(&conn);
+        svc.validate_rotation(id, "NewPassword-bbbb-2").expect("fresh password is accepted");
+        rotate_to(&svc, id, "NewPassword-bbbb-2");
+
+        // B -> A (the original) and B -> B are both reuse.
+        let err = svc.validate_rotation(id, "OldPassword-1234").unwrap_err();
+        assert!(err.to_string().contains("used before"), "{}", err);
+        assert!(svc.validate_rotation(id, "NewPassword-bbbb-2").is_err());
+        // A brand-new password is still accepted.
+        svc.validate_rotation(id, "BrandNew-Password-9").expect("new password accepted");
+    }
+
+    #[test]
+    fn test_validate_rotation_skips_non_bcrypt_history_and_keeps_five() {
+        let (conn, vault_id) = setup_batch_db();
+        let id = add_secret(&conn, vault_id, SecretType::Password, "pw");
+        let svc = rotation_service(&conn);
+        SqliteVaultRepository::new(&conn).add_password_history(id, "redacted").unwrap();
+        svc.validate_rotation(id, "BrandNew-Password-9").expect("redacted entries are skipped");
+
+        for i in 0..7 {
+            rotate_to(&svc, id, &format!("Rotated-Password-{}", i));
+        }
+        let n = count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id);
+        assert_eq!(n, 5);
+        assert!(svc.validate_rotation(id, "Rotated-Password-6").is_err());
+    }
+
     #[test]
     fn test_batch_rotation_rotates_all_items() {
         let (conn, vault_id) = setup_batch_db();
@@ -427,7 +492,8 @@ mod tests {
 
         for id in [s1, s2] {
             assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", id), 1);
-            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id), 1);
+            // outgoing and new password are both remembered for reuse checks
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id), 2);
             assert_eq!(count(&conn, "SELECT COUNT(*) FROM vault_secrets WHERE id = ?1 AND last_rotated IS NOT NULL", id), 1);
         }
         for (id, pw) in [(s1, "NewPassword-aaaa-1"), (s2, "NewPassword-bbbb-2")] {

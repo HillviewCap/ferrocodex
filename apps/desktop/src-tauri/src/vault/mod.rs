@@ -1493,25 +1493,17 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(history)
     }
 
-    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool> {
-        let query = if let Some(_exclude_id) = exclude_secret_id {
-            "SELECT COUNT(*) FROM password_history ph 
-             JOIN vault_secrets vs ON ph.secret_id = vs.id 
-             WHERE ph.password_hash = ?1 AND vs.id != ?2 AND ph.retired_at IS NULL"
-        } else {
-            "SELECT COUNT(*) FROM password_history ph 
-             JOIN vault_secrets vs ON ph.secret_id = vs.id 
-             WHERE ph.password_hash = ?1 AND ph.retired_at IS NULL"
-        };
-
-        let mut stmt = self.conn.prepare(query)?;
-        let count: i64 = if let Some(exclude_id) = exclude_secret_id {
-            stmt.query_row((password_hash, exclude_id), |row| row.get(0))?
-        } else {
-            stmt.query_row([password_hash], |row| row.get(0))?
-        };
-
-        Ok(count > 0)
+    /// `password` is the plaintext candidate. Stored hashes are salted bcrypt, so each
+    /// active history hash (of other secrets, when `exclude_secret_id` is set) is verified.
+    fn check_password_reuse(&self, password: &str, exclude_secret_id: Option<i64>) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ph.password_hash FROM password_history ph
+             JOIN vault_secrets vs ON ph.secret_id = vs.id
+             WHERE (?1 IS NULL OR vs.id != ?1) AND ph.retired_at IS NULL"
+        )?;
+        let hashes = stmt.query_map([exclude_secret_id], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(password_services::PasswordReuseChecker::is_password_reused(password, &hashes))
     }
 
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()> {
@@ -1594,7 +1586,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
              WHERE secret_id = ?1 AND id NOT IN (
                  SELECT id FROM password_history 
                  WHERE secret_id = ?1 
-                 ORDER BY created_at DESC 
+                 ORDER BY created_at DESC, id DESC 
                  LIMIT ?2
              )",
             (secret_id, keep_count),
