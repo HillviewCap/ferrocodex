@@ -156,10 +156,18 @@ impl<'a> PasswordRotationService<'a> {
 
     // Task 2.1 & 2.2: Guided workflow for individual password rotation
     pub fn rotate_password(&self, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
-        debug!("Rotating password for secret {}", request.secret_id);
-
-        // Begin transaction
         let tx = self.conn.unchecked_transaction()?;
+        self.rotate_password_in(&tx, request, key)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Performs a rotation on `tx` without starting or committing a transaction, so it
+    /// can run inside a caller-managed transaction or savepoint (SQLite cannot nest BEGIN).
+    /// `tx` must be the same connection the repositories wrap. On error the caller is
+    /// responsible for rolling back any partial writes.
+    pub(crate) fn rotate_password_in(&self, tx: &Connection, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
+        debug!("Rotating password for secret {}", request.secret_id);
 
         // Get the current secret
         let secret = self.vault_repo.get_secret_by_id(request.secret_id)?
@@ -253,8 +261,6 @@ impl<'a> PasswordRotationService<'a> {
             changes,
         )?;
 
-        tx.commit()?;
-
         info!("Successfully rotated password for secret {} by user {}", request.secret_id, request.author_id);
         Ok(())
     }
@@ -346,6 +352,140 @@ mod tests {
         assert_eq!(BatchStatus::from_str("completed").unwrap(), BatchStatus::Completed);
         assert_eq!(BatchStatus::from_str("failed").unwrap(), BatchStatus::Failed);
         assert_eq!(BatchStatus::from_str("cancelled").unwrap(), BatchStatus::Cancelled);
+    }
+
+    use crate::vault::{AddSecretRequest, CreateVaultRequest, SecretType};
+
+    /// In-memory DB with users, assets, vault and audit schemas, plus one vault.
+    fn setup_batch_db() -> (Connection, i64) {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL,
+                role TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, is_active BOOLEAN DEFAULT 1
+            );
+            CREATE TABLE assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, description TEXT,
+                created_by INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO users (id, username, password_hash, role) VALUES (1, 'u', 'h', 'Engineer');
+            INSERT INTO assets (id, name, description, created_by) VALUES (1, 'A', 'D', 1);
+            "#,
+        ).unwrap();
+        SqliteVaultRepository::new(&conn).initialize_schema().unwrap();
+        SqliteAuditRepository::new(&conn).initialize_schema().unwrap();
+        let vault = SqliteVaultRepository::new(&conn).create_vault(CreateVaultRequest {
+            asset_id: 1, name: "Test Vault".into(), description: "desc".into(), created_by: 1,
+        }).unwrap();
+        (conn, vault.id)
+    }
+
+    fn add_secret(conn: &Connection, vault_id: i64, ty: SecretType, label: &str) -> i64 {
+        SqliteVaultRepository::new(conn).add_secret(AddSecretRequest {
+            vault_id, secret_type: ty, label: label.into(), value: "OldPassword-1234".into(), author_id: 1,
+        }, crate::encryption::test_key()).unwrap().id
+    }
+
+    fn batch_service(conn: &Connection) -> BatchRotationService<'_> {
+        BatchRotationService::new(
+            conn,
+            Box::new(SqliteVaultRepository::new(conn)),
+            Box::new(SqliteAuditRepository::new(conn)),
+        )
+    }
+
+    fn item(secret_id: i64, pw: &str) -> BatchRotationItem {
+        BatchRotationItem { secret_id, new_password: pw.into(), rotation_reason: "scheduled".into() }
+    }
+
+    fn count(conn: &Connection, sql: &str, id: i64) -> i64 {
+        conn.query_row(sql, [id], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn test_batch_rotation_rotates_all_items() {
+        let (conn, vault_id) = setup_batch_db();
+        let s1 = add_secret(&conn, vault_id, SecretType::Password, "one");
+        let s2 = add_secret(&conn, vault_id, SecretType::Password, "two");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+        let repo = SqliteVaultRepository::new(&conn);
+        let before1 = repo.get_secret_by_id(s1).unwrap().unwrap().encrypted_value;
+
+        svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(s1, "NewPassword-aaaa-1"), item(s2, "NewPassword-bbbb-2")],
+            author_id: 1,
+        }, crate::encryption::test_key()).expect("batch rotation should succeed for all items");
+
+        for id in [s1, s2] {
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", id), 1);
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id), 1);
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM vault_secrets WHERE id = ?1 AND last_rotated IS NOT NULL", id), 1);
+        }
+        for (id, pw) in [(s1, "NewPassword-aaaa-1"), (s2, "NewPassword-bbbb-2")] {
+            let enc = repo.get_secret_by_id(id).unwrap().unwrap().encrypted_value;
+            let plain = crate::encryption::FileEncryption::new(crate::encryption::test_key())
+                .decrypt_from_base64(&enc).unwrap();
+            assert_eq!(String::from_utf8(plain).unwrap(), pw);
+        }
+        assert_ne!(repo.get_secret_by_id(s1).unwrap().unwrap().encrypted_value, before1);
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Completed);
+        assert!(b.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_batch_rotation_partial_failure_keeps_successes_and_records_outcome() {
+        let (conn, vault_id) = setup_batch_db();
+        let good = add_secret(&conn, vault_id, SecretType::Password, "good");
+        let ip = add_secret(&conn, vault_id, SecretType::IpAddress, "ip");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+
+        let err = svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(ip, "NewPassword-cccc-3"), item(good, "NewPassword-dddd-4"), item(9999, "NewPassword-eeee-5")],
+            author_id: 1,
+        }, crate::encryption::test_key()).unwrap_err();
+        assert!(err.to_string().contains("1 succeeded, 2 failed"), "{}", err);
+
+        // Successful item persisted; failed items left no partial writes.
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", good), 1);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", ip), 0);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", ip), 0);
+        // Batch record reflects the outcome and is persisted.
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Completed);
+        let notes = b.notes.unwrap();
+        assert!(notes.contains("1 successes and 2 failures"), "{}", notes);
+        assert!(conn.is_autocommit(), "no transaction should be left open");
+    }
+
+    #[test]
+    fn test_batch_rotation_all_failures_marks_batch_failed() {
+        let (conn, vault_id) = setup_batch_db();
+        let ip = add_secret(&conn, vault_id, SecretType::IpAddress, "ip");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+        assert!(svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(ip, "NewPassword-ffff-6"), item(9999, "short")],
+            author_id: 1,
+        }, crate::encryption::test_key()).is_err());
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Failed);
+        assert!(b.notes.unwrap().contains("0 successes and 2 failures"));
     }
 }
 
@@ -650,7 +790,11 @@ impl<'a> BatchRotationService<'a> {
     pub fn execute_batch_rotation(&self, request: BatchRotationRequest, key: &DataKey) -> Result<()> {
         info!("Executing batch rotation {} with {} items", request.batch_id, request.items.len());
 
-        // Begin transaction for atomic operation
+        // Semantics: items are independent. The outer transaction holds the whole batch, but
+        // each item runs in its own SAVEPOINT, so a failing item is rolled back completely
+        // while other items still succeed. The transaction is always committed at the end so
+        // successful rotations and the batch outcome (status/notes) are persisted; partial
+        // failure is reported to the caller as an Err after that commit.
         let tx = self.conn.unchecked_transaction()?;
 
         // Update batch status to in_progress
@@ -667,15 +811,21 @@ impl<'a> BatchRotationService<'a> {
             // Task 4.6: Pre-flight validation
             match self.rotation_service.validate_rotation(item.secret_id, &item.new_password) {
                 Ok(_) => {
-                    match self.rotation_service.rotate_password(PasswordRotationRequest {
+                    tx.execute_batch("SAVEPOINT batch_item")?;
+                    let result = self.rotation_service.rotate_password_in(&tx, PasswordRotationRequest {
                         secret_id: item.secret_id,
                         new_password: item.new_password.clone(),
                         rotation_reason: item.rotation_reason.clone(),
                         author_id: request.author_id,
                         batch_id: Some(request.batch_id),
-                    }, key) {
-                        Ok(_) => successful_count += 1,
+                    }, key);
+                    match result {
+                        Ok(_) => {
+                            tx.execute_batch("RELEASE SAVEPOINT batch_item")?;
+                            successful_count += 1
+                        }
                         Err(e) => {
+                            tx.execute_batch("ROLLBACK TO SAVEPOINT batch_item; RELEASE SAVEPOINT batch_item")?;
                             warn!("Failed to rotate password for secret {}: {}", item.secret_id, e);
                             failed_items.push((item.secret_id, e.to_string()));
                         }
@@ -716,12 +866,11 @@ impl<'a> BatchRotationService<'a> {
             params![final_status.to_string(), completed_at, notes, request.batch_id],
         )?;
 
+        // Always commit: keeps successful rotations and the recorded batch outcome.
+        tx.commit()?;
         if failed_items.is_empty() {
-            tx.commit()?;
             info!("Batch rotation {} completed successfully", request.batch_id);
         } else {
-            // Partial failure - still commit successful rotations
-            tx.commit()?;
             return Err(anyhow::anyhow!(
                 "Batch rotation partially failed. {} succeeded, {} failed", 
                 successful_count, failed_items.len()
