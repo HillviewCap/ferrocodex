@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ferrocodex is an offline-first OT (Operational Technology) configuration management desktop app built with Tauri 2.0: a Rust backend (`apps/desktop/src-tauri`) and a React 18 + TypeScript + Vite + Ant Design + Zustand frontend (`apps/desktop/src`). It is an npm-workspaces/Turborepo monorepo, but `apps/desktop` is currently the only package.
+Ferrocodex is an offline-first OT (Operational Technology) configuration management desktop app built with Tauri 2.0: a Rust backend (`apps/desktop/src-tauri`) and a React 18 + TypeScript + Vite + Ant Design + Zustand frontend (`apps/desktop/src`). It is an npm-workspaces/Turborepo monorepo with two packages: `apps/desktop` (the app) and `apps/website` (the static ferrocodex.com site, plain HTML/CSS/JS under `public/`, deployed as Cloudflare Worker static assets with `npm run deploy -w apps/website`; see its README).
 
 ## Commands
 
