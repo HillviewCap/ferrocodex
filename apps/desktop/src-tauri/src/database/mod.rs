@@ -95,6 +95,7 @@ impl Database {
         // Initialize the wrapped data key schema
         let key_store = SqliteKeyStoreRepository::new(&self.conn);
         key_store.initialize_schema()?;
+        crate::keystore::rotation::initialize_schema(&self.conn)?;
 
         // Initialize user settings schema
         let user_settings_repo = SqliteUserSettingsRepository::new(&self.conn);
@@ -340,6 +341,21 @@ impl Database {
             info!("Key version columns migration completed");
         }
 
+        // A key rotation selects ciphertexts by key_version. The indexes are
+        // created here rather than in the repositories' schema setup, which
+        // runs before the migration above adds the column on old installs.
+        let key_version_index_key = "key_version_indexes_20261020";
+        if self.get_metadata(key_version_index_key)?.is_none() {
+            for table in KEY_VERSIONED_TABLES.iter().filter(|t| **t != "data_key_wraps") {
+                // Table names come from the constant list above, never from input
+                self.conn.execute_batch(&format!(
+                    "CREATE INDEX IF NOT EXISTS idx_{table}_key_version ON {table}(key_version);"
+                ))?;
+            }
+            self.set_metadata(key_version_index_key, "applied")?;
+            info!("Key version indexes created");
+        }
+
         Ok(())
     }
 
@@ -552,6 +568,7 @@ mod tests {
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
             .collect::<Result<_, _>>().unwrap();
         assert_eq!(data_keys, vec![(1, "active".to_string())]);
+        assert_key_version_indexes(&db.conn);
 
         // Running again is a no-op, even with the marker gone
         db.conn.execute("DELETE FROM app_metadata WHERE key = 'key_version_columns_20261019'", []).unwrap();
@@ -571,6 +588,24 @@ mod tests {
         assert!(db.get_metadata("key_version_columns_20261019").unwrap().is_some());
         let rows: i64 = db.conn.query_row("SELECT COUNT(*) FROM data_keys", [], |r| r.get(0)).unwrap();
         assert_eq!(rows, 0);
+        assert_key_version_indexes(&db.conn);
+        let failures_table: bool = db.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'key_rotation_failures')",
+            [], |r| r.get(0),
+        ).unwrap();
+        assert!(failures_table);
+    }
+
+    /// Rotation looks rows up by key_version in every ciphertext table.
+    fn assert_key_version_indexes(conn: &Connection) {
+        for table in ["configuration_versions", "vault_secrets", "standalone_credentials", "firmware_versions"] {
+            let indexed: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_index_list(?1) l JOIN pragma_index_info(l.name) i WHERE i.name = 'key_version')",
+                [table],
+                |r| r.get(0),
+            ).unwrap();
+            assert!(indexed, "{} has no key_version index", table);
+        }
     }
 
     #[test]

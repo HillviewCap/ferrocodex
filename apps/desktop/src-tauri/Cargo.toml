@@ -56,6 +56,10 @@ unicode-normalization = "0.1"
 x25519-dalek = { version = "2", features = ["static_secrets", "zeroize"] }
 hkdf = "0.12"
 
+[dev-dependencies]
+# Connection::backup, for the key-rotation test that copies a database
+rusqlite = { version = "0.37.0", features = ["bundled", "backup"] }
+
 # Argon2id runs at every login and unlock. Unoptimized it takes several
 # seconds with the production cost parameters, so optimize it in dev/test too.
 [profile.dev.package.argon2]

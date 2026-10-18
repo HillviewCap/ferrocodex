@@ -7,6 +7,8 @@ use crate::encryption::{
     normalize_recovery_code, open_with_secret, seal_to_public_key,
 };
 
+pub mod rotation;
+
 /// Status values of a `data_keys` row. Only one row is `active` at a time.
 /// A rotation marks the old key `retiring` until every ciphertext has been
 /// re-encrypted, then `retired`.

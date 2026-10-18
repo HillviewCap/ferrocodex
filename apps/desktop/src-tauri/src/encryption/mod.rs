@@ -73,6 +73,22 @@ impl DataKey {
         self.version = version;
         self
     }
+
+    /// Encrypts this key under another data key, binding `aad`. Used to keep
+    /// a retiring key recoverable from the active one during a rotation.
+    pub fn seal_under(&self, wrapping: &DataKey, aad: &[u8]) -> Result<Vec<u8>> {
+        FileEncryption::new(wrapping).encrypt_with_aad(&self.bytes, aad)
+    }
+
+    /// Opens a key sealed by [`DataKey::seal_under`] with the same `aad`, and
+    /// labels it with `version`.
+    pub fn open_under(ciphertext: &[u8], wrapping: &DataKey, aad: &[u8], version: u32) -> Result<Self> {
+        let bytes = FileEncryption::new(wrapping)
+            .decrypt_with_aad(ciphertext, aad)
+            .map(Zeroizing::new)
+            .map_err(|_| anyhow::anyhow!("Wrong key or corrupted key wrap"))?;
+        Self::from_slice_with_version(&bytes, version)
+    }
 }
 
 impl fmt::Debug for DataKey {
@@ -433,6 +449,20 @@ mod tests {
         let opened = wrapped.open("pw").unwrap();
         assert_eq!(opened.bytes, key.bytes);
         assert_eq!(opened.version(), INITIAL_KEY_VERSION);
+    }
+
+    #[test]
+    fn test_seal_under_round_trip_binds_aad_and_key() {
+        let inner = DataKey::generate_with_version(3);
+        let outer = DataKey::generate_with_version(4);
+        let sealed = inner.seal_under(&outer, b"aad-1").unwrap();
+
+        assert!(!sealed.windows(KEY_LEN).any(|w| w == inner.bytes));
+        let opened = DataKey::open_under(&sealed, &outer, b"aad-1", 3).unwrap();
+        assert_eq!(opened.bytes, inner.bytes);
+        assert_eq!(opened.version(), 3);
+        assert!(DataKey::open_under(&sealed, &outer, b"aad-2", 3).is_err());
+        assert!(DataKey::open_under(&sealed, &inner, b"aad-1", 3).is_err());
     }
 
     #[test]
