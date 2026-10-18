@@ -1302,7 +1302,7 @@ mod tests {
         assert!(fixed.finalized && fixed.failure_count == 0);
         assert_readable_only_with(&app, &seeded, dir, &k2, &k1);
 
-        // Engineers can't clear failures; nothing to retry once finished
+        // Nothing to retry once the rotation has finished
         assert!(retry(&app, &setup.token).await.is_err());
     }
 
