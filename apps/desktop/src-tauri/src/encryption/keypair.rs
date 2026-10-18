@@ -48,9 +48,20 @@ impl UserKeyPair {
     /// recomputes its public key.
     pub fn open_secret(wrapped: &WrappedKey, password: &str) -> Result<Self> {
         let bytes = wrapped.open_bytes(password, USER_PRIVATE_KEY_AAD)?;
-        let bytes: &[u8; 32] = bytes.as_slice().try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid private key length"))?;
-        Ok(Self::from_secret(StaticSecret::from(*bytes)))
+        if bytes.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid private key length"));
+        }
+        // x25519-dalek 2 only builds a StaticSecret from an owned [u8; 32]
+        // (there is no constructor from a reference or slice), so the bytes
+        // have to be passed by value. Copy them into a zeroizing array and
+        // move that in: our own copy and the decrypted Vec are wiped on drop,
+        // and the StaticSecret zeroizes itself. The by-value argument of
+        // `From<[u8; 32]>` may still leave a transient copy in a stack slot
+        // the compiler chooses; Rust gives no way to wipe that, so it is
+        // accepted here.
+        let mut secret = zeroize::Zeroizing::new([0u8; 32]);
+        secret.copy_from_slice(&bytes);
+        Ok(Self::from_secret(StaticSecret::from(*secret)))
     }
 }
 
