@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import UserManagement from './UserManagement';
 import useAuthStore from '../store/auth';
 import useUserManagementStore from '../store/userManagement';
+import useKeyRotationStore from '../store/keyRotation';
 
 // Mock the stores
 vi.mock('../store/auth');
@@ -282,6 +283,57 @@ describe('UserManagement', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+    });
+  });
+
+  describe('encryption access', () => {
+    const statusWith = (details: Record<string, unknown> | null) => ({
+      in_progress: false,
+      active_version: 1,
+      retiring_version: null,
+      details,
+    });
+
+    beforeEach(() => {
+      useKeyRotationStore.getState().reset();
+    });
+
+    it('marks users without a key and hints at Reset password', () => {
+      useKeyRotationStore.setState({
+        status: statusWith({
+          remaining: { configuration_versions: 0, vault_secrets: 0, standalone_credentials: 0, firmware_versions: 0, total: 0 },
+          failures: [],
+          users_without_keypair: [{ id: 2, username: 'engineer1', role: 'Engineer' }],
+          users_without_access: [],
+          active_analysis_jobs: 0,
+        }),
+      });
+      render(<UserManagement />);
+
+      expect(screen.getByText('Encryption access')).toBeInTheDocument();
+      expect(screen.getAllByText('No access - reset password')).toHaveLength(1);
+      // The active admin has access; the inactive engineer shows neither tag
+      expect(screen.getAllByText('Has access')).toHaveLength(1);
+    });
+
+    it('also marks users listed as without access after a rotation', () => {
+      useKeyRotationStore.setState({
+        status: statusWith({
+          remaining: { configuration_versions: 0, vault_secrets: 0, standalone_credentials: 0, firmware_versions: 0, total: 0 },
+          failures: [],
+          users_without_keypair: [],
+          users_without_access: [{ id: 1, username: 'admin', role: 'Administrator' }],
+          active_analysis_jobs: 0,
+        }),
+      });
+      render(<UserManagement />);
+      expect(screen.getAllByText('No access - reset password')).toHaveLength(1);
+    });
+
+    it('opens the rotation modal from the Rotate Encryption Key button', async () => {
+      render(<UserManagement />);
+      fireEvent.click(screen.getByRole('button', { name: /Rotate Encryption Key/ }));
+      expect(await screen.findByText('Begin rotation', undefined, VALIDATION_TIMEOUT)).toBeInTheDocument();
     });
   });
 });

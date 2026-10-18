@@ -14,7 +14,8 @@ import {
   Row,
   Col,
   Alert,
-  Spin
+  Spin,
+  Tooltip
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -23,12 +24,15 @@ import {
   PlayCircleOutlined,
   ExclamationCircleOutlined,
   KeyOutlined,
-  LockOutlined
+  LockOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../store/auth';
 import useUserManagementStore from '../store/userManagement';
+import useKeyRotationStore from '../store/keyRotation';
 import RoleGuard from './RoleGuard';
+import KeyRotationModal from './KeyRotationModal';
 import type { UserInfo } from '../store/auth';
 
 const { Title, Text } = Typography;
@@ -71,12 +75,21 @@ const UserManagement: React.FC = () => {
   const [passwordTarget, setPasswordTarget] = useState<TemporaryPasswordTarget | null>(null);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   const [passwordForm] = Form.useForm<TemporaryPasswordFormData>();
+  const [isRotationModalOpen, setIsRotationModalOpen] = useState(false);
+  const rotationStatus = useKeyRotationStore((state) => state.status);
+  const fetchRotationStatus = useKeyRotationStore((state) => state.fetchStatus);
+
+  const usersWithoutEncryptionAccess = new Set<number>([
+    ...(rotationStatus?.details?.users_without_access ?? []).map((u) => u.id),
+    ...(rotationStatus?.details?.users_without_keypair ?? []).map((u) => u.id),
+  ]);
 
   useEffect(() => {
     if (token) {
       fetchUsers(token).catch(console.error);
+      fetchRotationStatus(token);
     }
-  }, [token, fetchUsers]);
+  }, [token, fetchUsers, fetchRotationStatus]);
 
   const handleCreateUser = async (values: CreateUserFormData) => {
     if (!token) {
@@ -190,6 +203,20 @@ const UserManagement: React.FC = () => {
       ),
     },
     {
+      title: 'Encryption access',
+      key: 'encryption_access',
+      render: (_: any, record: UserInfo) =>
+        record.is_active && usersWithoutEncryptionAccess.has(record.id) ? (
+          <Tooltip title="This user cannot decrypt data. Use Reset password to restore their access.">
+            <Tag color="orange">No access - reset password</Tag>
+          </Tooltip>
+        ) : record.is_active ? (
+          <Tag color="green">Has access</Tag>
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
+    },
+    {
       title: 'Created',
       dataIndex: 'created_at',
       key: 'created_at',
@@ -277,6 +304,12 @@ const UserManagement: React.FC = () => {
                 Replace Recovery Key
               </Button>
             </Popconfirm>
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() => setIsRotationModalOpen(true)}
+            >
+              Rotate Encryption Key
+            </Button>
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
@@ -365,6 +398,17 @@ const UserManagement: React.FC = () => {
           />
         </Spin>
       </Card>
+
+      <KeyRotationModal
+        open={isRotationModalOpen}
+        onClose={() => {
+          setIsRotationModalOpen(false);
+          if (token) {
+            fetchRotationStatus(token);
+            fetchUsers(token).catch(console.error);
+          }
+        }}
+      />
 
       {/* Create User Modal */}
       <Modal
