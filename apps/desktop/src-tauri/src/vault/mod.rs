@@ -694,14 +694,14 @@ impl<'a> SqliteVaultRepository<'a> {
             encrypted_value: row.get("encrypted_value")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
-            strength_score: row.get("strength_score").ok(),
-            last_changed: row.get("last_changed").ok(),
-            generation_method: row.get("generation_method").ok(),
-            policy_version: row.get("policy_version").ok(),
-            last_rotated: row.get("last_rotated").ok(),
-            rotation_interval_days: row.get("rotation_interval_days").ok(),
-            next_rotation_due: row.get("next_rotation_due").ok(),
-            rotation_policy_id: row.get("rotation_policy_id").ok(),
+            strength_score: row.get("strength_score")?,
+            last_changed: row.get("last_changed")?,
+            generation_method: row.get("generation_method")?,
+            policy_version: row.get("policy_version")?,
+            last_rotated: row.get("last_rotated")?,
+            rotation_interval_days: row.get("rotation_interval_days")?,
+            next_rotation_due: row.get("next_rotation_due")?,
+            rotation_policy_id: row.get("rotation_policy_id")?,
         })
     }
 
@@ -1283,7 +1283,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         let mut stmt = self.conn.prepare(
             "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) 
              VALUES (?1, ?2, ?3, ?4) 
-             RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at"
+             RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id"
         )?;
 
         let secret = stmt.query_row(
@@ -1311,7 +1313,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at 
+            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id 
              FROM vault_secrets WHERE vault_id = ?1 ORDER BY created_at ASC"
         )?;
 
@@ -1327,7 +1331,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at 
+            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id 
              FROM vault_secrets WHERE id = ?1"
         )?;
 
@@ -2871,6 +2877,50 @@ mod tests {
             created_by: 1,
         };
         assert!(repo.create_vault(request).is_err());
+    }
+
+    #[test]
+    fn test_secret_queries_populate_rotation_and_password_fields() {
+        use crate::audit::{AuditRepository, SqliteAuditRepository};
+        use rotation::{PasswordRotationRequest, PasswordRotationService};
+
+        let (_temp_file, conn) = setup_test_db();
+        SqliteAuditRepository::new(&conn).initialize_schema().unwrap();
+        let repo = SqliteVaultRepository::new(&conn);
+        let vault = repo.create_vault(CreateVaultRequest {
+            asset_id: 1, name: "Vault".to_string(), description: "D".to_string(), created_by: 1,
+        }).unwrap();
+        let secret = repo.add_secret(AddSecretRequest {
+            vault_id: vault.id, secret_type: SecretType::Password, label: "pw".to_string(),
+            value: "Old-Password-123".to_string(), author_id: 1,
+        }, test_key()).unwrap();
+        assert!(secret.last_rotated.is_none());
+
+        PasswordRotationService::new(
+            &conn,
+            Box::new(SqliteVaultRepository::new(&conn)),
+            Box::new(SqliteAuditRepository::new(&conn)),
+        ).rotate_password(PasswordRotationRequest {
+            secret_id: secret.id, new_password: "New-Password-456".to_string(),
+            rotation_reason: "Scheduled".to_string(), author_id: 1, batch_id: None,
+        }, test_key()).unwrap();
+        conn.execute(
+            "UPDATE vault_secrets SET strength_score = 77, generation_method = 'manual', policy_version = 2 WHERE id = ?1",
+            [secret.id],
+        ).unwrap();
+
+        let by_id = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+        assert!(by_id.last_rotated.is_some(), "last_rotated must be read back");
+        assert!(by_id.last_changed.is_some());
+        assert!(by_id.next_rotation_due.is_some());
+        assert_eq!(by_id.strength_score, Some(77));
+        assert_eq!(by_id.generation_method.as_deref(), Some("manual"));
+        assert_eq!(by_id.policy_version, Some(2));
+
+        let listed = repo.get_vault_secrets(vault.id).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].last_rotated, by_id.last_rotated);
+        assert_eq!(listed[0].strength_score, Some(77));
     }
 
     #[test]
