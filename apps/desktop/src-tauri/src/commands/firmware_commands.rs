@@ -10,7 +10,7 @@ use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, Au
 use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory, get_firmware_storage_dir};
 use crate::firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
 use crate::recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
-use crate::vault::{VaultRepository, SqliteVaultRepository};
+use crate::vault::{VaultRepository, SqliteVaultRepository, PermissionType};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Manager};
 use tracing::{error, info, warn};
@@ -730,6 +730,15 @@ pub async fn export_complete_recovery(
             };
 
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            if include_vault.unwrap_or(false) {
+                let vault = vault_repo.get_vault_by_asset_id(asset_id)
+                    .map_err(|e| format!("Failed to get vault: {}", e))?;
+                if let Some(vault) = vault {
+                    super::vault_commands::require_vault_permission(
+                        db.get_connection(), &session, vault.vault.id, PermissionType::Export,
+                    )?;
+                }
+            }
             let exporter = RecoveryExporter::new(&config_repo, &firmware_repo, &vault_repo, &audit_repo);
             
             let request = RecoveryExportRequest {
