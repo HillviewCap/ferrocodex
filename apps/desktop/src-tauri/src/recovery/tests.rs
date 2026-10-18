@@ -328,9 +328,6 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn check_password_reuse(&self, _password_hash: &str, _exclude_secret_id: Option<i64>) -> Result<bool> {
-            unimplemented!()
-        }
         
         fn update_password(&self, _request: crate::vault::UpdateCredentialPasswordRequest, _password_hash: &str, _strength_score: i32, _key: &DataKey) -> Result<()> {
             unimplemented!()

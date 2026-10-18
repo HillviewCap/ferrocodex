@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { App } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
@@ -66,16 +66,25 @@ describe('PasswordInput', () => {
     expect(screen.getByText(/Password strength is below recommended level \(25\/40\)/)).toBeInTheDocument();
 
     expect(await screen.findByText('Password Reuse Detected')).toBeInTheDocument();
-    expect(screen.getByText('This password has been used for another credential')).toBeInTheDocument();
+    expect(screen.getByText('This password has been used before on this credential')).toBeInTheDocument();
 
     expect(invoke).toHaveBeenCalledWith('validate_password_strength', { token: 'test-token', password: 'abcdef' });
     expect(invoke).toHaveBeenCalledWith('check_password_reuse', {
       token: 'test-token',
       password: 'abcdef',
-      excludeSecretId: 3,
+      secretId: 3,
     });
     expect(onStrengthChange).toHaveBeenCalledWith(weak);
     expect(onReuseCheck).toHaveBeenCalledWith(true);
+  });
+
+  it('skips the reuse check for a new secret that has no id yet', async () => {
+    const onReuseCheck = vi.fn();
+    renderInput({ value: 'abcdef', onReuseCheck });
+
+    expect(await screen.findByText('Weak (25/100)')).toBeInTheDocument();
+    await waitFor(() => expect(onReuseCheck).toHaveBeenCalledWith(false));
+    expect(invoke).not.toHaveBeenCalledWith('check_password_reuse', expect.anything());
   });
 
   it('opens the generator and applies the generated password', async () => {

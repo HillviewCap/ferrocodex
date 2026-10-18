@@ -89,6 +89,7 @@ describe('PasswordRotation', () => {
     expect(screen.getByText('Great password')).toBeInTheDocument();
     expect(screen.getByText('Generated Password')).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith('generate_secure_password', expect.objectContaining({ token: 'test-token' }));
+    expect(invoke).toHaveBeenCalledWith('check_password_reuse', expect.objectContaining({ token: 'test-token', secretId: 9 }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText('Rotation Summary')).toBeInTheDocument();

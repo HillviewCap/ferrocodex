@@ -618,7 +618,6 @@ pub trait VaultRepository {
     // Password management methods
     fn add_password_history(&self, secret_id: i64, password_hash: &str) -> Result<()>;
     fn get_password_history(&self, secret_id: i64) -> Result<Vec<PasswordHistory>>;
-    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool>;
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()>;
     fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
@@ -1512,19 +1511,6 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         Ok(history)
-    }
-
-    /// `password` is the plaintext candidate. Stored hashes are salted bcrypt, so each
-    /// active history hash (of other secrets, when `exclude_secret_id` is set) is verified.
-    fn check_password_reuse(&self, password: &str, exclude_secret_id: Option<i64>) -> Result<bool> {
-        let mut stmt = self.conn.prepare(
-            "SELECT ph.password_hash FROM password_history ph
-             JOIN vault_secrets vs ON ph.secret_id = vs.id
-             WHERE (?1 IS NULL OR vs.id != ?1) AND ph.retired_at IS NULL"
-        )?;
-        let hashes = stmt.query_map([exclude_secret_id], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<String>>>()?;
-        Ok(password_services::PasswordReuseChecker::is_password_reused(password, &hashes))
     }
 
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()> {

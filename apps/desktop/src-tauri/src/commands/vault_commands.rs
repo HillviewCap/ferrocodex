@@ -11,7 +11,7 @@ use crate::vault::{
     DeleteVaultSecretRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer,
     CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, 
     CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService,
-    PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
+    password_services::PasswordReuseChecker, PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
     VaultAccessLog, CreatePermissionRequest, PermissionRequest, open_vault_export, seal_vault_export,
     rotation::{
         PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule,
@@ -554,11 +554,15 @@ pub async fn validate_password_strength(
     Ok(strength)
 }
 
+/// Checks whether `password` matches anything in the password history of one secret.
+///
+/// This is deliberately scoped to a single secret the caller holds Write on. A global
+/// reuse check would be an oracle for other vaults' current passwords.
 #[tauri::command]
 pub async fn check_password_reuse(
     token: String,
     password: String,
-    exclude_secret_id: Option<i64>,
+    secret_id: i64,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<bool, String> {
@@ -575,25 +579,35 @@ pub async fn check_password_reuse(
     };
     drop(session_manager_guard);
 
-    let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
-            match vault_repo.check_password_reuse(&password, exclude_secret_id) {
-                Ok(is_reused) => {
-                    info!("Password reuse check by {}: {}", session.username, is_reused);
-                    Ok(is_reused)
-                }
-                Err(e) => {
-                    error!("Failed to check password reuse: {}", e);
-                    Err(format!("Failed to check password reuse: {}", e))
-                }
-            }
-        }
-        None => Err("Database not initialized".to_string()),
-    }
+    // Fetch the hashes under the DB lock; verify (slow bcrypt) after releasing it.
+    let hashes: Vec<String> = {
+        let db_guard = db_state.lock()
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
+        let db = db_guard.as_ref().ok_or("Database not initialized")?;
+        secret_reuse_hashes(db.get_connection(), &session, secret_id)?
+    };
+
+    let is_reused = PasswordReuseChecker::is_password_reused(&password, &hashes);
+    info!("Password reuse check by {} for secret {}: {}", session.username, secret_id, is_reused);
+    Ok(is_reused)
+}
+
+/// Authorizes (Write on the secret's vault) and returns the hashes of one secret's own history.
+fn secret_reuse_hashes(
+    conn: &Connection,
+    session: &Session,
+    secret_id: i64,
+) -> Result<Vec<String>, String> {
+    require_secret_permission(conn, session, secret_id, PermissionType::Write)?;
+    Ok(SqliteVaultRepository::new(conn)
+        .get_password_history(secret_id)
+        .map_err(|e| {
+            error!("Failed to load password history: {}", e);
+            format!("Failed to check password reuse: {}", e)
+        })?
+        .into_iter()
+        .map(|h| h.password_hash)
+        .collect())
 }
 
 #[tauri::command]
@@ -684,19 +698,6 @@ pub async fn update_credential_password(
             let request = UpdateCredentialPasswordRequest { author_id: session.user_id, ..request };
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
 
-            // Check for password reuse
-            match vault_repo.check_password_reuse(&request.new_password, Some(request.secret_id)) {
-                Ok(is_reused) => {
-                    if is_reused {
-                        return Err("Password has been used before on another credential".to_string());
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to check password reuse: {}", e);
-                    return Err("Failed to validate password uniqueness".to_string());
-                }
-            }
-            
             match vault_repo.update_password(request, &password_hash, strength.score, &data_key) {
                 Ok(()) => {
                     info!("Password updated by {} for secret with strength score {}", session.username, strength.score);
@@ -2508,6 +2509,62 @@ mod tests {
 
             assert_denied(get_password_history(f.other.clone(), f.admin_secret, f.app.state(), f.app.state()).await);
             assert!(get_password_history(f.admin.clone(), f.admin_secret, f.app.state(), f.app.state()).await.is_ok());
+        }
+
+        async fn set_password(f: &VaultFixture, token: &str, secret_id: i64, pw: &str) {
+            update_credential_password(token.to_string(), UpdateCredentialPasswordRequest {
+                secret_id,
+                new_password: pw.to_string(),
+                author_id: 0,
+            }, f.app.state(), f.app.state()).await.unwrap();
+        }
+
+        async fn reuse(f: &VaultFixture, token: &str, pw: &str, secret_id: i64) -> Result<bool, String> {
+            check_password_reuse(token.to_string(), pw.to_string(), secret_id, f.app.state(), f.app.state()).await
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_requires_write_on_the_secrets_vault() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Target-Default-Pw-1!").await;
+
+            assert_denied(reuse(&f, &f.other, "Target-Default-Pw-1!", f.admin_secret).await);
+            // Read alone is not enough
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, None);
+            assert_denied(reuse(&f, &f.grantee, "Target-Default-Pw-1!", f.admin_secret).await);
+            assert_eq!(f.denial_events().len(), 2);
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_is_not_a_cross_vault_oracle() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Target-Default-Pw-1!").await;
+            set_password(&f, &f.owner, f.owner_secret, "Owner-Own-Pw-2222!").await;
+
+            // The owner can only test against their own secret: the other vault's current
+            // password never matches, and the other vault's secret id is denied outright.
+            assert_eq!(reuse(&f, &f.owner, "Target-Default-Pw-1!", f.owner_secret).await, Ok(false));
+            assert_denied(reuse(&f, &f.owner, "Target-Default-Pw-1!", f.admin_secret).await);
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_detects_own_history() {
+            let f = setup();
+            set_password(&f, &f.owner, f.owner_secret, "First-Password-111!").await;
+            set_password(&f, &f.owner, f.owner_secret, "Second-Password-222!").await;
+
+            assert_eq!(reuse(&f, &f.owner, "First-Password-111!", f.owner_secret).await, Ok(true));
+            assert_eq!(reuse(&f, &f.owner, "Second-Password-222!", f.owner_secret).await, Ok(true));
+            assert_eq!(reuse(&f, &f.owner, "Never-Used-Password-3!", f.owner_secret).await, Ok(false));
+        }
+
+        #[tokio::test]
+        async fn test_changing_password_is_not_blocked_by_other_secrets_passwords() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Shared-Password-123!").await;
+            // Previously rejected with "used before on another credential"; that global
+            // check was an oracle and is gone.
+            set_password(&f, &f.owner, f.owner_secret, "Shared-Password-123!").await;
         }
 
         #[tokio::test]

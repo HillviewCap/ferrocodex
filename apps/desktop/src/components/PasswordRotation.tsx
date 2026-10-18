@@ -62,7 +62,7 @@ const PasswordRotation: React.FC<PasswordRotationProps> = ({ secret, visible, on
       const isReused = await invoke<boolean>('check_password_reuse', {
         token,
         password,
-        exclude_secret_id: secret.id,
+        secretId: secret.id,
       });
 
       if (isReused) {
