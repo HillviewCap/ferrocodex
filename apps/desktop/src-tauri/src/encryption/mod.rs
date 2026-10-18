@@ -1,10 +1,5 @@
-// The keypair primitives and `reencrypt_in_place` have no callers until the
-// keystore and rotation commands adopt them (data-key rotation design, chunks
-// 4 and 5). Remove these allows then.
-#[allow(dead_code)]
 mod keypair;
 
-#[allow(unused_imports)]
 pub use keypair::{open_with_secret, seal_to_public_key, PublicKeyWrap, UserKeyPair};
 
 use anyhow::Result;

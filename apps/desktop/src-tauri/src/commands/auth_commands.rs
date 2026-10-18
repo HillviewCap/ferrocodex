@@ -151,13 +151,19 @@ pub async fn login(
     }
 }
 
-/// Unlocks the data key for a user who just proved their password. An
-/// administrator logging in to a database created before the key store
+/// Unlocks the data key for a user who just proved their password. A user who
+/// still has a legacy password wrap is moved to a keypair, which is audited.
+/// An administrator logging in to a database created before the key store
 /// existed creates the key, and gets the recovery code to record.
 fn unlock_data_key(db: &Database, user: &User, password: &str) -> Result<(Option<DataKey>, Option<String>), String> {
     let key_store = SqliteKeyStoreRepository::new(db.get_connection());
-    match key_store.unlock_for_user(user.id, password) {
-        Ok(Some(data_key)) => Ok((Some(data_key), None)),
+    match key_store.unlock_user(user.id, password) {
+        Ok(Some(unlocked)) => {
+            if unlocked.upgraded {
+                log_keys_upgraded(db, user);
+            }
+            Ok((Some(unlocked.key), None))
+        }
         Ok(None) => {
             let has_data_key = key_store.has_data_key()
                 .map_err(|e| format!("Failed to check encryption key: {}", e))?;
@@ -176,6 +182,29 @@ fn unlock_data_key(db: &Database, user: &User, password: &str) -> Result<(Option
             Err("Authentication error".to_string())
         }
     }
+}
+
+fn log_keys_upgraded(db: &Database, user: &User) {
+    let audit_event = AuditEventRequest {
+        event_type: AuditEventType::UserEncryptionKeysUpgraded,
+        user_id: Some(user.id),
+        username: Some(user.username.clone()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: Some(user.id),
+        target_username: Some(user.username.clone()),
+        description: format!(
+            "Encryption key access for '{}' moved from a password wrap to a per-user keypair",
+            user.username
+        ),
+        metadata: None,
+        ip_address: None,
+        user_agent: None,
+    };
+    if let Err(e) = SqliteAuditRepository::new(db.get_connection()).log_event(&audit_event) {
+        error!("Failed to log audit event: {}", e);
+    }
+    info!("Upgraded encryption keys for user: {}", user.username);
 }
 
 /// Sets a new password for an account using the recovery code, which also
@@ -232,7 +261,7 @@ pub async fn reset_password_with_recovery_key(
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
     user_repo.update_user(&user)
         .map_err(|e| format!("Failed to update password: {}", e))?;
-    key_store.grant_user(user.id, &new_password, &data_key)
+    key_store.set_user_keys(user.id, &new_password, &data_key)
         .map_err(|e| format!("Failed to update encryption key: {}", e))?;
     let new_recovery_code = key_store.replace_recovery_code(&data_key)
         .map_err(|e| format!("Failed to replace recovery key: {}", e))?;
@@ -427,6 +456,96 @@ mod tests {
         ).await.unwrap();
         let engineer_login = login_as(&app, "engineer", ENGINEER_PASSWORD).await.unwrap();
         assert!(same_key(&admin_key, &session_key(&app, &engineer_login.token)));
+    }
+
+    fn query_i64(app: &tauri::App<MockRuntime>, sql: &str, user_id: i64) -> i64 {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        db_guard.as_ref().unwrap().get_connection()
+            .query_row(sql, [user_id], |row| row.get(0)).unwrap()
+    }
+
+    fn public_key(app: &tauri::App<MockRuntime>, user_id: i64) -> Vec<u8> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        db_guard.as_ref().unwrap().get_connection()
+            .query_row("SELECT public_key FROM user_keypairs WHERE user_id = ?1", [user_id], |row| row.get(0))
+            .unwrap()
+    }
+
+    fn keypairs(app: &tauri::App<MockRuntime>, user_id: i64) -> i64 {
+        query_i64(app, "SELECT COUNT(*) FROM user_keypairs WHERE user_id = ?1", user_id)
+    }
+
+    fn legacy_wraps(app: &tauri::App<MockRuntime>, user_id: i64) -> i64 {
+        query_i64(app, "SELECT COUNT(*) FROM data_key_wraps WHERE user_id = ?1", user_id)
+    }
+
+    fn upgrade_events(app: &tauri::App<MockRuntime>, user_id: i64) -> i64 {
+        query_i64(app, "SELECT COUNT(*) FROM audit_events WHERE event_code = 'SEC_003' AND user_id = ?1", user_id)
+    }
+
+    #[tokio::test]
+    async fn test_setup_gives_admin_a_keypair_and_no_password_wrap() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+
+        assert_eq!(keypairs(&app, setup.user.id), 1);
+        assert_eq!(legacy_wraps(&app, setup.user.id), 0);
+        assert_eq!(query_i64(&app, "SELECT COUNT(*) FROM data_key_wraps WHERE kind = 'recovery' AND ?1 > 0", 1), 1);
+        assert_eq!(query_i64(&app, "SELECT COUNT(*) FROM data_key_public_wraps WHERE user_id = ?1", setup.user.id), 1);
+        assert_eq!(upgrade_events(&app, setup.user.id), 0);
+    }
+
+    #[tokio::test]
+    async fn test_legacy_user_login_moves_to_keypair_once() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+        let admin_key = session_key(&app, &setup.token);
+        let engineer = create_engineer_user(
+            setup.token.clone(), "engineer".to_string(), ENGINEER_PASSWORD.to_string(),
+            app.state(), app.state(), app.state(),
+        ).await.unwrap();
+        {
+            // Turn the engineer into a pre-keypair user: only a password wrap
+            let db_state = app.state::<DatabaseState>();
+            let db_guard = db_state.lock().unwrap();
+            let store = SqliteKeyStoreRepository::with_params(
+                db_guard.as_ref().unwrap().get_connection(), crate::encryption::KdfParams::fast_for_tests(),
+            );
+            store.revoke_user(engineer.id).unwrap();
+            store.store_legacy_user_wrap(engineer.id, ENGINEER_PASSWORD, &admin_key).unwrap();
+        }
+        assert_eq!(keypairs(&app, engineer.id), 0);
+        assert_eq!(legacy_wraps(&app, engineer.id), 1);
+
+        let first = login_as(&app, "engineer", ENGINEER_PASSWORD).await.unwrap();
+        assert!(same_key(&admin_key, &session_key(&app, &first.token)));
+        assert_eq!(keypairs(&app, engineer.id), 1);
+        assert_eq!(legacy_wraps(&app, engineer.id), 0);
+        assert_eq!(upgrade_events(&app, engineer.id), 1);
+        let migrated_public_key = public_key(&app, engineer.id);
+
+        let second = login_as(&app, "engineer", ENGINEER_PASSWORD).await.unwrap();
+        assert!(same_key(&admin_key, &session_key(&app, &second.token)));
+        assert_eq!(upgrade_events(&app, engineer.id), 1);
+        assert_eq!(public_key(&app, engineer.id), migrated_public_key);
+    }
+
+    #[tokio::test]
+    async fn test_recovery_reset_replaces_keypair() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+        let admin_key = session_key(&app, &setup.token);
+        let old_public_key = public_key(&app, setup.user.id);
+
+        reset(&app, setup.recovery_code.as_deref().unwrap(), NEW_PASSWORD).await.unwrap();
+
+        assert_ne!(public_key(&app, setup.user.id), old_public_key);
+        assert_eq!(keypairs(&app, setup.user.id), 1);
+        assert_eq!(legacy_wraps(&app, setup.user.id), 0);
+        let relogin = login_as(&app, "admin", NEW_PASSWORD).await.unwrap();
+        assert!(same_key(&admin_key, &session_key(&app, &relogin.token)));
     }
 
     #[tokio::test]

@@ -70,7 +70,7 @@ pub async fn create_engineer_user(
 
     drop(session_manager_guard);
 
-    // The new account gets its own copy of the data key, wrapped under its password
+    // The new account gets its own keypair, wrapped under its password, holding the data key
     let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
@@ -84,7 +84,7 @@ pub async fn create_engineer_user(
                 .map_err(|e| format!("Failed to start transaction: {}", e))?;
             let created = user_repo.create_engineer_account(username, initial_password.clone(), session.user_id)
                 .and_then(|user| {
-                    key_store.grant_user(user.id, &initial_password, &data_key)?;
+                    key_store.set_user_keys(user.id, &initial_password, &data_key)?;
                     tx.commit()?;
                     Ok(user)
                 });
@@ -250,7 +250,7 @@ pub async fn deactivate_user(
     Ok(())
 }
 
-/// Sets `new_password` for `user_id` and gives them a fresh wrapped copy of the
+/// Sets `new_password` for `user_id` and gives them a fresh keypair holding the
 /// data key, in one transaction. With `reactivate`, also marks the account active.
 fn set_password_and_grant_key(
     db: &Database,
@@ -285,7 +285,7 @@ fn set_password_and_grant_key(
     }
     user_repo.update_user(&crate::users::User { is_active: true, ..user.clone() })
         .map_err(|e| format!("Failed to update password: {}", e))?;
-    key_store.grant_user(user_id, new_password, data_key)
+    key_store.set_user_keys(user_id, new_password, data_key)
         .map_err(|e| format!("Failed to update encryption key: {}", e))?;
     tx.commit()
         .map_err(|e| format!("Failed to save changes: {}", e))?;
@@ -611,6 +611,73 @@ mod tests {
             .await.is_err());
         // Still revoked
         assert!(unlock(&app, engineer_id, TEMP_PASSWORD).unwrap().is_none());
+    }
+
+    /// (keypairs, public wraps, legacy password wraps) held by `user_id`.
+    fn key_rows(app: &tauri::App<MockRuntime>, user_id: i64) -> (i64, i64, i64) {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        let conn = db_guard.as_ref().unwrap().get_connection();
+        let count = |table: &str| -> i64 {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {} WHERE user_id = ?1", table), [user_id], |r| r.get(0))
+                .unwrap()
+        };
+        (count("user_keypairs"), count("data_key_public_wraps"), count("data_key_wraps"))
+    }
+
+    #[tokio::test]
+    async fn test_deactivation_removes_keypair_and_public_wraps() {
+        let app = setup_test_app();
+        let (admin, engineer_id) = setup_admin_and_engineer(&app).await;
+        assert_eq!(key_rows(&app, engineer_id), (1, 1, 0));
+
+        deactivate_user(admin.token.clone(), engineer_id, app.state(), app.state()).await.unwrap();
+
+        assert_eq!(key_rows(&app, engineer_id), (0, 0, 0));
+    }
+
+    #[tokio::test]
+    async fn test_reactivation_and_admin_reset_produce_working_keypairs() {
+        let app = setup_test_app();
+        let (admin, engineer_id) = setup_admin_and_engineer(&app).await;
+        let admin_key = session_key(&app, &admin.token);
+
+        deactivate_user(admin.token.clone(), engineer_id, app.state(), app.state()).await.unwrap();
+        reactivate_user(admin.token.clone(), engineer_id, TEMP_PASSWORD.to_string(), app.state(), app.state())
+            .await.unwrap();
+        assert_eq!(key_rows(&app, engineer_id), (1, 1, 0));
+        assert!(same_key(&admin_key, &unlock(&app, engineer_id, TEMP_PASSWORD).unwrap().unwrap()));
+
+        const RESET_PASSWORD: &str = "Reset-Pass-789";
+        admin_reset_user_password(admin.token.clone(), engineer_id, RESET_PASSWORD.to_string(), app.state(), app.state())
+            .await.unwrap();
+        assert_eq!(key_rows(&app, engineer_id), (1, 1, 0));
+        assert!(unlock(&app, engineer_id, TEMP_PASSWORD).is_err());
+        assert!(same_key(&admin_key, &unlock(&app, engineer_id, RESET_PASSWORD).unwrap().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_admin_reset_upgrades_a_legacy_user() {
+        let app = setup_test_app();
+        let (admin, engineer_id) = setup_admin_and_engineer(&app).await;
+        let admin_key = session_key(&app, &admin.token);
+        {
+            let db_state = app.state::<DatabaseState>();
+            let db_guard = db_state.lock().unwrap();
+            let store = SqliteKeyStoreRepository::with_params(
+                db_guard.as_ref().unwrap().get_connection(), crate::encryption::KdfParams::fast_for_tests(),
+            );
+            store.revoke_user(engineer_id).unwrap();
+            store.store_legacy_user_wrap(engineer_id, ENGINEER_PASSWORD, &admin_key).unwrap();
+        }
+        assert_eq!(key_rows(&app, engineer_id), (0, 0, 1));
+
+        admin_reset_user_password(admin.token.clone(), engineer_id, TEMP_PASSWORD.to_string(), app.state(), app.state())
+            .await.unwrap();
+
+        assert_eq!(key_rows(&app, engineer_id), (1, 1, 0));
+        let relogin = login_as(&app, "engineer", TEMP_PASSWORD).await.unwrap();
+        assert!(same_key(&admin_key, &session_key(&app, &relogin.token)));
     }
 
     fn session_user_id(app: &tauri::App<MockRuntime>, token: &str) -> i64 {
