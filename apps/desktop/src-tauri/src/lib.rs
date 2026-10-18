@@ -80,6 +80,7 @@ pub fn run() {
             commands::list_users,
             commands::deactivate_user,
             commands::reactivate_user,
+            commands::admin_reset_user_password,
             
             // Asset management commands
             commands::create_asset,

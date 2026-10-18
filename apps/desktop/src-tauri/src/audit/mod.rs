@@ -484,7 +484,10 @@ pub fn create_user_deactivated_event(
         admin_username: Some(admin_username.to_string()),
         target_user_id: Some(target_user_id),
         target_username: Some(target_username.to_string()),
-        description: format!("Administrator '{}' deactivated user '{}'", admin_username, target_username),
+        description: format!(
+            "Administrator '{}' deactivated user '{}'; encryption key access revoked and active sessions ended",
+            admin_username, target_username
+        ),
         metadata: None,
         ip_address: None,
         user_agent: None,
@@ -505,7 +508,10 @@ pub fn create_user_reactivated_event(
         admin_username: Some(admin_username.to_string()),
         target_user_id: Some(target_user_id),
         target_username: Some(target_username.to_string()),
-        description: format!("Administrator '{}' reactivated user '{}'", admin_username, target_username),
+        description: format!(
+            "Administrator '{}' reactivated user '{}' with a temporary password; encryption key access restored",
+            admin_username, target_username
+        ),
         metadata: None,
         ip_address: None,
         user_agent: None,

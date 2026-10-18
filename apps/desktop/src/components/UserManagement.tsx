@@ -22,7 +22,8 @@ import {
   StopOutlined,
   PlayCircleOutlined,
   ExclamationCircleOutlined,
-  KeyOutlined
+  KeyOutlined,
+  LockOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../store/auth';
@@ -32,6 +33,16 @@ import type { UserInfo } from '../store/auth';
 
 const { Title, Text } = Typography;
 
+interface TemporaryPasswordFormData {
+  password: string;
+  confirmPassword: string;
+}
+
+type TemporaryPasswordTarget = {
+  mode: 'reactivate' | 'reset';
+  user: UserInfo;
+};
+
 interface CreateUserFormData {
   username: string;
   password: string;
@@ -39,7 +50,7 @@ interface CreateUserFormData {
 }
 
 const UserManagement: React.FC = () => {
-  const { token, showRecoveryCode } = useAuthStore();
+  const { token, user: currentUser, showRecoveryCode } = useAuthStore();
   const { 
     users, 
     isLoading, 
@@ -50,12 +61,16 @@ const UserManagement: React.FC = () => {
     createEngineerUser, 
     deactivateUser, 
     reactivateUser,
+    resetUserPassword,
     clearError,
     clearCreateUserError
   } = useUserManagementStore();
   
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [createUserForm] = Form.useForm<CreateUserFormData>();
+  const [passwordTarget, setPasswordTarget] = useState<TemporaryPasswordTarget | null>(null);
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+  const [passwordForm] = Form.useForm<TemporaryPasswordFormData>();
 
   useEffect(() => {
     if (token) {
@@ -107,17 +122,32 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleReactivateUser = async (userId: number, username: string) => {
-    if (!token) {
+  const closePasswordModal = () => {
+    setPasswordTarget(null);
+    passwordForm.resetFields();
+  };
+
+  const handleSubmitTemporaryPassword = async (values: TemporaryPasswordFormData) => {
+    if (!token || !passwordTarget) {
       message.error('Authentication required');
       return;
     }
 
+    const { mode, user } = passwordTarget;
+    setIsSubmittingPassword(true);
     try {
-      await reactivateUser(token, userId);
-      message.success(`User ${username} reactivated successfully`);
+      if (mode === 'reactivate') {
+        await reactivateUser(token, user.id, values.password);
+        message.success(`User ${user.username} reactivated with a temporary password`);
+      } else {
+        await resetUserPassword(token, user.id, values.password);
+        message.success(`Temporary password set for ${user.username}`);
+      }
+      closePasswordModal();
     } catch (error) {
-      message.error('Failed to reactivate user');
+      message.error(mode === 'reactivate' ? 'Failed to reactivate user' : 'Failed to reset password');
+    } finally {
+      setIsSubmittingPassword(false);
     }
   };
 
@@ -176,7 +206,7 @@ const UserManagement: React.FC = () => {
           {record.is_active ? (
             <Popconfirm
               title="Deactivate User"
-              description={`Are you sure you want to deactivate ${record.username}?`}
+              description={`Deactivate ${record.username}? Their sessions end immediately and their access to encrypted data is revoked. Reactivating them later requires setting a temporary password.`}
               onConfirm={() => handleDeactivateUser(record.id, record.username)}
               okText="Yes"
               cancelText="No"
@@ -193,14 +223,24 @@ const UserManagement: React.FC = () => {
               </Button>
             </Popconfirm>
           ) : (
-            <Button 
-              type="text" 
+            <Button
+              type="text"
               size="small"
               icon={<PlayCircleOutlined />}
-              onClick={() => handleReactivateUser(record.id, record.username)}
+              onClick={() => setPasswordTarget({ mode: 'reactivate', user: record })}
               style={{ color: '#52c41a' }}
             >
               Reactivate
+            </Button>
+          )}
+          {record.is_active && record.id !== currentUser?.id && (
+            <Button
+              type="text"
+              size="small"
+              icon={<LockOutlined />}
+              onClick={() => setPasswordTarget({ mode: 'reset', user: record })}
+            >
+              Reset password
             </Button>
           )}
         </Space>
@@ -424,6 +464,76 @@ const UserManagement: React.FC = () => {
                 loading={isCreatingUser}
               >
                 Create Account
+              </Button>
+            </div>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Temporary Password Modal (Reactivate / Reset password) */}
+      <Modal
+        title={passwordTarget?.mode === 'reactivate' ? 'Reactivate User' : 'Reset Password'}
+        open={passwordTarget !== null}
+        onCancel={closePasswordModal}
+        footer={null}
+        width={500}
+        destroyOnHidden
+      >
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={handleSubmitTemporaryPassword}
+          autoComplete="off"
+        >
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: '16px' }}
+            title={`Set a temporary password for ${passwordTarget?.user.username ?? ''}`}
+            description="Share it with the user through a secure channel. It replaces their current password and restores their access to encrypted data."
+          />
+
+          <Form.Item
+            label="Temporary Password"
+            name="password"
+            rules={[
+              { required: true, message: 'Please input a temporary password' },
+              { min: 8, message: 'Password must be at least 8 characters' },
+            ]}
+          >
+            <Input.Password
+              placeholder="Enter temporary password"
+              autoComplete="new-password"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Confirm Password"
+            name="confirmPassword"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password
+              placeholder="Confirm temporary password"
+              autoComplete="new-password"
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <Button onClick={closePasswordModal}>Cancel</Button>
+              <Button type="primary" htmlType="submit" loading={isSubmittingPassword}>
+                {passwordTarget?.mode === 'reactivate' ? 'Reactivate' : 'Set Password'}
               </Button>
             </div>
           </Form.Item>

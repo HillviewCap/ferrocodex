@@ -17,6 +17,8 @@ pub trait KeyStoreRepository {
     fn unlock_for_user(&self, user_id: i64, password: &str) -> Result<Option<DataKey>>;
     /// Wraps the key for a user, replacing any copy they already hold.
     fn grant_user(&self, user_id: i64, password: &str, key: &DataKey) -> Result<()>;
+    /// Deletes the user's wrapped copy of the key, so their password opens nothing.
+    fn revoke_user(&self, user_id: i64) -> Result<()>;
     fn unlock_with_recovery_code(&self, recovery_code: &str) -> Result<DataKey>;
     /// Wraps the key under a new recovery code and returns the code.
     fn replace_recovery_code(&self, key: &DataKey) -> Result<String>;
@@ -151,6 +153,11 @@ impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
         self.store_wrap("user", Some(user_id), &wrapped)
     }
 
+    fn revoke_user(&self, user_id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM data_key_wraps WHERE user_id = ?1", [user_id])?;
+        Ok(())
+    }
+
     fn unlock_with_recovery_code(&self, recovery_code: &str) -> Result<DataKey> {
         let wrapped = self.load_wrap("kind = ?1", &"recovery")?
             .ok_or_else(|| anyhow::anyhow!("No recovery key has been set up"))?;
@@ -244,6 +251,26 @@ mod tests {
         store.grant_user(engineer, "engineer-password", &key).unwrap();
 
         let unlocked = store.unlock_for_user(engineer, "engineer-password").unwrap().unwrap();
+        assert!(same_key(&key, &unlocked));
+    }
+
+    #[test]
+    fn test_revoked_user_unlocks_nothing_and_can_be_regranted() {
+        let conn = setup();
+        let admin = create_user(&conn, "admin");
+        let engineer = create_user(&conn, "engineer");
+        let store = store(&conn);
+
+        let (key, _code) = store.create_data_key(admin, "admin-password").unwrap();
+        store.grant_user(engineer, "engineer-password", &key).unwrap();
+        store.revoke_user(engineer).unwrap();
+
+        assert!(store.unlock_for_user(engineer, "engineer-password").unwrap().is_none());
+        // Other users and the recovery code are untouched
+        assert!(store.unlock_for_user(admin, "admin-password").unwrap().is_some());
+
+        store.grant_user(engineer, "new-password", &key).unwrap();
+        let unlocked = store.unlock_for_user(engineer, "new-password").unwrap().unwrap();
         assert!(same_key(&key, &unlocked));
     }
 

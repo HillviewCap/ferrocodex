@@ -14,7 +14,8 @@ interface UserManagementActions {
   fetchUsers: (token: string) => Promise<void>;
   createEngineerUser: (token: string, username: string, password: string) => Promise<void>;
   deactivateUser: (token: string, userId: number) => Promise<void>;
-  reactivateUser: (token: string, userId: number) => Promise<void>;
+  reactivateUser: (token: string, userId: number, newPassword: string) => Promise<void>;
+  resetUserPassword: (token: string, userId: number, newPassword: string) => Promise<void>;
   clearError: () => void;
   clearCreateUserError: () => void;
   setLoading: (loading: boolean) => void;
@@ -103,11 +104,11 @@ const useUserManagementStore = create<UserManagementState & UserManagementAction
       }
     },
 
-    reactivateUser: async (token: string, userId: number) => {
+    reactivateUser: async (token: string, userId: number, newPassword: string) => {
       try {
         set({ isLoading: true, error: null });
         
-        await invoke('reactivate_user', { token, userId });
+        await invoke('reactivate_user', { token, userId, newPassword });
         
         // Update the user in the list
         const currentUsers = get().users;
@@ -120,6 +121,22 @@ const useUserManagementStore = create<UserManagementState & UserManagementAction
           isLoading: false,
           error: null,
         });
+      } catch (error) {
+        set({
+          isLoading: false,
+          error: error as string,
+        });
+        throw error;
+      }
+    },
+
+    resetUserPassword: async (token: string, userId: number, newPassword: string) => {
+      try {
+        set({ isLoading: true, error: null });
+
+        await invoke('admin_reset_user_password', { token, userId, newPassword });
+
+        set({ isLoading: false, error: null });
       } catch (error) {
         set({
           isLoading: false,

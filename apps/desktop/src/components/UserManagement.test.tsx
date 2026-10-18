@@ -36,6 +36,7 @@ describe('UserManagement', () => {
     createEngineerUser: vi.fn().mockResolvedValue(undefined),
     deactivateUser: vi.fn().mockResolvedValue(undefined),
     reactivateUser: vi.fn().mockResolvedValue(undefined),
+    resetUserPassword: vi.fn().mockResolvedValue(undefined),
     clearError: vi.fn(),
     clearCreateUserError: vi.fn(),
     setLoading: vi.fn(),
@@ -165,15 +166,61 @@ describe('UserManagement', () => {
     });
   });
 
-  it('calls reactivateUser when reactivate is clicked', async () => {
+  it('asks for a temporary password and calls reactivateUser', async () => {
     render(<UserManagement />);
-    
-    const reactivateButton = screen.getByText('Reactivate');
-    fireEvent.click(reactivateButton);
-    
+
+    fireEvent.click(screen.getByText('Reactivate'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
     await waitFor(() => {
-      expect(mockUserManagementStore.reactivateUser).toHaveBeenCalledWith('test-token', 3);
-    });
+      expect(mockUserManagementStore.reactivateUser).toHaveBeenCalledWith('test-token', 3, 'Temp-Pass-456');
+    }, VALIDATION_TIMEOUT);
+  });
+
+  it('does not reactivate when the passwords differ', async () => {
+    render(<UserManagement />);
+
+    fireEvent.click(screen.getByText('Reactivate'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Different-789' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+    expect(await within(dialog).findByText('Passwords do not match', undefined, VALIDATION_TIMEOUT)).toBeInTheDocument();
+    expect(mockUserManagementStore.reactivateUser).not.toHaveBeenCalled();
+  });
+
+  it('offers Reset password only for other active users and calls resetUserPassword', async () => {
+    render(<UserManagement />);
+
+    // Active users are admin (self, hidden) and engineer1; engineer2 is inactive
+    expect(screen.getAllByText('Reset password')).toHaveLength(1);
+
+    const engineerRow = screen.getByText('engineer1').closest('tr')!;
+    fireEvent.click(within(engineerRow).getByText('Reset password'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Set Password' }));
+
+    await waitFor(() => {
+      expect(mockUserManagementStore.resetUserPassword).toHaveBeenCalledWith('test-token', 2, 'Temp-Pass-456');
+    }, VALIDATION_TIMEOUT);
+  });
+
+  it('warns that deactivation revokes encrypted-data access', async () => {
+    render(<UserManagement />);
+
+    const engineerRow = screen.getByText('engineer1').closest('tr')!;
+    fireEvent.click(within(engineerRow).getByText('Deactivate'));
+
+    expect(await screen.findByText(/access to encrypted data is revoked/)).toBeInTheDocument();
   });
 
   it('calls fetchUsers when refresh button is clicked', async () => {
