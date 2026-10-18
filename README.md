@@ -120,6 +120,7 @@ ferrocodex/
 │           ├── audit/
 │           ├── auth/
 │           └── database/     # SQLite layer
+├── apps/website/             # ferrocodex.com, static site on Cloudflare Workers
 ├── docs/                     # Sphinx documentation (Read the Docs)
 ├── .github/workflows/        # CI, release, and Dependabot automation
 └── CLAUDE.md                 # Guidance for AI-assisted development

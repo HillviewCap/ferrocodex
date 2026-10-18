@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ferrocodex. Offline configuration management for industrial equipment</title>
+  <meta name="description" content="Ferrocodex keeps PLC and HMI configurations, firmware, and equipment credentials in one encrypted database on a single workstation. No server, no account, no network connection. Free and open source for Windows, macOS, and Linux.">
+  <link rel="canonical" href="https://ferrocodex.com/">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/assets/icon-256.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Ferrocodex">
+  <meta property="og:description" content="Offline-first configuration, firmware, and credential management for operational technology.">
+  <meta property="og:url" content="https://ferrocodex.com/">
+  <meta property="og:image" content="https://ferrocodex.com/assets/icon-256.png">
+  <meta name="theme-color" content="#1a1450">
+  <link rel="preload" href="/assets/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container site-header__row">
+    <a class="brand" href="/">
+      <img src="/assets/ferrocodex-mark.png" alt="" width="50" height="36">
+      <span class="brand__name">Ferrocodex</span>
+    </a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="#features">Features</a>
+      <a href="#security">Security</a>
+      <a href="https://ferrocodex.readthedocs.io/en/latest/">Documentation</a>
+      <a href="https://github.com/HillviewCap/ferrocodex">GitHub</a>
+      <a class="button button--small" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="container hero__grid">
+      <div class="hero__copy">
+        <h1>Configuration records for equipment that never touches the network.</h1>
+        <p class="hero__lede">Ferrocodex keeps PLC and HMI configurations, firmware, and equipment credentials in one encrypted database on a single workstation. No server, no account, no connection required.</p>
+        <div class="hero__actions">
+          <a class="button button--light" href="#download" data-hero-download>Download</a>
+          <a class="button button--ghost" href="https://ferrocodex.readthedocs.io/en/latest/getting-started.html">Read the getting started guide</a>
+        </div>
+        <p class="hero__meta">Version <span data-version>0.5.2</span> for Windows, macOS, and Linux. Free and open source under the AGPL-3.0.</p>
+      </div>
+
+      <figure class="ledger" aria-label="Example version history for a PLC configuration">
+        <div class="ledger__head">
+          <div>
+            <div class="ledger__asset">PLC-07</div>
+            <div class="ledger__path">Packaging / Line 3 / Case packer</div>
+          </div>
+          <div class="ledger__kind">Configuration</div>
+        </div>
+        <table class="ledger__table">
+          <thead>
+            <tr>
+              <th scope="col">Version</th>
+              <th scope="col">Change</th>
+              <th scope="col">By</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>v1</td>
+              <td>Commissioning baseline<span class="ledger__date">2 Mar 2026</span></td>
+              <td>M. Okafor</td>
+              <td><span class="status status--archived">Archived</span></td>
+            </tr>
+            <tr>
+              <td>v2</td>
+              <td>Infeed photoeye timing<span class="ledger__date">14 May 2026</span></td>
+              <td>M. Okafor</td>
+              <td><span class="status status--approved">Approved</span></td>
+            </tr>
+            <tr class="ledger__branch">
+              <td>v2.1</td>
+              <td>Branch: jam recovery<span class="ledger__date">21 Aug 2026</span></td>
+              <td>R. Lindqvist</td>
+              <td><span class="status status--silver">Silver</span></td>
+            </tr>
+            <tr class="ledger__golden">
+              <td>v3</td>
+              <td>Jam recovery sequence<span class="ledger__date">30 Sep 2026</span></td>
+              <td>R. Lindqvist</td>
+              <td><span class="status status--golden">Golden</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <figcaption class="ledger__foot">
+          <span>SHA-256 <code>465fdc27 8a3e</code></span>
+          <span>Encrypted at rest</span>
+          <span>Promoted by admin, 30 Sep 2026</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="principles" id="principles">
+    <div class="container">
+      <h2>Built for the air gap</h2>
+      <div class="principles__grid">
+        <div class="principle">
+          <h3>Nothing leaves the workstation</h3>
+          <p>Ferrocodex makes no network calls. Data lives in a SQLite database in the local application data folder, and the app works the same on a plant-floor laptop that has never seen the internet.</p>
+        </div>
+        <div class="principle">
+          <h3>Secrets are encrypted before they are stored</h3>
+          <p>Configuration content, firmware files, and vault credentials are encrypted with AES-256-GCM. Keys are derived from the signed-in user's credentials, so there is no master key sitting on disk.</p>
+        </div>
+        <div class="principle">
+          <h3>Every change is on the record</h3>
+          <p>Each upload, status change, credential access, and login is written to an audit log. Administrators can see who changed what, and when, for any device.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container features__grid">
+      <div class="features__intro">
+        <h2>What it keeps</h2>
+        <p>One record per device, with everything you would need to put it back into service after a failure.</p>
+      </div>
+      <dl class="features__list">
+        <div>
+          <dt>Configurations</dt>
+          <dd>Upload a configuration file and keep every version. Branch to try a change while the golden version stays untouched, then promote the version that works.</dd>
+        </div>
+        <div>
+          <dt>Firmware</dt>
+          <dd>Store firmware images next to the configurations they belong to, with SHA-256 integrity checks and the same draft, approved, and golden statuses.</dd>
+        </div>
+        <div>
+          <dt>Credentials</dt>
+          <dd>An identity vault for equipment passwords, with rotation history and per-user access. The password you typed is the one that gets stored, and nobody else can read it without their own login.</dd>
+        </div>
+        <div>
+          <dt>Asset hierarchy</dt>
+          <dd>Organise sites, lines, and devices in a tree. Drag to reorganise, search by name or type, and import, export, or rename in bulk.</dd>
+        </div>
+        <div>
+          <dt>Metadata</dt>
+          <dd>Define the fields that matter at your site, such as IP address, rack slot, or maintenance contact, with JSON Schema validation and reusable templates.</dd>
+        </div>
+        <div>
+          <dt>Recovery packages</dt>
+          <dd>Export the golden configuration and firmware for a device as one bundle. Import it on another workstation to restore the device.</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="workflow" id="workflow">
+    <div class="container">
+      <h2>How a change becomes golden</h2>
+      <ol class="steps">
+        <li>
+          <h3>Upload the running configuration</h3>
+          <p>Pull the configuration from the device and add it as a new version. It starts as a draft.</p>
+          <span class="status status--draft">Draft</span>
+        </li>
+        <li>
+          <h3>Branch to try a change</h3>
+          <p>Work on a branch while the current golden version stays available. Promote the branch when it holds up on the equipment.</p>
+          <span class="status status--silver">Silver</span>
+        </li>
+        <li>
+          <h3>Approve it</h3>
+          <p>An administrator reviews the version and the notes, then approves it for production use.</p>
+          <span class="status status--approved">Approved</span>
+        </li>
+        <li>
+          <h3>Promote to golden</h3>
+          <p>The approved version becomes the one you restore from. The previous golden stays in history, and the audit log records who promoted it.</p>
+          <span class="status status--golden">Golden</span>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="security" id="security">
+    <div class="container security__grid">
+      <div class="security__intro">
+        <h2>What is encrypted, and what is not</h2>
+        <p>Ferrocodex encrypts the data that would hurt if it leaked, and says so plainly about the rest. Protect the application data folder with operating system permissions and full-disk encryption.</p>
+      </div>
+      <div class="security__lists">
+        <div>
+          <h3>Encrypted before it is stored</h3>
+          <ul>
+            <li>Configuration file content</li>
+            <li>Firmware files on disk</li>
+            <li>Vault credentials</li>
+            <li>User passwords, stored as bcrypt hashes</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Stored in plain text</h3>
+          <ul>
+            <li>Asset names and the hierarchy</li>
+            <li>Metadata field values</li>
+            <li>Version notes and status history</li>
+            <li>Audit log entries</li>
+          </ul>
+        </div>
+      </div>
+      <div class="security__access">
+        <h3>Access control</h3>
+        <p>Two roles. Administrators manage users, review audit logs, and approve versions. Engineers manage assets, configurations, and firmware. Logins are rate limited and sessions expire. Vault credentials are shared per user, not per role.</p>
+        <p><a href="https://ferrocodex.readthedocs.io/en/latest/security.html">Read the security guide</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="download" id="download">
+    <div class="container">
+      <h2>Download</h2>
+      <p class="download__lede">Version <span data-version>0.5.2</span>. Every file is built by GitHub Actions from the tagged source and published on the <a href="https://github.com/HillviewCap/ferrocodex/releases/latest" data-release-notes>GitHub release</a>.</p>
+
+      <div class="download__platforms">
+        <div class="platform" data-platform="windows" id="download-windows">
+          <h3>Windows</h3>
+          <ul>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_x64_en-US.msi" data-asset="windows-msi">Installer (.msi)</a> <span class="platform__size" data-size>9 MB</span></li>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_x64-setup.exe" data-asset="windows-exe">Setup (.exe)</a> <span class="platform__size" data-size>6 MB</span></li>
+          </ul>
+          <p>Windows 10 or 11, 64-bit.</p>
+        </div>
+        <div class="platform" data-platform="macos" id="download-macos">
+          <h3>macOS</h3>
+          <ul>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_aarch64.dmg" data-asset="macos-arm">Apple silicon (.dmg)</a> <span class="platform__size" data-size>10 MB</span></li>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_x64.dmg" data-asset="macos-intel">Intel (.dmg)</a> <span class="platform__size" data-size>11 MB</span></li>
+          </ul>
+          <p>macOS 10.15 or later.</p>
+        </div>
+        <div class="platform" data-platform="linux" id="download-linux">
+          <h3>Linux</h3>
+          <ul>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_amd64.AppImage" data-asset="linux-appimage">AppImage</a> <span class="platform__size" data-size>85 MB</span></li>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex_0.5.2_amd64.deb" data-asset="linux-deb">Debian and Ubuntu (.deb)</a> <span class="platform__size" data-size>11 MB</span></li>
+            <li><a href="https://github.com/HillviewCap/ferrocodex/releases/download/v0.5.2/Ferrocodex-0.5.2-1.x86_64.rpm" data-asset="linux-rpm">Fedora and RHEL (.rpm)</a> <span class="platform__size" data-size>11 MB</span></li>
+          </ul>
+          <p>x86-64 with WebKitGTK 4.1, for example Ubuntu 22.04 or later.</p>
+        </div>
+      </div>
+
+      <div class="download__notes">
+        <p>The installers are not yet code-signed. Windows SmartScreen and macOS Gatekeeper will ask you to confirm the first launch. On macOS, right-click the app and choose Open.</p>
+        <p>Prefer to build it yourself? The <a href="https://github.com/HillviewCap/ferrocodex#building-from-source">README</a> lists the prerequisites and the build command for each platform.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container site-footer__grid">
+    <div class="site-footer__brand">
+      <div class="brand brand--footer"><img src="/assets/ferrocodex-mark.png" alt="" width="50" height="36"><span class="brand__name">Ferrocodex</span></div>
+      <p>Open source configuration management for operational technology. Licensed under the GNU Affero General Public License v3.0.</p>
+    </div>
+    <div class="site-footer__links">
+      <h3>Product</h3>
+      <a href="#download">Download</a>
+      <a href="https://ferrocodex.readthedocs.io/en/latest/">Documentation</a>
+      <a href="https://github.com/HillviewCap/ferrocodex/releases">Release notes</a>
+    </div>
+    <div class="site-footer__links">
+      <h3>Project</h3>
+      <a href="https://github.com/HillviewCap/ferrocodex">Source code</a>
+      <a href="https://github.com/HillviewCap/ferrocodex/issues">Issue tracker</a>
+      <a href="https://github.com/HillviewCap/ferrocodex/blob/main/LICENSE">License</a>
+    </div>
+    <div class="site-footer__links">
+      <h3>Security</h3>
+      <p>Found a vulnerability? Email <a href="mailto:security@ferrocodex.com">security@ferrocodex.com</a> rather than opening a public issue.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>

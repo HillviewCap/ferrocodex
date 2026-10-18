@@ -71,3 +71,6 @@ private/
 *.tmp
 *.temp
 .tmp/
+
+# Wrangler
+.wrangler/

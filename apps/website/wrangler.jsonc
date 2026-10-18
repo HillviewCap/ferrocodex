@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ferrocodex-website",
+  "compatibility_date": "2026-10-17",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Attach the production domain after the zone is on this Cloudflare account.
+  // Remove the "www" entry if the site should answer on the apex only.
+  "routes": [
+    { "pattern": "ferrocodex.com", "custom_domain": true },
+    { "pattern": "www.ferrocodex.com", "custom_domain": true }
+  ]
+}
