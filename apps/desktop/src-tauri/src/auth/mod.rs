@@ -2,6 +2,7 @@ use anyhow::Result;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
@@ -21,10 +22,30 @@ pub struct SessionToken {
     /// and never serialized.
     #[serde(skip)]
     pub data_key: Option<Arc<DataKey>>,
+    /// Shared with the [`SessionManager`] and every other session. Set while
+    /// a data-key rotation is in progress, which blocks [`SessionToken::data_key`].
+    #[serde(skip)]
+    rotation_gate: Arc<AtomicBool>,
 }
 
+/// The error every encrypted-data command returns while a rotation runs.
+pub const KEY_ROTATION_IN_PROGRESS_ERROR: &str =
+    "Encryption key rotation in progress; an administrator must finish it";
+
 impl SessionToken {
+    /// The unlocked data key, for reading or writing encrypted data. Errors
+    /// while a data-key rotation is in progress, so nothing is read or written
+    /// under a key that is being replaced.
     pub fn data_key(&self) -> Result<Arc<DataKey>, String> {
+        if self.rotation_gate.load(Ordering::SeqCst) {
+            return Err(KEY_ROTATION_IN_PROGRESS_ERROR.to_string());
+        }
+        self.rotation_key()
+    }
+
+    /// The unlocked data key regardless of the rotation gate. Only the
+    /// rotation commands and Replace Recovery Key may use this.
+    pub fn rotation_key(&self) -> Result<Arc<DataKey>, String> {
         self.data_key.clone().ok_or_else(|| {
             "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key.".to_string()
         })
@@ -41,6 +62,10 @@ pub struct LoginResponse {
     /// Set only when this login created the data key. Shown to the user once.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovery_code: Option<String>,
+    /// True while a data-key rotation is in progress: encrypted data is
+    /// unavailable until an administrator finishes it.
+    #[serde(default)]
+    pub key_rotation_in_progress: bool,
 }
 
 // Type alias for service compatibility
@@ -51,6 +76,7 @@ pub type AuthState = SessionManager;
 pub struct SessionManager {
     sessions: Mutex<HashMap<String, SessionToken>>,
     session_duration: u64, // in seconds
+    rotation_gate: Arc<AtomicBool>,
 }
 
 impl SessionManager {
@@ -58,7 +84,20 @@ impl SessionManager {
         Self {
             sessions: Mutex::new(HashMap::new()),
             session_duration: 24 * 60 * 60, // 24 hours
+            rotation_gate: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Opens or closes the rotation gate for every session, current and future.
+    pub fn set_rotation_in_progress(&self, in_progress: bool) {
+        let was = self.rotation_gate.swap(in_progress, Ordering::SeqCst);
+        if was != in_progress {
+            info!("Data-key rotation gate {}", if in_progress { "set" } else { "cleared" });
+        }
+    }
+
+    pub fn rotation_in_progress(&self) -> bool {
+        self.rotation_gate.load(Ordering::SeqCst)
     }
 
     pub fn create_session(&self, user: &User) -> Result<SessionToken> {
@@ -79,6 +118,7 @@ impl SessionManager {
             role: user.role.clone(),
             expires_at: now + self.session_duration,
             data_key: data_key.map(Arc::new),
+            rotation_gate: self.rotation_gate.clone(),
         };
 
         {
@@ -520,6 +560,36 @@ pub mod tests {
         assert!(FileEncryption::new(&old_key).decrypt(&ciphertext).is_ok());
 
         assert!(manager.replace_session_key("missing", DataKey::generate()).is_err());
+    }
+
+    #[test]
+    fn test_rotation_gate_blocks_data_key_for_every_session() {
+        let manager = SessionManager::new();
+        let before = manager.create_session_with_key(&test_user(1, "a"), Some(DataKey::generate())).unwrap();
+        assert!(before.data_key().is_ok());
+
+        manager.set_rotation_in_progress(true);
+        assert!(manager.rotation_in_progress());
+        // Sessions created before and after the gate was set, and copies
+        // returned by validate_session, all share it
+        let after = manager.create_session_with_key(&test_user(2, "b"), Some(DataKey::generate())).unwrap();
+        let validated = manager.validate_session(&before.token).unwrap().unwrap();
+        for session in [&before, &after, &validated] {
+            assert_eq!(session.data_key().unwrap_err(), KEY_ROTATION_IN_PROGRESS_ERROR);
+            assert!(session.rotation_key().is_ok());
+        }
+
+        manager.set_rotation_in_progress(false);
+        assert!(before.data_key().is_ok());
+        assert!(after.data_key().is_ok());
+    }
+
+    #[test]
+    fn test_rotation_key_without_a_key_errors() {
+        let manager = SessionManager::new();
+        let session = manager.create_session(&test_user(1, "a")).unwrap();
+        assert!(session.rotation_key().is_err());
+        assert!(session.data_key().is_err());
     }
 
     #[test]

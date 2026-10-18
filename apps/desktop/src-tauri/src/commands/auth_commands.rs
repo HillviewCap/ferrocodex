@@ -62,6 +62,7 @@ pub async fn create_admin_account(
                 token: session.token,
                 user: user.into(),
                 recovery_code: Some(recovery_code),
+                key_rotation_in_progress: false,
             })
         }
         None => Err("Database not initialized".to_string()),
@@ -104,8 +105,17 @@ pub async fn login(
 
                             let (data_key, recovery_code) = unlock_data_key(db, &user, &password)?;
 
+                            // A retiring key means a rotation is unfinished, possibly
+                            // from before a restart: gate encrypted data until an
+                            // administrator finishes it
+                            let key_rotation_in_progress = SqliteKeyStoreRepository::new(db.get_connection())
+                                .retiring_key_version()
+                                .map_err(|e| format!("Failed to check encryption key state: {}", e))?
+                                .is_some();
+
                             let session_manager = session_manager.lock()
                                 .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+                            session_manager.set_rotation_in_progress(key_rotation_in_progress);
                             let session = session_manager.create_session_with_key(&user, data_key)
                                 .map_err(|e| format!("Failed to create session: {}", e))?;
 
@@ -115,6 +125,7 @@ pub async fn login(
                                 token: session.token,
                                 user: user.into(),
                                 recovery_code,
+                                key_rotation_in_progress,
                             })
                         }
                         Ok(false) => {
@@ -184,7 +195,7 @@ fn unlock_data_key(db: &Database, user: &User, password: &str) -> Result<(Option
     }
 }
 
-fn log_keys_upgraded(db: &Database, user: &User) {
+pub(crate) fn log_keys_upgraded(db: &Database, user: &User) {
     let audit_event = AuditEventRequest {
         event_type: AuditEventType::UserEncryptionKeysUpgraded,
         user_id: Some(user.id),
@@ -319,13 +330,21 @@ pub async fn replace_recovery_key(
         warn!("Non-admin user attempted to replace the recovery key: {}", session.username);
         return Err("Only administrators can replace the recovery key".to_string());
     }
-    let data_key = session.data_key()?;
+    // Allowed during a key rotation: the session key is then the new active
+    // key, which is the one the recovery code must open
+    let data_key = session.rotation_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     let db = db_guard.as_ref().ok_or_else(|| "Database not initialized".to_string())?;
 
-    let recovery_code = SqliteKeyStoreRepository::new(db.get_connection())
+    let key_store = SqliteKeyStoreRepository::new(db.get_connection());
+    let active_version = key_store.active_key_version()
+        .map_err(|e| format!("Failed to check encryption key state: {}", e))?;
+    if active_version != Some(data_key.version()) {
+        return Err("Your session holds an outdated encryption key; log in again".to_string());
+    }
+    let recovery_code = key_store
         .replace_recovery_code(&data_key)
         .map_err(|e| format!("Failed to replace recovery key: {}", e))?;
 

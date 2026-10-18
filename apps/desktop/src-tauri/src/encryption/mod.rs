@@ -16,7 +16,6 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
-#[allow(dead_code)]
 const TAG_LEN: usize = 16;
 const SALT_LEN: usize = 16;
 const RECOVERY_CODE_BYTES: usize = 20;
@@ -149,7 +148,6 @@ impl FileEncryption {
     /// ciphertext and tag) and the same length as the input, so `decrypt` with
     /// `to` reads it. If the blob does not authenticate under `from`, `buf` is
     /// left unchanged.
-    #[allow(dead_code)]
     pub fn reencrypt_in_place(from: &DataKey, to: &DataKey, buf: &mut [u8]) -> Result<()> {
         if buf.len() < NONCE_LEN + TAG_LEN {
             return Err(anyhow::anyhow!("Invalid encrypted data: too short"));

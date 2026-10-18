@@ -7,9 +7,12 @@ use crate::encryption::{
     normalize_recovery_code, open_with_secret, seal_to_public_key,
 };
 
-/// Status values of a `data_keys` row. Only one row is `active` at a time;
-/// `retiring` and `retired` are used by rotation (design chunk 5).
+/// Status values of a `data_keys` row. Only one row is `active` at a time.
+/// A rotation marks the old key `retiring` until every ciphertext has been
+/// re-encrypted, then `retired`.
 pub const DATA_KEY_STATUS_ACTIVE: &str = "active";
+pub const DATA_KEY_STATUS_RETIRING: &str = "retiring";
+pub const DATA_KEY_STATUS_RETIRED: &str = "retired";
 
 /// The result of unlocking a user's copy of the data key.
 #[derive(Debug)]
@@ -33,6 +36,8 @@ pub trait KeyStoreRepository {
     fn has_data_key(&self) -> Result<bool>;
     /// The version of the `active` data key, if one has been created.
     fn active_key_version(&self) -> Result<Option<u32>>;
+    /// The version of the `retiring` data key: set while a rotation is in progress.
+    fn retiring_key_version(&self) -> Result<Option<u32>>;
     /// Generates the data key, gives the first user a keypair holding it,
     /// wraps it under a new recovery code, and returns the key with the code
     /// to show once.
@@ -68,7 +73,6 @@ impl<'a> SqliteKeyStoreRepository<'a> {
         Self { conn, params: KdfParams::default() }
     }
 
-    #[cfg(test)]
     pub fn with_params(conn: &'a Connection, params: KdfParams) -> Self {
         Self { conn, params }
     }
@@ -286,6 +290,14 @@ impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
         Ok(self.conn.query_row(
             "SELECT version FROM data_keys WHERE status = ?1",
             [DATA_KEY_STATUS_ACTIVE],
+            |row| row.get(0),
+        ).optional()?)
+    }
+
+    fn retiring_key_version(&self) -> Result<Option<u32>> {
+        Ok(self.conn.query_row(
+            "SELECT version FROM data_keys WHERE status = ?1",
+            [DATA_KEY_STATUS_RETIRING],
             |row| row.get(0),
         ).optional()?)
     }
