@@ -40,7 +40,7 @@ use tempfile::TempDir;
     }
 
     impl ConfigurationRepository for MockConfigurationRepository {
-        fn store_configuration(&self, _request: crate::configurations::CreateConfigurationRequest) -> Result<ConfigurationVersion> {
+        fn store_configuration(&self, _request: crate::configurations::CreateConfigurationRequest, _key: &DataKey) -> Result<ConfigurationVersion> {
             unimplemented!()
         }
 
@@ -48,7 +48,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn get_configuration_content(&self, _version_id: i64) -> Result<Vec<u8>> {
+        fn get_configuration_content(&self, _version_id: i64, _key: &DataKey) -> Result<Vec<u8>> {
             unimplemented!()
         }
         
@@ -84,7 +84,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
 
-        fn export_configuration_version(&self, _version_id: i64, export_path: &str) -> Result<()> {
+        fn export_configuration_version(&self, _version_id: i64, export_path: &str, _key: &DataKey) -> Result<()> {
             // Write a test configuration file
             std::fs::write(export_path, r#"{"test": "configuration", "version": "1.0.0"}"#)?;
             Ok(())
@@ -281,7 +281,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn add_secret(&self, _request: AddSecretRequest) -> Result<VaultSecret> {
+        fn add_secret(&self, _request: AddSecretRequest, _key: &DataKey) -> Result<VaultSecret> {
             unimplemented!()
         }
         
@@ -330,7 +330,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_password(&self, _request: crate::vault::UpdateCredentialPasswordRequest, _password_hash: &str, _strength_score: i32) -> Result<()> {
+        fn update_password(&self, _request: crate::vault::UpdateCredentialPasswordRequest, _password_hash: &str, _strength_score: i32, _key: &DataKey) -> Result<()> {
             unimplemented!()
         }
         
@@ -343,7 +343,7 @@ use tempfile::TempDir;
         }
         
         // Standalone credential methods
-        fn create_standalone_credential(&self, _request: crate::vault::CreateStandaloneCredentialRequest) -> Result<crate::vault::StandaloneCredential> {
+        fn create_standalone_credential(&self, _request: crate::vault::CreateStandaloneCredentialRequest, _key: &DataKey) -> Result<crate::vault::StandaloneCredential> {
             unimplemented!()
         }
         
@@ -351,7 +351,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_standalone_credential(&self, _request: crate::vault::UpdateStandaloneCredentialRequest) -> Result<()> {
+        fn update_standalone_credential(&self, _request: crate::vault::UpdateStandaloneCredentialRequest, _key: &DataKey) -> Result<()> {
             unimplemented!()
         }
         
@@ -405,7 +405,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_vault_secret(&self, _request: UpdateVaultSecretRequest) -> Result<()> {
+        fn update_vault_secret(&self, _request: UpdateVaultSecretRequest, _key: &DataKey) -> Result<()> {
             unimplemented!()
         }
         

@@ -12,7 +12,7 @@ use crate::vault::{
     CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, 
     CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService,
     PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
-    VaultAccessLog, CreatePermissionRequest, PermissionRequest,
+    VaultAccessLog, CreatePermissionRequest, PermissionRequest, open_vault_export, seal_vault_export,
     rotation::{
         PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule,
         RotationBatch, BatchRotationService, PasswordRotationHistory, CreateRotationBatchRequest,
@@ -108,6 +108,8 @@ pub async fn add_vault_secret(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate inputs
     let sanitized_label = InputSanitizer::sanitize_string(&secret_request.label);
     let sanitized_value = InputSanitizer::sanitize_string(&secret_request.value);
@@ -132,7 +134,7 @@ pub async fn add_vault_secret(
                 author_id: session.user_id,
             };
 
-            match vault_repo.add_secret(sanitized_request) {
+            match vault_repo.add_secret(sanitized_request, &data_key) {
                 Ok(secret) => {
                     info!("Secret added to vault by {}: {} ({})", 
                           session.username, secret.label, secret.secret_type.to_string());
@@ -237,6 +239,7 @@ pub async fn import_vault_from_recovery(
     token: String,
     recovery_file_path: String,
     asset_id: i64,
+    passphrase: String,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<IdentityVault, String> {
@@ -251,6 +254,9 @@ pub async fn import_vault_from_recovery(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -262,8 +268,8 @@ pub async fn import_vault_from_recovery(
             let vault_json = std::fs::read_to_string(&recovery_file_path)
                 .map_err(|e| format!("Failed to read recovery vault file: {}", e))?;
             
-            let vault_info: VaultInfo = serde_json::from_str(&vault_json)
-                .map_err(|e| format!("Failed to parse vault data: {}", e))?;
+            let vault_info = open_vault_export(&vault_json, &passphrase, &data_key)
+                .map_err(|e| format!("Failed to open vault export: {}", e))?;
             
             // Verify the asset_id matches
             if vault_info.vault.asset_id != asset_id {
@@ -308,6 +314,8 @@ pub async fn decrypt_vault_secret(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
@@ -315,39 +323,24 @@ pub async fn decrypt_vault_secret(
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
             
             match vault_repo.get_secret_by_id(secret_id) {
-                Ok(Some(secret)) => {
+                Ok(Some(secret)) if secret.vault_id == vault_id => {
                     // Decrypt the secret value
-                    let encryption = FileEncryption::new(&format!("vault_{}_{}", vault_id, session.user_id));
-                    use base64::{Engine as _, engine::general_purpose};
-                    match general_purpose::STANDARD.decode(&secret.encrypted_value) {
-                        Ok(encrypted_bytes) => {
-                            match encryption.decrypt(&encrypted_bytes) {
-                                Ok(decrypted_bytes) => {
-                                    match String::from_utf8(decrypted_bytes) {
-                                        Ok(decrypted_value) => {
-                                            info!("Secret decrypted for user {}: {} ({})", 
-                                                  session.username, secret.label, secret.secret_type.to_string());
-                                            Ok(decrypted_value)
-                                        }
-                                        Err(e) => {
-                                            error!("Failed to convert decrypted bytes to string: {}", e);
-                                            Err("Failed to decrypt secret".to_string())
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to decrypt secret: {}", e);
-                                    Err("Failed to decrypt secret".to_string())
-                                }
-                            }
+                    let decrypted = FileEncryption::new(&data_key)
+                        .decrypt_from_base64(&secret.encrypted_value)
+                        .and_then(|bytes| Ok(String::from_utf8(bytes)?));
+                    match decrypted {
+                        Ok(decrypted_value) => {
+                            info!("Secret decrypted for user {}: {} ({})", 
+                                  session.username, secret.label, secret.secret_type.to_string());
+                            Ok(decrypted_value)
                         }
                         Err(e) => {
-                            error!("Failed to decode base64 encrypted value: {}", e);
+                            error!("Failed to decrypt secret: {}", e);
                             Err("Failed to decrypt secret".to_string())
                         }
                     }
                 }
-                Ok(None) => Err("Secret not found".to_string()),
+                Ok(_) => Err("Secret not found".to_string()),
                 Err(e) => {
                     error!("Failed to get secret {}: {}", secret_id, e);
                     Err(format!("Failed to get secret: {}", e))
@@ -362,6 +355,7 @@ pub async fn decrypt_vault_secret(
 pub async fn export_vault(
     token: String,
     vault_id: i64,
+    passphrase: String,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<String, String> {
@@ -377,6 +371,8 @@ pub async fn export_vault(
         }
     };
     drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -397,15 +393,15 @@ pub async fn export_vault(
                                 secret_count: secrets.len(),
                             };
                             
-                            // Serialize to JSON string for export
-                            match serde_json::to_string_pretty(&vault_info) {
+                            // Re-encrypt the secrets under the export passphrase
+                            match seal_vault_export(&vault_info, &data_key, &passphrase) {
                                 Ok(json_string) => {
                                     info!("Vault {} exported by {}: {} secrets", vault_id, session.username, vault_info.secret_count);
                                     Ok(json_string)
                                 }
                                 Err(e) => {
-                                    error!("Failed to serialize vault data: {}", e);
-                                    Err("Failed to serialize vault data".to_string())
+                                    error!("Failed to export vault data: {}", e);
+                                    Err(format!("Failed to export vault: {}", e))
                                 }
                             }
                         }
@@ -593,6 +589,8 @@ pub async fn update_credential_password(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate inputs
     let sanitized_password = InputSanitizer::sanitize_string(&request.new_password);
     if InputSanitizer::is_potentially_malicious(&sanitized_password) {
@@ -631,7 +629,7 @@ pub async fn update_credential_password(
                 }
             }
             
-            match vault_repo.update_password(request, &password_hash, strength.score) {
+            match vault_repo.update_password(request, &password_hash, strength.score, &data_key) {
                 Ok(()) => {
                     info!("Password updated by {} for secret with strength score {}", session.username, strength.score);
                     Ok(())
@@ -666,6 +664,8 @@ pub async fn update_vault_secret(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate inputs
     if let Some(ref label) = request.label {
         let sanitized_label = InputSanitizer::sanitize_string(label);
@@ -689,7 +689,7 @@ pub async fn update_vault_secret(
         Some(db) => {
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
             
-            match vault_repo.update_vault_secret(request) {
+            match vault_repo.update_vault_secret(request, &data_key) {
                 Ok(()) => {
                     info!("Vault secret updated by {}", session.username);
                     Ok(())
@@ -765,6 +765,9 @@ pub async fn create_standalone_credential(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     // Sanitize input
     let sanitized_name = InputSanitizer::sanitize_string(&credential_request.name);
@@ -798,7 +801,7 @@ pub async fn create_standalone_credential(
                 created_by: session.user_id,
             };
 
-            match vault_repo.create_standalone_credential(sanitized_request) {
+            match vault_repo.create_standalone_credential(sanitized_request, &data_key) {
                 Ok(credential) => {
                     info!("Standalone credential created by {}: {}", session.username, credential.name);
                     
@@ -1051,6 +1054,8 @@ pub async fn update_standalone_credential(
 
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     let db = db_guard.as_ref()
@@ -1078,7 +1083,7 @@ pub async fn update_standalone_credential(
         author_id: session.user_id,
     };
 
-    match vault_repo.update_standalone_credential(sanitized_request) {
+    match vault_repo.update_standalone_credential(sanitized_request, &data_key) {
         Ok(_) => {
             info!("Updated standalone credential {} by {}", update_request.id, session.username);
             Ok("Credential updated successfully".to_string())
@@ -1226,6 +1231,9 @@ pub async fn decrypt_standalone_credential(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
+
+    let data_key = session.data_key()?;
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1236,13 +1244,8 @@ pub async fn decrypt_standalone_credential(
             match vault_repo.get_standalone_credential(credential_id) {
                 Ok(Some(credential_info)) => {
                     // Decrypt the credential value
-                    let encryption = FileEncryption::new(&format!("standalone_{}_{}", credential_id, session.user_id));
-                    use base64::{Engine as _, engine::general_purpose};
-                    
-                    let encrypted_bytes = general_purpose::STANDARD.decode(&credential_info.credential.encrypted_data)
-                        .map_err(|e| format!("Failed to decode encrypted data: {}", e))?;
-                    
-                    let decrypted_bytes = encryption.decrypt(&encrypted_bytes)
+                    let decrypted_bytes = FileEncryption::new(&data_key)
+                        .decrypt_from_base64(&credential_info.credential.encrypted_data)
                         .map_err(|e| format!("Failed to decrypt credential: {}", e))?;
                     
                     let decrypted_value = String::from_utf8(decrypted_bytes)
@@ -1284,6 +1287,8 @@ pub async fn rotate_password(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Check permissions - Engineers can rotate passwords
     if session.role != UserRole::Administrator && session.role != UserRole::Engineer {
         return Err("Insufficient permissions to rotate passwords".to_string());
@@ -1308,7 +1313,7 @@ pub async fn rotate_password(
             let mut rotation_request = request;
             rotation_request.author_id = session.user_id;
             
-            rotation_service.rotate_password(rotation_request)
+            rotation_service.rotate_password(rotation_request, &data_key)
                 .map_err(|e| {
                     error!("Failed to rotate password: {}", e);
                     format!("Failed to rotate password: {}", e)
@@ -1784,6 +1789,8 @@ pub async fn execute_batch_rotation(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Check permissions
     if session.role != crate::users::UserRole::Administrator && session.role != crate::users::UserRole::Engineer {
         return Err("Insufficient permissions to execute batch rotation".to_string());
@@ -1803,7 +1810,7 @@ pub async fn execute_batch_rotation(
             let mut batch_request = request;
             batch_request.author_id = session.user_id;
             
-            batch_service.execute_batch_rotation(batch_request)
+            batch_service.execute_batch_rotation(batch_request, &data_key)
                 .map_err(|e| format!("Failed to execute batch rotation: {}", e))
         }
         None => Err("Database not initialized".to_string()),
@@ -1954,6 +1961,7 @@ pub async fn update_rotation_policy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::test_key;
     use crate::vault::{CreateStandaloneCredentialRequest, SecretType};
     use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
     use tauri::Manager;
@@ -1984,14 +1992,14 @@ mod tests {
                 value: "secret".to_string(),
                 tags: None,
                 created_by: OWNER_ID,
-            })
+            }, test_key())
             .unwrap();
 
         let session_manager = SessionManager::new();
         let user_repo = SqliteUserRepository::new(conn);
         let tokens = [ADMIN_ID, OWNER_ID, OTHER_ID].map(|id| {
             let user = user_repo.find_by_id(id).unwrap().unwrap();
-            session_manager.create_session(&user).unwrap().token
+            session_manager.create_session_with_key(&user, Some(test_key().clone())).unwrap().token
         });
 
         let app = mock_builder()
@@ -2116,5 +2124,31 @@ mod tests {
         let result = update_standalone_credential(admin_token, rename_request(credential_id + 1), app.state(), app.state()).await;
 
         assert_eq!(result, Err("Credential not found".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_credential_decrypts_for_users_other_than_its_creator() {
+        let (app, credential_id, [admin_token, owner_token, _]) = setup_test_app();
+
+        for token in [owner_token, admin_token] {
+            let result = decrypt_standalone_credential(token, credential_id, app.state(), app.state()).await;
+            assert_eq!(result, Ok("secret".to_string()));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_session_without_data_key_cannot_decrypt() {
+        let (app, credential_id, _) = setup_test_app();
+        let keyless_token = {
+            let db_state = app.state::<DatabaseState>();
+            let db_guard = db_state.lock().unwrap();
+            let user = SqliteUserRepository::new(db_guard.as_ref().unwrap().get_connection())
+                .find_by_id(OWNER_ID).unwrap().unwrap();
+            app.state::<SessionManagerState>().lock().unwrap().create_session(&user).unwrap().token
+        };
+
+        let result = decrypt_standalone_credential(keyless_token, credential_id, app.state(), app.state()).await;
+
+        assert!(result.unwrap_err().contains("Encrypted data is unavailable"));
     }
 }

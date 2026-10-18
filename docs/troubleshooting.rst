@@ -104,8 +104,14 @@ Forgotten Password
 
 **Administrator Password:**
 
+1. On the login screen, click **Forgot password?**
+2. Enter the username, the recovery key saved at setup, and a new password
+3. Ferrocodex sets the new password and shows a new recovery key; the old one stops working. Store the new key offline.
+
+An administrator who still knows their password can issue a new recovery key from **User Management** with **Replace Recovery Key**.
+
 .. warning::
-   Passwords are stored as bcrypt hashes and cannot be recovered. Encryption keys for configuration content, firmware files, and vault secrets are derived from user credentials, so data stored by an account whose password is lost cannot be decrypted. Keep a secure record of the administrator credentials.
+   Passwords are stored as bcrypt hashes and cannot be recovered. If every administrator password and the recovery key are lost, configuration content, firmware files, and vault secrets cannot be decrypted.
 
 Session Timeout
 ^^^^^^^^^^^^^^^
@@ -567,6 +573,7 @@ Export/Import with Vaults
 
 *Common Causes:*
 
+* Wrong export passphrase. Vault secrets in an export are encrypted with the passphrase chosen at export time, and the import needs the same one.
 * Version incompatibility
 * Corrupted export file
 * Insufficient permissions

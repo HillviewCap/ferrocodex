@@ -79,6 +79,7 @@ describe('ImportRecoveryPackageModal', () => {
     expect(screen.getByText('Import Identity Vault')).toBeInTheDocument();
     expect(screen.getByLabelText('Target Asset')).toBeInTheDocument();
 
+    fireEvent.change(screen.getByPlaceholderText('Export passphrase'), { target: { value: 'substation-7 recovery' } });
     const importButton = screen.getByRole('button', { name: /Import Bundle/ });
     expect(importButton).toBeEnabled();
     fireEvent.click(importButton);
@@ -90,11 +91,23 @@ describe('ImportRecoveryPackageModal', () => {
         bundlePath: '/bundles/plc-001',
         targetAssetId: 1,
         importVault: true,
+        vaultPassphrase: 'substation-7 recovery',
       });
     });
     expect(await screen.findByText('Import Successful!')).toBeInTheDocument();
     // Footer "Close" plus the modal's own close (X) button
     expect(screen.getAllByRole('button', { name: 'Close' }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('requires the export passphrase to import the vault', async () => {
+    render(<ImportRecoveryPackageModal visible onCancel={vi.fn()} onSuccess={vi.fn()} assets={assets} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Select Recovery Bundle Directory/ }));
+    await screen.findByText('Bundle Contents');
+    fireEvent.click(screen.getByRole('button', { name: /Import Bundle/ }));
+
+    expect(await screen.findByText('Please enter the export passphrase')).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('import_recovery_bundle', expect.anything());
   });
 
   it('shows the error result when validation fails', async () => {

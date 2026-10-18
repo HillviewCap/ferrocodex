@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Modal, Alert, Space, Typography, notification, Tooltip } from 'antd';
+import { Button, Modal, Alert, Space, Typography, notification, Tooltip, Form } from 'antd';
 import { ExportOutlined, LockOutlined, WarningOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import useAuthStore from '../store/auth';
 import { VaultInfo, VaultAccessInfo } from '../types/vault';
+import ExportPassphraseFields from './ExportPassphraseFields';
 
 const { Text } = Typography;
 
@@ -29,6 +30,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
   const [loading] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [passphraseForm] = Form.useForm<{ vaultPassphrase: string }>();
 
   useEffect(() => {
     checkExportPermission();
@@ -56,15 +58,28 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
     setExportModalVisible(true);
   };
 
+  const closeExportModal = () => {
+    passphraseForm.resetFields();
+    setExportModalVisible(false);
+  };
+
   const performExport = async () => {
     if (!token || !user) return;
 
+    let passphrase: string;
+    try {
+      ({ vaultPassphrase: passphrase } = await passphraseForm.validateFields());
+    } catch {
+      return;
+    }
+
     setExporting(true);
     try {
-      // Export vault data
+      // Export vault data, re-encrypted under the passphrase
       const exportData = await invoke<string>('export_vault', {
         token,
-        vaultId: vault.vault.id
+        vaultId: vault.vault.id,
+        passphrase
       });
 
       // Show save dialog
@@ -90,7 +105,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
         });
 
         onExportComplete?.();
-        setExportModalVisible(false);
+        closeExportModal();
       }
     } catch (error) {
       console.error('Failed to export vault:', error);
@@ -138,7 +153,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
       <Modal
         title="Export Vault"
         open={exportModalVisible}
-        onCancel={() => setExportModalVisible(false)}
+        onCancel={closeExportModal}
         footer={null}
         width={600}
       >
@@ -150,7 +165,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
                 <p>You are about to export sensitive vault data. This export will contain:</p>
                 <ul style={{ marginLeft: '20px', marginTop: '8px' }}>
                   <li>All secret labels and metadata</li>
-                  <li>Encrypted secret values (requires decryption key to read)</li>
+                  <li>Secret values, encrypted with the export passphrase you choose below</li>
                   <li>Vault configuration and history</li>
                 </ul>
                 <p style={{ marginTop: '12px', marginBottom: 0 }}>
@@ -175,6 +190,10 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
             </div>
           </div>
 
+          <Form form={passphraseForm} layout="vertical" requiredMark={false} autoComplete="off">
+            <ExportPassphraseFields />
+          </Form>
+
           {isAdministrator && (
             <Alert
               title="Administrator Export"
@@ -186,7 +205,7 @@ const VaultExportButton: React.FC<VaultExportButtonProps> = ({
 
           <div style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => setExportModalVisible(false)}>
+              <Button onClick={closeExportModal}>
                 Cancel
               </Button>
               <Button

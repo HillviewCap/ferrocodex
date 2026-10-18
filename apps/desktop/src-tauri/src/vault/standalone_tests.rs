@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod standalone_credential_tests {
     use super::super::*;
+    use crate::encryption::test_key;
     use tempfile::NamedTempFile;
     use rusqlite::Connection;
 
@@ -48,7 +49,7 @@ mod standalone_credential_tests {
             created_by: 1,
         };
 
-        let credential = repo.create_standalone_credential(request).unwrap();
+        let credential = repo.create_standalone_credential(request, test_key()).unwrap();
         assert_eq!(credential.name, "Test Database Password");
         assert_eq!(credential.credential_type, SecretType::Password);
         assert_eq!(credential.category_id, Some(2));
@@ -78,7 +79,7 @@ mod standalone_credential_tests {
                 tags: Some(tags.iter().map(|s| s.to_string()).collect()),
                 created_by: 1,
             };
-            repo.create_standalone_credential(request).unwrap();
+            repo.create_standalone_credential(request, test_key()).unwrap();
         }
 
         // Test search by query
@@ -195,7 +196,7 @@ mod standalone_credential_tests {
             created_by: 1,
         };
 
-        let credential = repo.create_standalone_credential(create_request).unwrap();
+        let credential = repo.create_standalone_credential(create_request, test_key()).unwrap();
 
         // Update the credential
         let update_request = UpdateStandaloneCredentialRequest {
@@ -207,7 +208,7 @@ mod standalone_credential_tests {
             author_id: 1,
         };
 
-        repo.update_standalone_credential(update_request).unwrap();
+        repo.update_standalone_credential(update_request, test_key()).unwrap();
 
         // Verify the update
         let updated = repo.get_standalone_credential(credential.id).unwrap().unwrap();
@@ -237,7 +238,7 @@ mod standalone_credential_tests {
             created_by: 1,
         };
 
-        let credential = repo.create_standalone_credential(request).unwrap();
+        let credential = repo.create_standalone_credential(request, test_key()).unwrap();
 
         // Verify tags were added
         let info = repo.get_standalone_credential(credential.id).unwrap().unwrap();
@@ -285,7 +286,7 @@ mod standalone_credential_tests {
             created_by: 1,
         };
 
-        let credential = repo.create_standalone_credential(request).unwrap();
+        let credential = repo.create_standalone_credential(request, test_key()).unwrap();
 
         // Delete the credential
         repo.delete_standalone_credential(credential.id, 1).unwrap();
@@ -318,7 +319,7 @@ mod standalone_credential_tests {
             created_by: 1,
         };
 
-        let credential = repo.create_standalone_credential(request).unwrap();
+        let credential = repo.create_standalone_credential(request, test_key()).unwrap();
 
         // Verify the stored value is encrypted (not plaintext)
         assert_ne!(credential.encrypted_data, secret_value);

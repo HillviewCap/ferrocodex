@@ -13,6 +13,8 @@ export interface UserInfo {
 export interface LoginResponse {
   token: string;
   user: UserInfo;
+  // Set only when this login created the encryption key
+  recovery_code?: string;
 }
 
 interface AuthState {
@@ -21,6 +23,8 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  // A recovery key to show the user once. Never persisted.
+  pendingRecoveryCode: string | null;
 }
 
 interface AuthActions {
@@ -30,6 +34,8 @@ interface AuthActions {
   checkSession: () => Promise<void>;
   clearError: () => void;
   setLoading: (loading: boolean) => void;
+  showRecoveryCode: (recoveryCode: string) => void;
+  dismissRecoveryCode: () => void;
 }
 
 const useAuthStore = create<AuthState & AuthActions>()(
@@ -41,6 +47,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      pendingRecoveryCode: null,
 
       // Actions
       login: async (username: string, password: string) => {
@@ -58,6 +65,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            pendingRecoveryCode: response.recovery_code ?? null,
           });
         } catch (error) {
           set({
@@ -86,6 +94,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            pendingRecoveryCode: null,
           });
         }
       },
@@ -105,6 +114,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            pendingRecoveryCode: response.recovery_code ?? null,
           });
         } catch (error) {
           set({
@@ -146,6 +156,10 @@ const useAuthStore = create<AuthState & AuthActions>()(
       clearError: () => set({ error: null }),
 
       setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+      showRecoveryCode: (recoveryCode: string) => set({ pendingRecoveryCode: recoveryCode }),
+
+      dismissRecoveryCode: () => set({ pendingRecoveryCode: null }),
     }),
     {
       name: 'auth-storage',

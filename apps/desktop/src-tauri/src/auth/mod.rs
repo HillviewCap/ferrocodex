@@ -2,11 +2,12 @@ use anyhow::Result;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use crate::encryption::DataKey;
 use crate::users::{User, UserInfo, UserRole};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +17,18 @@ pub struct SessionToken {
     pub username: String,
     pub role: UserRole,
     pub expires_at: u64,
+    /// The unlocked data key. Only set for sessions opened with a password,
+    /// and never serialized.
+    #[serde(skip)]
+    pub data_key: Option<Arc<DataKey>>,
+}
+
+impl SessionToken {
+    pub fn data_key(&self) -> Result<Arc<DataKey>, String> {
+        self.data_key.clone().ok_or_else(|| {
+            "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key.".to_string()
+        })
+    }
 }
 
 // Type alias for compatibility
@@ -25,6 +38,9 @@ pub type Session = SessionToken;
 pub struct LoginResponse {
     pub token: String,
     pub user: UserInfo,
+    /// Set only when this login created the data key. Shown to the user once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_code: Option<String>,
 }
 
 // Type alias for service compatibility
@@ -46,6 +62,10 @@ impl SessionManager {
     }
 
     pub fn create_session(&self, user: &User) -> Result<SessionToken> {
+        self.create_session_with_key(user, None)
+    }
+
+    pub fn create_session_with_key(&self, user: &User, data_key: Option<DataKey>) -> Result<SessionToken> {
         let token = Uuid::new_v4().to_string();
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -58,6 +78,7 @@ impl SessionManager {
             username: user.username.clone(),
             role: user.role.clone(),
             expires_at: now + self.session_duration,
+            data_key: data_key.map(Arc::new),
         };
 
         {

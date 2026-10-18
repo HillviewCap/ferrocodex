@@ -28,6 +28,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo } from '../types/assets';
 import { FirmwareVersionInfo } from '../types/firmware';
 import useAuthStore from '../store/auth';
+import ExportPassphraseFields from './ExportPassphraseFields';
 
 const { Text, Title } = Typography;
 
@@ -146,6 +147,16 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
       return;
     }
 
+    const exportVault = includeVault && !!exportOptions?.vaultAvailable;
+    let vaultPassphrase: string | undefined;
+    if (exportVault) {
+      try {
+        ({ vaultPassphrase } = await form.validateFields(['vaultPassphrase', 'confirmVaultPassphrase']));
+      } catch {
+        return;
+      }
+    }
+
     setExporting(true);
     try {
       const manifestPath = await invoke<string>('export_complete_recovery', {
@@ -155,14 +166,16 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
         configVersionId: configuration.id,
         firmwareVersionId: linkedFirmwareId,
         exportDirectory: selectedPath,
-        includeVault: includeVault && exportOptions?.vaultAvailable
+        includeVault: exportVault,
+        vaultPassphrase
       });
       
       message.success('Recovery package exported successfully!');
       onSuccess(manifestPath);
     } catch (err) {
       console.error('Failed to export recovery package:', err);
-      message.error(`Failed to export recovery package: ${(err as Error).message}`);
+      // Tauri commands reject with a plain string
+      message.error(`Failed to export recovery package: ${err instanceof Error ? err.message : err}`);
     } finally {
       setExporting(false);
     }
@@ -325,17 +338,10 @@ const ExportRecoveryPackageModal: React.FC<ExportRecoveryPackageModalProps> = ({
                   </Tooltip>
                 </Space>
               </Checkbox>
-              {includeVault && (
-                <Alert
-                  title="Security Notice"
-                  description="The vault data will remain encrypted during export. Only users with appropriate permissions can access the vault contents after import."
-                  type="warning"
-                  showIcon
-                  style={{ marginTop: 8 }}
-                />
-              )}
             </Form.Item>
           )}
+
+          {exportOptions?.vaultAvailable && includeVault && <ExportPassphraseFields />}
         </Form>
 
         {selectedPath && (

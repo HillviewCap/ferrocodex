@@ -195,6 +195,8 @@ pub async fn import_version_to_branch(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     // Validate inputs
     let notes = InputSanitizer::sanitize_string(&notes);
     
@@ -220,7 +222,7 @@ pub async fn import_version_to_branch(
                 author: session.user_id,
             };
 
-            match branch_repo.import_version_to_branch(request) {
+            match branch_repo.import_version_to_branch(request, &data_key) {
                 Ok(_branch_version) => {
                     // Get the full branch version info
                     match branch_repo.get_branch_latest_version(branch_id) {
@@ -351,13 +353,15 @@ pub async fn compare_branch_versions(
     };
     drop(session_manager_guard);
 
+    let data_key = session.data_key()?;
+
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
             let branch_repo = SqliteBranchRepository::new(db.get_connection());
             
-            match branch_repo.compare_branch_versions(branch_id, version1_id, version2_id) {
+            match branch_repo.compare_branch_versions(branch_id, version1_id, version2_id, &data_key) {
                 Ok(diff_content) => {
                     // Convert bytes to string for frontend
                     match String::from_utf8(diff_content) {

@@ -21,8 +21,10 @@ import {
   UserOutlined, 
   StopOutlined,
   PlayCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  KeyOutlined
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../store/auth';
 import useUserManagementStore from '../store/userManagement';
 import RoleGuard from './RoleGuard';
@@ -37,7 +39,7 @@ interface CreateUserFormData {
 }
 
 const UserManagement: React.FC = () => {
-  const { token } = useAuthStore();
+  const { token, showRecoveryCode } = useAuthStore();
   const { 
     users, 
     isLoading, 
@@ -74,6 +76,20 @@ const UserManagement: React.FC = () => {
       createUserForm.resetFields();
     } catch (error) {
       message.error('Failed to create engineer account');
+    }
+  };
+
+  const handleReplaceRecoveryKey = async () => {
+    if (!token) {
+      message.error('Authentication required');
+      return;
+    }
+
+    try {
+      const recoveryCode = await invoke<string>('replace_recovery_key', { token });
+      showRecoveryCode(recoveryCode);
+    } catch (error) {
+      message.error(`Failed to replace recovery key: ${error}`);
     }
   };
 
@@ -210,6 +226,17 @@ const UserManagement: React.FC = () => {
             >
               Refresh
             </Button>
+            <Popconfirm
+              title="Replace Recovery Key"
+              description="Issue a new recovery key? The current one stops working immediately."
+              onConfirm={handleReplaceRecoveryKey}
+              okText="Replace"
+              cancelText="Cancel"
+            >
+              <Button icon={<KeyOutlined />}>
+                Replace Recovery Key
+              </Button>
+            </Popconfirm>
             <Button 
               type="primary" 
               icon={<PlusOutlined />}

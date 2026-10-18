@@ -6,8 +6,9 @@ use tauri::AppHandle;
 use uuid::Uuid;
 use crate::{
     configurations::{ConfigurationRepository, CreateConfigurationRequest},
+    encryption::DataKey,
     firmware::{FirmwareRepository, FirmwareFileStorage, CreateFirmwareRequest},
-    vault::{VaultRepository, VaultInfo},
+    vault::{VaultRepository, open_vault_export, seal_vault_export},
     validation::InputSanitizer,
     audit::{self, AuditRepository},
     users::UserRole,
@@ -129,10 +130,16 @@ impl<'a> RecoveryExporter<'a> {
         username: &str,
         user_role: &UserRole,
         asset_name: &str,
+        key: &DataKey,
+        vault_passphrase: Option<&str>,
     ) -> Result<RecoveryManifest> {
         // Validate user permissions
         if *user_role != UserRole::Engineer && *user_role != UserRole::Administrator {
             return Err(anyhow::anyhow!("Only Engineers and Administrators can export recovery packages"));
+        }
+
+        if request.include_vault.unwrap_or(false) && vault_passphrase.is_none() {
+            return Err(anyhow::anyhow!("An export passphrase is required to include the vault"));
         }
 
         // Validate export directory path
@@ -204,7 +211,7 @@ impl<'a> RecoveryExporter<'a> {
                 anyhow::anyhow!("Invalid configuration export path")
             })?;
 
-        self.config_repo.export_configuration_version(request.config_version_id, config_export_path_str)
+        self.config_repo.export_configuration_version(request.config_version_id, config_export_path_str, key)
             .map_err(|e| {
                 cleanup_files(&created_files, export_dir, export_dir_created);
                 anyhow::anyhow!("Failed to export configuration: {}", e)
@@ -233,8 +240,7 @@ impl<'a> RecoveryExporter<'a> {
         let firmware_data = FirmwareFileStorage::read_firmware_file(
             app,
             &firmware.file_path,
-            user_id,
-            username,
+            key,
         ).map_err(|e| {
             cleanup_files(&created_files, export_dir, export_dir_created);
             anyhow::anyhow!("Failed to read firmware file: {}", e)
@@ -264,11 +270,11 @@ impl<'a> RecoveryExporter<'a> {
                     let vault_filename = format!("{}_vault.json", sanitized_asset_name);
                     let vault_export_path = export_dir.join(&vault_filename);
                     
-                    // Export vault data as JSON (encrypted secrets remain encrypted)
-                    let vault_json = serde_json::to_string_pretty(&vault_info)
+                    // Re-encrypt the secrets under the export passphrase
+                    let vault_json = seal_vault_export(&vault_info, key, vault_passphrase.unwrap_or_default())
                         .map_err(|e| {
                             cleanup_files(&created_files, export_dir, export_dir_created);
-                            anyhow::anyhow!("Failed to serialize vault data: {}", e)
+                            anyhow::anyhow!("Failed to export vault: {}", e)
                         })?;
                     
                     std::fs::write(&vault_export_path, &vault_json)
@@ -538,6 +544,8 @@ impl<'a> RecoveryImporter<'a> {
         user_id: i64,
         username: &str,
         user_role: &UserRole,
+        key: &DataKey,
+        vault_passphrase: Option<&str>,
     ) -> Result<RecoveryManifest> {
         // Validate user permissions
         if *user_role != UserRole::Engineer && *user_role != UserRole::Administrator {
@@ -556,6 +564,17 @@ impl<'a> RecoveryImporter<'a> {
         let bundle_dir = Path::new(&request.bundle_path);
         let start_time = std::time::Instant::now();
 
+        // Open the vault first so a wrong passphrase fails before anything is imported
+        let vault_data = match (&manifest.vault, request.import_vault) {
+            (Some(vault_info), true) => {
+                let passphrase = vault_passphrase
+                    .ok_or_else(|| anyhow::anyhow!("The export passphrase is required to import the vault"))?;
+                let vault_content = std::fs::read_to_string(bundle_dir.join(&vault_info.filename))?;
+                Some(open_vault_export(&vault_content, passphrase, key)?)
+            }
+            _ => None,
+        };
+
         // Import configuration
         let config_path = bundle_dir.join(&manifest.configuration.filename);
         let config_content = std::fs::read_to_string(&config_path)?;
@@ -569,7 +588,7 @@ impl<'a> RecoveryImporter<'a> {
                 username, chrono::Utc::now().to_rfc3339()),
         };
 
-        let imported_config = self.config_repo.store_configuration(config_request)?;
+        let imported_config = self.config_repo.store_configuration(config_request, key)?;
 
         // Import firmware
         let firmware_path = bundle_dir.join(&manifest.firmware.filename);
@@ -583,8 +602,7 @@ impl<'a> RecoveryImporter<'a> {
             request.target_asset_id,
             temp_firmware_id,
             &firmware_data,
-            user_id,
-            username,
+            key,
         )?;
 
         let firmware_request = CreateFirmwareRequest {
@@ -610,15 +628,8 @@ impl<'a> RecoveryImporter<'a> {
         )?;
 
         // Import vault if requested and available
-        if request.import_vault && manifest.vault.is_some() {
-            if let Some(ref vault_info) = manifest.vault {
-                let vault_path = bundle_dir.join(&vault_info.filename);
-                let vault_content = std::fs::read_to_string(&vault_path)?;
-                let vault_data: VaultInfo = serde_json::from_str(&vault_content)?;
-
-                // Import vault with all secrets
-                self.vault_repo.import_vault(&vault_data, user_id)?;
-            }
+        if let Some(vault_data) = vault_data {
+            self.vault_repo.import_vault(&vault_data, user_id)?;
         }
 
         // Link firmware to configuration if they were linked in the original

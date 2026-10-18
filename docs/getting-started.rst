@@ -104,7 +104,7 @@ Ferrocodex stores its SQLite database and encrypted files in the platform applic
 * **macOS**: ``~/Library/Application Support/com.ferrocodex.app/``
 * **Linux**: ``~/.config/com.ferrocodex.app/``
 
-The database (``ferrocodex.db``) is created on first launch and opened in WAL mode. Configuration content, firmware files, and vault secrets are encrypted with AES-256-GCM using keys derived from user credentials. The database file itself is not encrypted as a whole, so protect the data directory with operating-system permissions and full-disk encryption.
+The database (``ferrocodex.db``) is created on first launch and opened in WAL mode. Configuration content, firmware files, and vault secrets are encrypted with AES-256-GCM under a random 256-bit data key. The data key is stored only in wrapped form: once for each user, encrypted with a key derived from that user's password (Argon2id), and once under the recovery key. The database file itself is not encrypted as a whole, so protect the data directory with operating-system permissions and full-disk encryption.
 
 First Launch
 ------------
@@ -125,7 +125,7 @@ When you first launch Ferrocodex, you'll need to:
 2. **Create the Administrator Account**: Set up the first user account, which has the Administrator role
 
 .. warning::
-   There is no password recovery. If the administrator password is lost, the account and the data encrypted with its credentials cannot be recovered. Keep a secure record of the credentials.
+   After the administrator account is created, Ferrocodex shows a **recovery key** once. It is the only way to recover encrypted data if every administrator password is lost. Write it down or print it, and store it offline away from the workstation. Anyone holding it can reset any account's password.
 
 Creating Your First User
 ^^^^^^^^^^^^^^^^^^^^^^^^
