@@ -111,6 +111,7 @@ mod tests {
                 rotation_interval_days: None,
                 next_rotation_due: None,
                 rotation_policy_id: None,
+                key_version: 1,
             }],
             secret_count: 1,
         }

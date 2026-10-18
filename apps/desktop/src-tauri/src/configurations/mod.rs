@@ -177,6 +177,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
                 status_changed_at DATETIME,
                 firmware_version_id INTEGER REFERENCES firmware_versions(id) ON DELETE SET NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                 FOREIGN KEY (author) REFERENCES users(id),
                 UNIQUE(asset_id, version_number)
@@ -256,15 +257,21 @@ impl<'a> SqliteConfigurationRepository<'a> {
     }
 
     /// Copies a version as a new version of the same asset. The encrypted
-    /// content is copied as-is, so no key is needed.
+    /// content is copied as-is, so no key is needed; the copy keeps the
+    /// source's key version because its ciphertext is unchanged.
     pub fn duplicate_configuration_version(&self, version_id: i64, author: i64, notes: &str) -> Result<ConfigurationVersion> {
         let source = self.get_configuration_by_id(version_id)?
             .ok_or_else(|| anyhow::anyhow!("Configuration version not found"))?;
+        let key_version: u32 = self.conn.query_row(
+            "SELECT key_version FROM configuration_versions WHERE id = ?1",
+            [version_id],
+            |row| row.get(0),
+        )?;
         let version_number = self.generate_next_version_number(source.asset_id)?;
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO configuration_versions (asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING *"
+            "INSERT INTO configuration_versions (asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING *"
         )?;
 
         let config = stmt.query_row(
@@ -277,6 +284,7 @@ impl<'a> SqliteConfigurationRepository<'a> {
                 &source.content_hash,
                 &author,
                 &notes,
+                &key_version,
             ),
             Self::row_to_configuration,
         )?;
@@ -350,8 +358,8 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
         
         // Store configuration
         let mut stmt = self.conn.prepare(
-            "INSERT INTO configuration_versions (asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING *"
+            "INSERT INTO configuration_versions (asset_id, version_number, file_name, file_content, file_size, content_hash, author, notes, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING *"
         )?;
 
         let config = stmt.query_row(
@@ -364,6 +372,7 @@ impl<'a> ConfigurationRepository for SqliteConfigurationRepository<'a> {
                 &content_hash,
                 &request.author,
                 &request.notes,
+                &key.version(),
             ),
             Self::row_to_configuration,
         )?;

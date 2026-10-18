@@ -56,6 +56,15 @@ pub struct VaultSecret {
     pub rotation_interval_days: Option<i32>,
     pub next_rotation_due: Option<String>,
     pub rotation_policy_id: Option<i64>,
+    /// Version of the data key `encrypted_value` is encrypted under. Kept out
+    /// of IPC and vault exports: an exported secret is re-encrypted under the
+    /// export passphrase, so the install's key version means nothing there.
+    #[serde(skip, default = "default_key_version")]
+    pub key_version: u32,
+}
+
+fn default_key_version() -> u32 {
+    crate::encryption::INITIAL_KEY_VERSION
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -593,14 +602,17 @@ pub trait VaultRepository {
     fn add_secret(&self, request: AddSecretRequest, key: &DataKey) -> Result<VaultSecret>;
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>>;
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>>;
-    fn update_secret(&self, secret: &VaultSecret, author_id: i64) -> Result<()>;
+    /// Writes `secret.encrypted_value` as-is; `key_version` is the version of
+    /// the data key it is encrypted under.
+    fn update_secret(&self, secret: &VaultSecret, author_id: i64, key_version: u32) -> Result<()>;
     fn delete_secret(&self, secret_id: i64, author_id: i64) -> Result<()>;
     
     fn add_version_history(&self, vault_id: i64, change_type: ChangeType, author: i64, notes: &str, changes: HashMap<String, String>) -> Result<()>;
     fn get_vault_history(&self, vault_id: i64) -> Result<Vec<VaultVersion>>;
     
-    /// Imports a vault whose secrets are already encrypted under this install's data key.
-    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault>;
+    /// Imports a vault whose secrets are already encrypted under this install's
+    /// data key, at version `key_version`.
+    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64, key_version: u32) -> Result<IdentityVault>;
     fn initialize_schema(&self) -> Result<()>;
     
     // Password management methods
@@ -702,6 +714,7 @@ impl<'a> SqliteVaultRepository<'a> {
             rotation_interval_days: row.get("rotation_interval_days")?,
             next_rotation_due: row.get("next_rotation_due")?,
             rotation_policy_id: row.get("rotation_policy_id")?,
+            key_version: row.get("key_version")?,
         })
     }
 
@@ -880,6 +893,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 rotation_interval_days INTEGER,
                 next_rotation_due DATETIME,
                 rotation_policy_id INTEGER,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
                 UNIQUE(vault_id, label)
             );
@@ -954,6 +968,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_accessed DATETIME,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (category_id) REFERENCES credential_categories(id) ON DELETE SET NULL,
                 FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
             );
@@ -1281,15 +1296,15 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                request.secret_type.to_string(), request.label, request.vault_id);
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) 
-             VALUES (?1, ?2, ?3, ?4) 
+            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5)
              RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
-                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id"
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version"
         )?;
 
         let secret = stmt.query_row(
-            (&request.vault_id, &request.secret_type.to_string(), &request.label, &encrypted_value_base64),
+            (&request.vault_id, &request.secret_type.to_string(), &request.label, &encrypted_value_base64, &key.version()),
             Self::row_to_secret,
         )?;
 
@@ -1315,7 +1330,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
-                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id 
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE vault_id = ?1 ORDER BY created_at ASC"
         )?;
 
@@ -1333,7 +1348,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
-                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id 
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE id = ?1"
         )?;
 
@@ -1346,12 +1361,12 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
     }
 
-    fn update_secret(&self, secret: &VaultSecret, author_id: i64) -> Result<()> {
+    fn update_secret(&self, secret: &VaultSecret, author_id: i64, key_version: u32) -> Result<()> {
         let rows_affected = self.conn.execute(
-            "UPDATE vault_secrets 
-             SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP 
-             WHERE id = ?3",
-            (&secret.label, &secret.encrypted_value, &secret.id),
+            "UPDATE vault_secrets
+             SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            (&secret.label, &secret.encrypted_value, &key_version, &secret.id),
         )?;
 
         if rows_affected == 0 {
@@ -1434,7 +1449,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(versions)
     }
 
-    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault> {
+    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64, key_version: u32) -> Result<IdentityVault> {
         debug!("Importing vault '{}' for asset {}", vault_info.vault.name, vault_info.vault.asset_id);
 
         // Create the vault
@@ -1450,8 +1465,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Import all secrets; callers have already re-encrypted them under this install's data key
         for secret in &vault_info.secrets {
             self.conn.execute(
-                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) VALUES (?1, ?2, ?3, ?4)",
-                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value),
+                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version) VALUES (?1, ?2, ?3, ?4, ?5)",
+                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value, &key_version),
             )?;
         }
 
@@ -1528,12 +1543,12 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         // Update the secret with new password and metadata
         self.conn.execute(
-            "UPDATE vault_secrets 
-             SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP, 
-                 strength_score = ?2, last_changed = CURRENT_TIMESTAMP,
+            "UPDATE vault_secrets
+             SET encrypted_value = ?1, key_version = ?2, updated_at = CURRENT_TIMESTAMP,
+                 strength_score = ?3, last_changed = CURRENT_TIMESTAMP,
                  generation_method = 'manual', policy_version = 1
-             WHERE id = ?3",
-            (&encrypted_value_base64, strength_score, request.secret_id),
+             WHERE id = ?4",
+            (&encrypted_value_base64, key.version(), strength_score, request.secret_id),
         )?;
 
         // Add version history
@@ -1614,8 +1629,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
-                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
-                (label, encrypted_value_base64, request.secret_id),
+                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP WHERE id = ?4",
+                (label, encrypted_value_base64, key.version(), request.secret_id),
             )?;
         } else if let Some(ref label) = request.label {
             // Only label provided
@@ -1628,8 +1643,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
-                "UPDATE vault_secrets SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
-                (encrypted_value_base64, request.secret_id),
+                "UPDATE vault_secrets SET encrypted_value = ?1, key_version = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
+                (encrypted_value_base64, key.version(), request.secret_id),
             )?;
         } else {
             return Err(anyhow::anyhow!("No fields to update"));
@@ -1705,14 +1720,14 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6) 
+            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              RETURNING id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed"
         )?;
 
         let credential = stmt.query_row(
-            (&request.name, &request.description, &request.credential_type.to_string(), 
-             &request.category_id, &encrypted_data_base64, &request.created_by),
+            (&request.name, &request.description, &request.credential_type.to_string(),
+             &request.category_id, &encrypted_data_base64, &request.created_by, &key.version()),
             Self::row_to_standalone_credential,
         )?;
 
@@ -1777,6 +1792,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()> {
+        // A version number from our own key, not user input, so it is safe inline
+        let encrypted_data_clause = format!("encrypted_data = ?, key_version = {}", key.version());
         let mut updates = Vec::new();
         let mut changes = HashMap::new();
 
@@ -1800,7 +1817,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             // Encrypt the new value
             let encrypted_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
-            updates.push("encrypted_data = ?");
+            updates.push(encrypted_data_clause.as_str());
             changes.insert("value_updated".to_string(), "true".to_string());
             Some(encrypted_base64)
         } else {

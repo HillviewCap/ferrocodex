@@ -4,6 +4,10 @@ use tracing::info;
 
 use crate::encryption::{DataKey, KdfParams, WrappedKey, generate_recovery_code, normalize_recovery_code};
 
+/// Status values of a `data_keys` row. Only one row is `active` at a time;
+/// `retiring` and `retired` are used by rotation (design chunk 5).
+pub const DATA_KEY_STATUS_ACTIVE: &str = "active";
+
 // The install-wide data key encrypts configuration files, firmware, and vault
 // secrets. It is never stored in plaintext: each user holds a copy wrapped
 // under their login password, and one more copy is wrapped under the recovery
@@ -52,12 +56,28 @@ impl<'a> SqliteKeyStoreRepository<'a> {
                 kdf_iterations INTEGER NOT NULL,
                 kdf_parallelism INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 CHECK((kind = 'user') = (user_id IS NOT NULL))
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS idx_data_key_wraps_recovery
                 ON data_key_wraps(kind) WHERE kind = 'recovery';
+
+            -- One row per data-key version. The key itself is never stored
+            -- here in plaintext; `wrapped_by_active` holds a retiring key
+            -- encrypted under the active one while a rotation runs.
+            CREATE TABLE IF NOT EXISTS data_keys (
+                version INTEGER PRIMARY KEY,
+                status TEXT NOT NULL CHECK(status IN ('active', 'retiring', 'retired')),
+                wrapped_by_active BLOB,
+                created_by INTEGER REFERENCES users(id),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                retired_at DATETIME
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_data_keys_active
+                ON data_keys(status) WHERE status = 'active';
             "#,
         )?;
         Ok(())
@@ -74,7 +94,7 @@ impl<'a> SqliteKeyStoreRepository<'a> {
         Ok(result)
     }
 
-    fn store_wrap(&self, kind: &str, user_id: Option<i64>, wrapped: &WrappedKey) -> Result<()> {
+    fn store_wrap(&self, kind: &str, user_id: Option<i64>, wrapped: &WrappedKey, key_version: u32) -> Result<()> {
         // Delete then insert: SQLite UNIQUE constraints treat NULL user_ids as
         // distinct, so an upsert can't target the single recovery row.
         self.in_transaction(|| {
@@ -83,8 +103,8 @@ impl<'a> SqliteKeyStoreRepository<'a> {
                 None => self.conn.execute("DELETE FROM data_key_wraps WHERE kind = ?1", [kind])?,
             };
             self.conn.execute(
-                "INSERT INTO data_key_wraps (kind, user_id, salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO data_key_wraps (kind, user_id, salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism, key_version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     kind,
                     user_id,
@@ -93,37 +113,51 @@ impl<'a> SqliteKeyStoreRepository<'a> {
                     wrapped.params.memory_kib,
                     wrapped.params.iterations,
                     wrapped.params.parallelism,
+                    key_version,
                 ],
             )?;
             Ok(())
         })
     }
 
-    fn load_wrap(&self, condition: &str, param: &dyn rusqlite::ToSql) -> Result<Option<WrappedKey>> {
+    /// Loads one wrap and the data-key version it holds.
+    fn load_wrap(&self, condition: &str, param: &dyn rusqlite::ToSql) -> Result<Option<(WrappedKey, u32)>> {
         let query = format!(
-            "SELECT salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism
+            "SELECT salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism, key_version
              FROM data_key_wraps WHERE {}",
             condition
         );
         let wrapped = self.conn.query_row(&query, [param], |row| {
-            Ok(WrappedKey {
-                salt: row.get(0)?,
-                ciphertext: row.get(1)?,
-                params: KdfParams {
-                    memory_kib: row.get(2)?,
-                    iterations: row.get(3)?,
-                    parallelism: row.get(4)?,
+            Ok((
+                WrappedKey {
+                    salt: row.get(0)?,
+                    ciphertext: row.get(1)?,
+                    params: KdfParams {
+                        memory_kib: row.get(2)?,
+                        iterations: row.get(3)?,
+                        parallelism: row.get(4)?,
+                    },
                 },
-            })
+                row.get(5)?,
+            ))
         }).optional()?;
         Ok(wrapped)
+    }
+
+    /// Opens a wrap and labels the key with the version stored in its row.
+    fn open_wrap(wrapped: &WrappedKey, key_version: u32, secret: &str) -> Result<DataKey> {
+        Ok(wrapped.open(secret)?.with_version(key_version))
     }
 }
 
 impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
     fn has_data_key(&self) -> Result<bool> {
-        let count: i64 = self.conn.query_row("SELECT COUNT(*) FROM data_key_wraps", [], |row| row.get(0))?;
-        Ok(count > 0)
+        let exists: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM data_key_wraps) OR EXISTS(SELECT 1 FROM data_keys)",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(exists)
     }
 
     fn create_data_key(&self, user_id: i64, password: &str) -> Result<(DataKey, String)> {
@@ -133,6 +167,10 @@ impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
 
         let key = DataKey::generate();
         let recovery_code = self.in_transaction(|| {
+            self.conn.execute(
+                "INSERT INTO data_keys (version, status, created_by) VALUES (?1, ?2, ?3)",
+                params![key.version(), DATA_KEY_STATUS_ACTIVE, user_id],
+            )?;
             self.grant_user(user_id, password, &key)?;
             self.replace_recovery_code(&key)
         })?;
@@ -143,14 +181,14 @@ impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
 
     fn unlock_for_user(&self, user_id: i64, password: &str) -> Result<Option<DataKey>> {
         match self.load_wrap("user_id = ?1", &user_id)? {
-            Some(wrapped) => Ok(Some(wrapped.open(password)?)),
+            Some((wrapped, key_version)) => Ok(Some(Self::open_wrap(&wrapped, key_version, password)?)),
             None => Ok(None),
         }
     }
 
     fn grant_user(&self, user_id: i64, password: &str, key: &DataKey) -> Result<()> {
         let wrapped = WrappedKey::seal(key, password, self.params)?;
-        self.store_wrap("user", Some(user_id), &wrapped)
+        self.store_wrap("user", Some(user_id), &wrapped, key.version())
     }
 
     fn revoke_user(&self, user_id: i64) -> Result<()> {
@@ -159,16 +197,16 @@ impl<'a> KeyStoreRepository for SqliteKeyStoreRepository<'a> {
     }
 
     fn unlock_with_recovery_code(&self, recovery_code: &str) -> Result<DataKey> {
-        let wrapped = self.load_wrap("kind = ?1", &"recovery")?
+        let (wrapped, key_version) = self.load_wrap("kind = ?1", &"recovery")?
             .ok_or_else(|| anyhow::anyhow!("No recovery key has been set up"))?;
-        wrapped.open(&normalize_recovery_code(recovery_code))
+        Self::open_wrap(&wrapped, key_version, &normalize_recovery_code(recovery_code))
             .map_err(|_| anyhow::anyhow!("Invalid recovery key"))
     }
 
     fn replace_recovery_code(&self, key: &DataKey) -> Result<String> {
         let recovery_code = generate_recovery_code();
         let wrapped = WrappedKey::seal(key, &normalize_recovery_code(&recovery_code), self.params)?;
-        self.store_wrap("recovery", None, &wrapped)?;
+        self.store_wrap("recovery", None, &wrapped, key.version())?;
         Ok(recovery_code)
     }
 }
@@ -322,6 +360,59 @@ mod tests {
             "SELECT COUNT(*) FROM data_key_wraps WHERE kind = 'recovery'", [], |row| row.get(0),
         ).unwrap();
         assert_eq!(recovery_rows, 1);
+    }
+
+    fn wrap_version(conn: &Connection, condition: &str) -> u32 {
+        conn.query_row(
+            &format!("SELECT key_version FROM data_key_wraps WHERE {}", condition), [], |row| row.get(0),
+        ).unwrap()
+    }
+
+    #[test]
+    fn test_create_data_key_records_active_version() {
+        let conn = setup();
+        let admin = create_user(&conn, "admin");
+        let store = store(&conn);
+
+        let (key, _code) = store.create_data_key(admin, "admin-password").unwrap();
+        assert_eq!(key.version(), crate::encryption::INITIAL_KEY_VERSION);
+
+        let (version, status, created_by): (u32, String, i64) = conn.query_row(
+            "SELECT version, status, created_by FROM data_keys", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        ).unwrap();
+        assert_eq!((version, status.as_str(), created_by), (key.version(), "active", admin));
+        assert_eq!(wrap_version(&conn, "kind = 'recovery'"), key.version());
+    }
+
+    #[test]
+    fn test_unwrapped_keys_take_version_from_row() {
+        let conn = setup();
+        let admin = create_user(&conn, "admin");
+        let store = store(&conn);
+
+        let (_key, code) = store.create_data_key(admin, "admin-password").unwrap();
+        // Pretend the wraps hold a later key version
+        conn.execute("UPDATE data_key_wraps SET key_version = 4", []).unwrap();
+
+        assert_eq!(store.unlock_for_user(admin, "admin-password").unwrap().unwrap().version(), 4);
+        assert_eq!(store.unlock_with_recovery_code(&code).unwrap().version(), 4);
+    }
+
+    #[test]
+    fn test_wraps_store_the_key_version() {
+        let conn = setup();
+        let admin = create_user(&conn, "admin");
+        let engineer = create_user(&conn, "engineer");
+        let store = store(&conn);
+
+        store.create_data_key(admin, "admin-password").unwrap();
+        let later = DataKey::generate_with_version(3);
+        store.grant_user(engineer, "engineer-password", &later).unwrap();
+        store.replace_recovery_code(&later).unwrap();
+
+        assert_eq!(wrap_version(&conn, &format!("user_id = {}", engineer)), 3);
+        assert_eq!(wrap_version(&conn, "kind = 'recovery'"), 3);
+        assert_eq!(store.unlock_for_user(engineer, "engineer-password").unwrap().unwrap().version(), 3);
     }
 
     #[test]

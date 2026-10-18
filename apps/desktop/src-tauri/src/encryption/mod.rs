@@ -27,27 +27,63 @@ const SALT_LEN: usize = 16;
 const RECOVERY_CODE_BYTES: usize = 20;
 const KEY_WRAP_AAD: &[u8] = b"ferrocodex-data-key-wrap-v1";
 
-/// A random 256-bit AES key. The bytes are zeroed on drop and never printed.
+/// Version of the first data key of an install. Rotation (design chunk 5)
+/// moves to higher versions; every ciphertext records the version it was
+/// written under in its row's `key_version` column.
+pub const INITIAL_KEY_VERSION: u32 = 1;
+
+/// A random 256-bit AES key and the data-key version it belongs to. The bytes
+/// are zeroed on drop and never printed.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
-pub struct DataKey([u8; KEY_LEN]);
+pub struct DataKey {
+    bytes: [u8; KEY_LEN],
+    version: u32,
+}
 
 impl DataKey {
+    /// Generates a key at [`INITIAL_KEY_VERSION`].
     pub fn generate() -> Self {
-        let mut bytes = [0u8; KEY_LEN];
-        OsRng.fill_bytes(&mut bytes);
-        Self(bytes)
+        Self::generate_with_version(INITIAL_KEY_VERSION)
     }
 
+    pub fn generate_with_version(version: u32) -> Self {
+        let mut key = Self::zeroed(version);
+        OsRng.fill_bytes(&mut key.bytes);
+        key
+    }
+
+    fn zeroed(version: u32) -> Self {
+        Self { bytes: [0u8; KEY_LEN], version }
+    }
+
+    /// Builds a key at [`INITIAL_KEY_VERSION`] from raw bytes.
     fn from_slice(bytes: &[u8]) -> Result<Self> {
+        Self::from_slice_with_version(bytes, INITIAL_KEY_VERSION)
+    }
+
+    fn from_slice_with_version(bytes: &[u8], version: u32) -> Result<Self> {
         let bytes: [u8; KEY_LEN] = bytes.try_into()
             .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
-        Ok(Self(bytes))
+        Ok(Self { bytes, version })
+    }
+
+    /// The data-key version, stored as `key_version` next to every
+    /// ciphertext written under this key.
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// Returns the same key bytes labelled with `version`, e.g. the
+    /// `key_version` of the row it was unwrapped from.
+    pub fn with_version(mut self, version: u32) -> Self {
+        self.version = version;
+        self
     }
 }
 
 impl fmt::Debug for DataKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("DataKey(<redacted>)")
+        write!(f, "DataKey(v{}, <redacted>)", self.version)
     }
 }
 
@@ -58,7 +94,7 @@ pub struct FileEncryption {
 
 impl FileEncryption {
     pub fn new(key: &DataKey) -> Self {
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.0));
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.bytes));
         Self { cipher }
     }
 
@@ -195,9 +231,9 @@ pub fn generate_salt() -> Vec<u8> {
 pub fn derive_key(secret: &[u8], salt: &[u8], params: &KdfParams) -> Result<DataKey> {
     let argon_params = Params::new(params.memory_kib, params.iterations, params.parallelism, Some(KEY_LEN))
         .map_err(|e| anyhow::anyhow!("Invalid key derivation parameters: {}", e))?;
-    let mut key = DataKey([0u8; KEY_LEN]);
+    let mut key = DataKey::zeroed(INITIAL_KEY_VERSION);
     Argon2::new(Algorithm::Argon2id, Version::V0x13, argon_params)
-        .hash_password_into(secret, salt, &mut key.0)
+        .hash_password_into(secret, salt, &mut key.bytes)
         .map_err(|e| anyhow::anyhow!("Key derivation failed: {}", e))?;
     Ok(key)
 }
@@ -213,11 +249,14 @@ pub struct WrappedKey {
 
 impl WrappedKey {
     /// Wraps a data key under `KEY_WRAP_AAD`, the format of every existing
-    /// `data_key_wraps` row.
+    /// `data_key_wraps` row. The key's version is not part of the wrap: it is
+    /// stored in the row's `key_version` column.
     pub fn seal(key: &DataKey, secret: &str, params: KdfParams) -> Result<Self> {
-        Self::seal_bytes(&key.0, secret, params, KEY_WRAP_AAD)
+        Self::seal_bytes(&key.bytes, secret, params, KEY_WRAP_AAD)
     }
 
+    /// Opens a wrap made by [`WrappedKey::seal`]. The key comes back at
+    /// [`INITIAL_KEY_VERSION`]; callers relabel it with the row's version.
     pub fn open(&self, secret: &str) -> Result<DataKey> {
         let bytes = self.open_bytes(secret, KEY_WRAP_AAD)?;
         DataKey::from_slice(&bytes)
@@ -366,12 +405,46 @@ mod tests {
 
     #[test]
     fn test_generated_keys_are_unique() {
-        assert_ne!(DataKey::generate().0, DataKey::generate().0);
+        assert_ne!(DataKey::generate().bytes, DataKey::generate().bytes);
+    }
+
+    #[test]
+    fn test_key_version_defaults_and_relabelling() {
+        let key = DataKey::generate();
+        assert_eq!(key.version(), INITIAL_KEY_VERSION);
+        assert_eq!(DataKey::from_slice(&[7u8; KEY_LEN]).unwrap().version(), INITIAL_KEY_VERSION);
+        assert_eq!(DataKey::generate_with_version(5).version(), 5);
+
+        let bytes = key.bytes;
+        let relabelled = key.with_version(9);
+        assert_eq!(relabelled.version(), 9);
+        assert_eq!(relabelled.bytes, bytes);
+
+        // The version does not change the AES key
+        let ciphertext = FileEncryption::new(&relabelled).encrypt(b"probe").unwrap();
+        assert_eq!(FileEncryption::new(&relabelled.clone().with_version(1)).decrypt(&ciphertext).unwrap(), b"probe");
+    }
+
+    #[test]
+    fn test_key_zeroize_clears_bytes() {
+        let mut key = DataKey::generate_with_version(4);
+        key.zeroize();
+        assert_eq!(key.bytes, [0u8; KEY_LEN]);
+        assert_eq!(key.version(), 0);
+    }
+
+    #[test]
+    fn test_wrapped_key_opens_at_initial_version() {
+        let key = DataKey::generate_with_version(6);
+        let wrapped = WrappedKey::seal(&key, "pw", KdfParams::fast_for_tests()).unwrap();
+        let opened = wrapped.open("pw").unwrap();
+        assert_eq!(opened.bytes, key.bytes);
+        assert_eq!(opened.version(), INITIAL_KEY_VERSION);
     }
 
     #[test]
     fn test_debug_does_not_print_key_bytes() {
-        assert_eq!(format!("{:?}", DataKey::generate()), "DataKey(<redacted>)");
+        assert_eq!(format!("{:?}", DataKey::generate()), "DataKey(v1, <redacted>)");
     }
 
     #[test]
@@ -380,9 +453,9 @@ mod tests {
         let salt = generate_salt();
 
         let key = derive_key(b"password", &salt, &params).unwrap();
-        assert_eq!(key.0, derive_key(b"password", &salt, &params).unwrap().0);
-        assert_ne!(key.0, derive_key(b"Password", &salt, &params).unwrap().0);
-        assert_ne!(key.0, derive_key(b"password", &generate_salt(), &params).unwrap().0);
+        assert_eq!(key.bytes, derive_key(b"password", &salt, &params).unwrap().bytes);
+        assert_ne!(key.bytes, derive_key(b"Password", &salt, &params).unwrap().bytes);
+        assert_ne!(key.bytes, derive_key(b"password", &generate_salt(), &params).unwrap().bytes);
     }
 
     #[test]
@@ -390,8 +463,8 @@ mod tests {
         let key = DataKey::generate();
         let wrapped = WrappedKey::seal(&key, "correct horse battery", KdfParams::fast_for_tests()).unwrap();
 
-        assert!(!wrapped.ciphertext.windows(KEY_LEN).any(|w| w == key.0));
-        assert_eq!(wrapped.open("correct horse battery").unwrap().0, key.0);
+        assert!(!wrapped.ciphertext.windows(KEY_LEN).any(|w| w == key.bytes));
+        assert_eq!(wrapped.open("correct horse battery").unwrap().bytes, key.bytes);
         assert!(wrapped.open("wrong password").is_err());
     }
 
@@ -417,7 +490,7 @@ mod tests {
         let expected: Vec<u8> = (0u8..32).collect();
         let wrapped = legacy_wrapped_key();
 
-        assert_eq!(wrapped.open("legacy-password").unwrap().0.to_vec(), expected);
+        assert_eq!(wrapped.open("legacy-password").unwrap().bytes.to_vec(), expected);
         assert_eq!(*wrapped.open_bytes("legacy-password", KEY_WRAP_AAD).unwrap(), expected);
         assert!(wrapped.open("wrong password").is_err());
         assert!(wrapped.open_bytes("legacy-password", b"some-other-aad").is_err());
@@ -428,11 +501,11 @@ mod tests {
         let key = DataKey::generate();
         let params = KdfParams::fast_for_tests();
 
-        let via_bytes = WrappedKey::seal_bytes(&key.0, "pw", params, KEY_WRAP_AAD).unwrap();
-        assert_eq!(via_bytes.open("pw").unwrap().0, key.0);
+        let via_bytes = WrappedKey::seal_bytes(&key.bytes, "pw", params, KEY_WRAP_AAD).unwrap();
+        assert_eq!(via_bytes.open("pw").unwrap().bytes, key.bytes);
 
         let via_seal = WrappedKey::seal(&key, "pw", params).unwrap();
-        assert_eq!(*via_seal.open_bytes("pw", KEY_WRAP_AAD).unwrap(), key.0.to_vec());
+        assert_eq!(*via_seal.open_bytes("pw", KEY_WRAP_AAD).unwrap(), key.bytes.to_vec());
     }
 
     #[test]

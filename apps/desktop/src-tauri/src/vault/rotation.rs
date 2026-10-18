@@ -211,9 +211,10 @@ impl<'a> PasswordRotationService<'a> {
         let encrypted_value = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         tx.execute(
-            "UPDATE vault_secrets 
-             SET encrypted_value = ?1, 
-                 last_changed = ?2, 
+            "UPDATE vault_secrets
+             SET encrypted_value = ?1,
+                 key_version = ?5,
+                 last_changed = ?2,
                  last_rotated = ?2,
                  next_rotation_due = ?3,
                  updated_at = ?2
@@ -222,7 +223,8 @@ impl<'a> PasswordRotationService<'a> {
                 encrypted_value,
                 now.to_rfc3339(),
                 next_rotation_due.to_rfc3339(),
-                request.secret_id
+                request.secret_id,
+                key.version()
             ],
         )?;
 

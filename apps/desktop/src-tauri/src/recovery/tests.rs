@@ -147,7 +147,7 @@ use tempfile::TempDir;
     }
 
     impl FirmwareRepository for MockFirmwareRepository {
-        fn create_firmware(&self, _request: crate::firmware::CreateFirmwareRequest, _author_id: i64, _file_path: String, _file_hash: String, _file_size: i64) -> Result<FirmwareVersion> {
+        fn create_firmware(&self, _request: crate::firmware::CreateFirmwareRequest, _author_id: i64, _file_path: String, _file_hash: String, _file_size: i64, _key_version: u32) -> Result<FirmwareVersion> {
             unimplemented!()
         }
 
@@ -226,6 +226,7 @@ use tempfile::TempDir;
                     rotation_interval_days: None,
                     next_rotation_due: None,
                     rotation_policy_id: None,
+                    key_version: 1,
                 },
                 VaultSecret {
                     id: 2,
@@ -243,6 +244,7 @@ use tempfile::TempDir;
                     rotation_interval_days: None,
                     next_rotation_due: None,
                     rotation_policy_id: None,
+                    key_version: 1,
                 },
             ];
             
@@ -293,7 +295,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_secret(&self, _secret: &VaultSecret, _author_id: i64) -> Result<()> {
+        fn update_secret(&self, _secret: &VaultSecret, _author_id: i64, _key_version: u32) -> Result<()> {
             unimplemented!()
         }
         
@@ -309,7 +311,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn import_vault(&self, _vault_info: &VaultInfo, _author_id: i64) -> Result<IdentityVault> {
+        fn import_vault(&self, _vault_info: &VaultInfo, _author_id: i64, _key_version: u32) -> Result<IdentityVault> {
             Ok(self.vaults.get(&1).unwrap().vault.clone())
         }
         

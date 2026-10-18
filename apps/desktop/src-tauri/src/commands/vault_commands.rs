@@ -355,7 +355,8 @@ pub async fn import_vault_from_recovery(
             }
             
             // Import the vault
-            match vault_repo.import_vault(&vault_info, session.user_id) {
+            // open_vault_export re-encrypted the secrets under the session key
+            match vault_repo.import_vault(&vault_info, session.user_id, data_key.version()) {
                 Ok(imported_vault) => {
                     info!("Vault imported from recovery by {}: Vault '{}' for Asset {}", 
                           session.username, imported_vault.name, asset_id);

@@ -95,7 +95,8 @@ pub struct UpdateFirmwareStatusRequest {
 }
 
 pub trait FirmwareRepository {
-    fn create_firmware(&self, request: CreateFirmwareRequest, author_id: i64, file_path: String, file_hash: String, file_size: i64) -> Result<FirmwareVersion>;
+    /// `key_version` is the version of the data key the file at `file_path` was encrypted under.
+    fn create_firmware(&self, request: CreateFirmwareRequest, author_id: i64, file_path: String, file_hash: String, file_size: i64, key_version: u32) -> Result<FirmwareVersion>;
     fn get_firmware_by_asset(&self, asset_id: i64) -> Result<Vec<FirmwareVersionInfo>>;
     fn get_firmware_by_id(&self, firmware_id: i64) -> Result<Option<FirmwareVersion>>;
     fn delete_firmware(&self, firmware_id: i64) -> Result<Option<String>>;
@@ -135,6 +136,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
                 status_changed_at DATETIME,
                 status_changed_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                 FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT,
                 FOREIGN KEY (status_changed_by) REFERENCES users(id) ON DELETE RESTRICT
@@ -212,7 +214,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
 }
 
 impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
-    fn create_firmware(&self, request: CreateFirmwareRequest, author_id: i64, file_path: String, file_hash: String, file_size: i64) -> Result<FirmwareVersion> {
+    fn create_firmware(&self, request: CreateFirmwareRequest, author_id: i64, file_path: String, file_hash: String, file_size: i64, key_version: u32) -> Result<FirmwareVersion> {
         let tx = self.conn.unchecked_transaction()?;
         
         let firmware = FirmwareVersion {
@@ -233,8 +235,8 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
         };
 
         tx.execute(
-            "INSERT INTO firmware_versions (asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO firmware_versions (asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 firmware.asset_id,
                 firmware.author_id,
@@ -246,6 +248,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
                 firmware.file_path,
                 firmware.file_hash,
                 file_size,
+                key_version,
             ],
         )?;
 
@@ -694,6 +697,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "abc123hash".to_string(),
             1024,
+            1,
         );
 
         assert!(result.is_ok());
@@ -722,6 +726,7 @@ mod tests {
             "/path/to/firmware1.enc".to_string(),
             "hash1".to_string(),
             1024,
+            1,
         ).unwrap();
 
         let request2 = CreateFirmwareRequest {
@@ -738,6 +743,7 @@ mod tests {
             "/path/to/firmware2.enc".to_string(),
             "hash2".to_string(),
             2048,
+            1,
         ).unwrap();
 
         let firmwares = repo.get_firmware_by_asset(1).unwrap();
@@ -766,6 +772,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "hash123".to_string(),
             1024,
+            1,
         ).unwrap();
 
         let file_path = repo.delete_firmware(firmware.id).unwrap();
@@ -848,6 +855,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "abc123hash".to_string(),
             1024,
+            1,
         ).unwrap();
 
         // Update status to Approved
@@ -887,6 +895,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "hash123".to_string(),
             1024,
+            1,
         ).unwrap();
 
         // Update status multiple times
@@ -935,6 +944,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "hash123".to_string(),
             1024,
+            1,
         ).unwrap();
 
         // Test transitions for Draft status (Engineer role)
@@ -987,6 +997,7 @@ mod tests {
             "/path/to/firmware1.enc".to_string(),
             "hash1".to_string(),
             1024,
+            1,
         ).unwrap();
 
         let request2 = CreateFirmwareRequest {
@@ -1003,6 +1014,7 @@ mod tests {
             "/path/to/firmware2.enc".to_string(),
             "hash2".to_string(),
             2048,
+            1,
         ).unwrap();
 
         // Approve both versions
@@ -1053,6 +1065,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "hash123".to_string(),
             1024,
+            1,
         ).unwrap();
 
         // Update notes
@@ -1090,6 +1103,7 @@ mod tests {
             "/path/to/firmware.enc".to_string(),
             "hash123".to_string(),
             1024,
+            1,
         ).unwrap();
 
         // Try to promote Draft directly to Golden (should fail)

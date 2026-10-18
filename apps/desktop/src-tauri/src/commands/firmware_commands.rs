@@ -371,7 +371,7 @@ pub async fn upload_firmware(
             };
             
             info!("Creating firmware database record");
-            match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size) {
+            match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size, data_key.version()) {
                 Ok(firmware) => {
                     info!("Successfully created firmware record with ID: {}", firmware.id);
                     // Update the file with the actual firmware ID

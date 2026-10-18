@@ -430,6 +430,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_session_key_carries_active_version_into_new_rows() {
+        use crate::configurations::{ConfigurationRepository, CreateConfigurationRequest, SqliteConfigurationRepository};
+
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+        let login = login_as(&app, "admin", ADMIN_PASSWORD).await.unwrap();
+        let key = session_key(&app, &login.token);
+
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        let conn = db_guard.as_ref().unwrap().get_connection();
+        let active: u32 = conn.query_row(
+            "SELECT version FROM data_keys WHERE status = 'active'", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(key.version(), active);
+        assert_eq!(session_key(&app, &setup.token).version(), active);
+
+        conn.execute("INSERT INTO assets (id, name, created_by) VALUES (1, 'plc', ?1)", [setup.user.id]).unwrap();
+        let config = SqliteConfigurationRepository::new(conn).store_configuration(CreateConfigurationRequest {
+            asset_id: 1, file_name: "a.cfg".into(), file_content: b"config".to_vec(),
+            author: setup.user.id, notes: String::new(),
+        }, &key).unwrap();
+        let row_version: u32 = conn.query_row(
+            "SELECT key_version FROM configuration_versions WHERE id = ?1", [config.id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(row_version, active);
+    }
+
+    #[tokio::test]
     async fn test_recovery_key_resets_password_and_is_replaced() {
         let app = setup_test_app();
         let setup = setup_admin(&app).await;

@@ -13,7 +13,7 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
-use super::{DataKey, FileEncryption, KdfParams, WrappedKey, KEY_LEN};
+use super::{DataKey, FileEncryption, KdfParams, WrappedKey};
 
 const USER_PRIVATE_KEY_AAD: &[u8] = b"ferrocodex-user-private-key-v1";
 const PUBWRAP_HKDF_INFO: &[u8] = b"ferrocodex-data-key-to-user-v1";
@@ -86,7 +86,7 @@ pub fn seal_to_public_key(
 
     let wrapping_key = derive_wrapping_key(&shared, &ephemeral_public, recipient_public)?;
     let ciphertext = FileEncryption::new(&wrapping_key)
-        .encrypt_with_aad(&key.0, &pubwrap_aad(user_id, key_version))?;
+        .encrypt_with_aad(&key.bytes, &pubwrap_aad(user_id, key_version))?;
 
     Ok(PublicKeyWrap { ephemeral_public, ciphertext })
 }
@@ -106,7 +106,7 @@ pub fn open_with_secret(
         .decrypt_with_aad(&wrap.ciphertext, &pubwrap_aad(user_id, key_version))
         .map(zeroize::Zeroizing::new)
         .map_err(|_| anyhow::anyhow!("Wrong key or corrupted key wrap"))?;
-    DataKey::from_slice(&bytes)
+    DataKey::from_slice_with_version(&bytes, key_version)
 }
 
 /// HKDF-SHA256(salt = ephemeral_public || recipient_public, ikm = shared,
@@ -125,9 +125,9 @@ fn derive_wrapping_key(
     salt[32..].copy_from_slice(recipient_public);
 
     // DataKey zeroes the output on drop
-    let mut okm = DataKey([0u8; KEY_LEN]);
+    let mut okm = DataKey::zeroed(super::INITIAL_KEY_VERSION);
     Hkdf::<Sha256>::new(Some(&salt), shared.as_bytes())
-        .expand(PUBWRAP_HKDF_INFO, &mut okm.0)
+        .expand(PUBWRAP_HKDF_INFO, &mut okm.bytes)
         .map_err(|_| anyhow::anyhow!("Key derivation failed"))?;
     Ok(okm)
 }
@@ -143,6 +143,7 @@ fn pubwrap_aad(user_id: i64, key_version: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::KEY_LEN;
 
     #[test]
     fn test_keypair_seal_open_round_trip() {
@@ -203,8 +204,10 @@ mod tests {
         let keypair = UserKeyPair::generate();
 
         let wrap = seal_to_public_key(&key, keypair.public_key(), 7, 3).unwrap();
-        assert!(!wrap.ciphertext.windows(KEY_LEN).any(|w| w == key.0));
-        assert_eq!(open_with_secret(&wrap, &keypair, 7, 3).unwrap().0, key.0);
+        assert!(!wrap.ciphertext.windows(KEY_LEN).any(|w| w == key.bytes));
+        let opened = open_with_secret(&wrap, &keypair, 7, 3).unwrap();
+        assert_eq!(opened.bytes, key.bytes);
+        assert_eq!(opened.version(), 3);
     }
 
     #[test]

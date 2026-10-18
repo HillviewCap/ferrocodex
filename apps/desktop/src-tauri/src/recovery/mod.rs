@@ -625,11 +625,13 @@ impl<'a> RecoveryImporter<'a> {
             firmware_storage_path,
             file_hash,
             manifest.firmware.file_size,
+            key.version(),
         )?;
 
         // Import vault if requested and available
         if let Some(vault_data) = vault_data {
-            self.vault_repo.import_vault(&vault_data, user_id)?;
+            // open_vault_export re-encrypted the secrets under `key`
+            self.vault_repo.import_vault(&vault_data, user_id, key.version())?;
         }
 
         // Link firmware to configuration if they were linked in the original
