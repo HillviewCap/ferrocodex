@@ -216,6 +216,26 @@ impl InputSanitizer {
             .to_string()
     }
 
+    /// Maximum accepted size (bytes) for a secret value or password.
+    pub const MAX_SECRET_LEN: usize = 4096;
+
+    /// Validates an opaque secret value or password (vault secrets, rotation passwords,
+    /// credentials). Secrets are encrypted or hashed and never interpreted, so they are
+    /// deliberately NOT trimmed, stripped, or run through `is_potentially_malicious`;
+    /// they must be stored exactly as typed. Only emptiness and a size limit are enforced.
+    pub fn validate_secret_value(secret: &str) -> Result<(), String> {
+        if secret.is_empty() {
+            return Err("Secret value cannot be empty".to_string());
+        }
+        if secret.len() > Self::MAX_SECRET_LEN {
+            return Err(format!(
+                "Secret value is too long (maximum {} bytes)",
+                Self::MAX_SECRET_LEN
+            ));
+        }
+        Ok(())
+    }
+
     pub fn is_potentially_malicious(input: &str) -> bool {
         let suspicious_patterns = vec![
             // Script injection patterns
@@ -235,7 +255,13 @@ impl InputSanitizer {
         
         for pattern in suspicious_patterns {
             if input_lower.contains(pattern) {
-                error!("Potentially malicious input detected: {}", input);
+                // Never log the input itself: callers may pass user-supplied data that
+                // turns out to be sensitive. Log only the matched pattern and length.
+                error!(
+                    "Potentially malicious input detected (pattern: {:?}, input length: {})",
+                    pattern,
+                    input.len()
+                );
                 return true;
             }
         }
@@ -291,6 +317,18 @@ impl InputSanitizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_secret_value_preserved_and_not_flagged() {
+        let secret = "  p@ss../exec( ";
+        // Heuristic would flag it, which is why secrets must bypass it.
+        assert!(InputSanitizer::is_potentially_malicious(secret));
+        assert!(InputSanitizer::validate_secret_value(secret).is_ok());
+        assert!(InputSanitizer::validate_secret_value("").is_err());
+        assert!(InputSanitizer::validate_secret_value(&"a".repeat(InputSanitizer::MAX_SECRET_LEN + 1)).is_err());
+        // Contrast: the general sanitizer would alter it.
+        assert_ne!(InputSanitizer::sanitize_string(secret), secret);
+    }
 
     #[test]
     fn test_username_validation() {

@@ -173,7 +173,7 @@ pub struct CreateVaultRequest {
     pub created_by: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AddSecretRequest {
     pub vault_id: i64,
     pub secret_type: SecretType,
@@ -212,14 +212,14 @@ impl Default for GeneratePasswordRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateCredentialPasswordRequest {
     pub secret_id: i64,
     pub new_password: String,
     pub author_id: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateVaultSecretRequest {
     pub secret_id: i64,
     pub label: Option<String>,
@@ -308,7 +308,7 @@ impl StandaloneChangeType {
 }
 
 // Request/Response types for standalone credentials
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CreateStandaloneCredentialRequest {
     pub name: String,
     pub description: String,
@@ -319,7 +319,7 @@ pub struct CreateStandaloneCredentialRequest {
     pub created_by: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateStandaloneCredentialRequest {
     pub id: i64,
     pub name: Option<String>,
@@ -2923,3 +2923,101 @@ mod tests {
     }
 }
 
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for AddSecretRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddSecretRequest")
+            .field("vault_id", &self.vault_id)
+            .field("secret_type", &self.secret_type)
+            .field("label", &self.label)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateCredentialPasswordRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateCredentialPasswordRequest")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateVaultSecretRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateVaultSecretRequest")
+            .field("secret_id", &self.secret_id)
+            .field("label", &self.label)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for CreateStandaloneCredentialRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateStandaloneCredentialRequest")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("credential_type", &self.credential_type)
+            .field("category_id", &self.category_id)
+            .field("value", &"[REDACTED]")
+            .field("tags", &self.tags)
+            .field("created_by", &self.created_by)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateStandaloneCredentialRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateStandaloneCredentialRequest")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("category_id", &self.category_id)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn debug_output_redacts_secrets() {
+        let secret = "sup3r-s3cret-v@lue";
+        let add = format!("{:?}", AddSecretRequest {
+            vault_id: 1, secret_type: SecretType::Password, label: "l".into(),
+            value: secret.into(), author_id: 1,
+        });
+        assert!(!add.contains(secret));
+        assert!(add.contains("[REDACTED]"));
+        let upd = format!("{:?}", UpdateCredentialPasswordRequest {
+            secret_id: 1, new_password: secret.into(), author_id: 1,
+        });
+        assert!(!upd.contains(secret));
+        let upd2 = format!("{:?}", UpdateVaultSecretRequest {
+            secret_id: 1, label: None, value: Some(secret.into()), author_id: 1,
+        });
+        assert!(!upd2.contains(secret));
+        let upd3 = format!("{:?}", UpdateStandaloneCredentialRequest {
+            id: 1, name: None, description: None, category_id: None,
+            value: Some(secret.into()), author_id: 1,
+        });
+        assert!(!upd3.contains(secret));
+        let create = format!("{:?}", CreateStandaloneCredentialRequest {
+            name: "n".into(), description: "d".into(), credential_type: SecretType::Password,
+            category_id: None, value: secret.into(), tags: None, created_by: 1,
+        });
+        assert!(!create.contains(secret));
+    }
+}

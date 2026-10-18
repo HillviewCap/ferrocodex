@@ -112,10 +112,11 @@ pub async fn add_vault_secret(
 
     // Validate inputs
     let sanitized_label = InputSanitizer::sanitize_string(&secret_request.label);
-    let sanitized_value = InputSanitizer::sanitize_string(&secret_request.value);
+    // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+    let sanitized_value = secret_request.value.clone();
+    InputSanitizer::validate_secret_value(&sanitized_value)?;
     
-    if InputSanitizer::is_potentially_malicious(&sanitized_label) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_value) {
+    if InputSanitizer::is_potentially_malicious(&sanitized_label) {
         error!("Potentially malicious input detected in add_vault_secret");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
@@ -592,11 +593,8 @@ pub async fn update_credential_password(
     let data_key = session.data_key()?;
 
     // Validate inputs
-    let sanitized_password = InputSanitizer::sanitize_string(&request.new_password);
-    if InputSanitizer::is_potentially_malicious(&sanitized_password) {
-        error!("Potentially malicious input detected in update_credential_password");
-        return Err("Invalid input detected".to_string());
-    }
+    // Passwords are opaque: preserved byte-for-byte, not run through the heuristic.
+    InputSanitizer::validate_secret_value(&request.new_password)?;
 
     // Analyze password strength
     let strength = PasswordStrengthAnalyzer::analyze(&request.new_password);
@@ -676,11 +674,8 @@ pub async fn update_vault_secret(
     }
     
     if let Some(ref value) = request.value {
-        let sanitized_value = InputSanitizer::sanitize_string(value);
-        if InputSanitizer::is_potentially_malicious(&sanitized_value) {
-            error!("Potentially malicious input detected in update_vault_secret");
-            return Err("Invalid input detected".to_string());
-        }
+        // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+        InputSanitizer::validate_secret_value(value)?;
     }
 
     let db_guard = db_state.lock()
@@ -772,15 +767,16 @@ pub async fn create_standalone_credential(
     // Sanitize input
     let sanitized_name = InputSanitizer::sanitize_string(&credential_request.name);
     let sanitized_description = InputSanitizer::sanitize_string(&credential_request.description);
-    let sanitized_value = InputSanitizer::sanitize_string(&credential_request.value);
+    // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+    let sanitized_value = credential_request.value.clone();
+    InputSanitizer::validate_secret_value(&sanitized_value)?;
     let sanitized_tags = credential_request.tags.as_ref().map(|tags| 
         tags.iter().map(|tag| InputSanitizer::sanitize_string(tag)).collect()
     );
 
     // Check for malicious input
     if InputSanitizer::is_potentially_malicious(&sanitized_name) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_description) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_value) {
+       InputSanitizer::is_potentially_malicious(&sanitized_description) {
         error!("Potentially malicious input detected in create_standalone_credential");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
@@ -1074,12 +1070,16 @@ pub async fn update_standalone_credential(
         return Err("Only administrators or the credential's creator can edit it".to_string());
     }
 
+    if let Some(ref v) = update_request.value {
+        InputSanitizer::validate_secret_value(v)?;
+    }
+
     let sanitized_request = UpdateStandaloneCredentialRequest {
         id: update_request.id,
         name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
         description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
         category_id: update_request.category_id,
-        value: update_request.value.map(|v| InputSanitizer::sanitize_string(&v)),
+        value: update_request.value.clone(),
         author_id: session.user_id,
     };
 

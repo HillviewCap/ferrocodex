@@ -31,10 +31,10 @@ pub async fn create_engineer_user(
 
     // Validate and sanitize inputs
     let username = InputSanitizer::sanitize_username(&username);
-    let initial_password = InputSanitizer::sanitize_string(&initial_password);
+    // Passwords are opaque: never trimmed, stripped, or run through the injection heuristic.
 
     // Check for malicious input
-    if InputSanitizer::is_potentially_malicious(&username) || InputSanitizer::is_potentially_malicious(&initial_password) {
+    if InputSanitizer::is_potentially_malicious(&username) {
         error!("Potentially malicious input detected in create_engineer_user");
         return Err("Invalid input detected".to_string());
     }

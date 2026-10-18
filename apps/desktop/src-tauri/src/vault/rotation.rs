@@ -10,7 +10,7 @@ use crate::audit::{AuditRepository, AuditEventRequest, AuditEventType};
 use super::VaultRepository;
 use crate::encryption::{DataKey, FileEncryption};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PasswordRotationRequest {
     pub secret_id: i64,
     pub new_password: String,
@@ -124,7 +124,7 @@ pub struct CreateRotationBatchRequest {
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BatchRotationItem {
     pub secret_id: i64,
     pub new_password: String,
@@ -820,5 +820,48 @@ impl<'a> BatchRotationService<'a> {
 
         info!("Cancelled batch rotation {}", batch_id);
         Ok(())
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for PasswordRotationRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasswordRotationRequest")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("rotation_reason", &self.rotation_reason)
+            .field("author_id", &self.author_id)
+            .field("batch_id", &self.batch_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for BatchRotationItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BatchRotationItem")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("rotation_reason", &self.rotation_reason)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn debug_output_redacts_new_password() {
+        let secret = "rotated-s3cret";
+        let r = format!("{:?}", PasswordRotationRequest {
+            secret_id: 1, new_password: secret.into(), rotation_reason: "r".into(),
+            author_id: 1, batch_id: None,
+        });
+        assert!(!r.contains(secret));
+        let b = format!("{:?}", BatchRotationItem {
+            secret_id: 1, new_password: secret.into(), rotation_reason: "r".into(),
+        });
+        assert!(!b.contains(secret));
     }
 }

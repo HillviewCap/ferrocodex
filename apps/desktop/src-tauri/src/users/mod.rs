@@ -63,7 +63,7 @@ impl From<User> for UserInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CreateUserRequest {
     pub username: String,
     pub password: String,
@@ -593,5 +593,16 @@ mod tests {
 
         // Try to reactivate a user that doesn't exist
         assert!(repo.reactivate_user(999).is_err());
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for CreateUserRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateUserRequest")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("role", &self.role)
+            .finish()
     }
 }
