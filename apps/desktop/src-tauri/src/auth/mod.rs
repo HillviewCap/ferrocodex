@@ -120,6 +120,42 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Ends every session belonging to `user_id`. Returns how many were removed.
+    pub fn invalidate_user_sessions(&self, user_id: i64) -> usize {
+        let mut sessions = self.sessions.lock().unwrap();
+        let before = sessions.len();
+        sessions.retain(|_, session| session.user_id != user_id);
+        let removed = before - sessions.len();
+        if removed > 0 {
+            info!("Invalidated {} session(s) for user ID {}", removed, user_id);
+        }
+        removed
+    }
+
+    /// Ends every session except `keep_token`. Returns how many were removed.
+    pub fn invalidate_all_except(&self, keep_token: &str) -> usize {
+        let mut sessions = self.sessions.lock().unwrap();
+        let before = sessions.len();
+        sessions.retain(|token, _| token == keep_token);
+        let removed = before - sessions.len();
+        if removed > 0 {
+            info!("Invalidated {} other session(s)", removed);
+        }
+        removed
+    }
+
+    /// Swaps the unlocked data key held by one session. Errors if there is no such session.
+    pub fn replace_session_key(&self, token: &str, key: DataKey) -> Result<()> {
+        let mut sessions = self.sessions.lock().unwrap();
+        match sessions.get_mut(token) {
+            Some(session) => {
+                session.data_key = Some(Arc::new(key));
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Session not found")),
+        }
+    }
+
     pub fn cleanup_expired_sessions(&self) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -428,6 +464,62 @@ pub mod tests {
 
         let validated = session_manager.validate_session(&session.token).unwrap();
         assert!(validated.is_none());
+    }
+
+    fn test_user(id: i64, name: &str) -> User {
+        User {
+            id,
+            username: name.to_string(),
+            password_hash: "hash".to_string(),
+            role: UserRole::Engineer,
+            created_at: "2023-01-01".to_string(),
+            updated_at: "2023-01-01".to_string(),
+            is_active: true,
+        }
+    }
+
+    #[test]
+    fn test_invalidate_user_sessions() {
+        let manager = SessionManager::new();
+        let a1 = manager.create_session(&test_user(1, "a")).unwrap();
+        let a2 = manager.create_session(&test_user(1, "a")).unwrap();
+        let b = manager.create_session(&test_user(2, "b")).unwrap();
+
+        assert_eq!(manager.invalidate_user_sessions(1), 2);
+        assert!(manager.validate_session(&a1.token).unwrap().is_none());
+        assert!(manager.validate_session(&a2.token).unwrap().is_none());
+        assert!(manager.validate_session(&b.token).unwrap().is_some());
+        assert_eq!(manager.invalidate_user_sessions(1), 0);
+    }
+
+    #[test]
+    fn test_invalidate_all_except() {
+        let manager = SessionManager::new();
+        let keep = manager.create_session(&test_user(1, "a")).unwrap();
+        let other1 = manager.create_session(&test_user(2, "b")).unwrap();
+        let other2 = manager.create_session(&test_user(1, "a")).unwrap();
+
+        assert_eq!(manager.invalidate_all_except(&keep.token), 2);
+        assert!(manager.validate_session(&keep.token).unwrap().is_some());
+        assert!(manager.validate_session(&other1.token).unwrap().is_none());
+        assert!(manager.validate_session(&other2.token).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_replace_session_key() {
+        use crate::encryption::FileEncryption;
+        let manager = SessionManager::new();
+        let k1 = DataKey::generate();
+        let session = manager.create_session_with_key(&test_user(1, "a"), Some(k1)).unwrap();
+        let old_key = session.data_key().unwrap();
+        let ciphertext = FileEncryption::new(&old_key).encrypt(b"probe").unwrap();
+
+        manager.replace_session_key(&session.token, DataKey::generate()).unwrap();
+        let new_key = manager.validate_session(&session.token).unwrap().unwrap().data_key().unwrap();
+        assert!(FileEncryption::new(&new_key).decrypt(&ciphertext).is_err());
+        assert!(FileEncryption::new(&old_key).decrypt(&ciphertext).is_ok());
+
+        assert!(manager.replace_session_key("missing", DataKey::generate()).is_err());
     }
 
     #[test]

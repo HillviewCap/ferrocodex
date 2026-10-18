@@ -53,6 +53,7 @@ impl Database {
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             PRAGMA temp_store = MEMORY;
+            PRAGMA secure_delete = ON;
             PRAGMA mmap_size = 268435456; -- 256MB
             
             CREATE TABLE IF NOT EXISTS app_metadata (
@@ -165,43 +166,41 @@ impl Database {
     fn run_data_migrations(&self) -> Result<()> {
         info!("Running data migrations");
         
-        // Check if firmware metadata migration has been run
-        let migration_key = "firmware_metadata_migration_20250125";
-        if let Ok(Some(_)) = self.get_metadata(migration_key) {
-            info!("Firmware metadata migration already applied");
-            return Ok(());
-        }
+        // Each migration is an independent guarded block: never return early, or
+        // migrations appended later would not run on installs that already applied
+        // an earlier one.
 
         // Fix firmware records with invalid metadata
-        info!("Fixing firmware metadata issues");
-        
-        self.conn.execute_batch(r#"
-            -- Update firmware records with NULL or invalid file_size
-            UPDATE firmware_versions 
-            SET file_size = 0 
-            WHERE file_size IS NULL OR file_size < 0;
+        let migration_key = "firmware_metadata_migration_20250125";
+        if self.get_metadata(migration_key)?.is_none() {
+            info!("Fixing firmware metadata issues");
 
-            -- Update firmware records with NULL or empty file_hash
-            UPDATE firmware_versions 
-            SET file_hash = 'unknown' 
-            WHERE file_hash IS NULL OR file_hash = '';
+            self.conn.execute_batch(r#"
+                -- Update firmware records with NULL or invalid file_size
+                UPDATE firmware_versions
+                SET file_size = 0
+                WHERE file_size IS NULL OR file_size < 0;
 
-            -- Update firmware records with invalid created_at timestamps
-            UPDATE firmware_versions 
-            SET created_at = datetime('now') 
-            WHERE created_at IS NULL OR created_at = '' OR datetime(created_at) IS NULL;
+                -- Update firmware records with NULL or empty file_hash
+                UPDATE firmware_versions
+                SET file_hash = 'unknown'
+                WHERE file_hash IS NULL OR file_hash = '';
 
-            -- Ensure all firmware records have proper status
-            UPDATE firmware_versions 
-            SET status = 'Draft' 
-            WHERE status IS NULL OR status = '' OR status NOT IN ('Draft', 'Approved', 'Golden', 'Archived');
-        "#)?;
+                -- Update firmware records with invalid created_at timestamps
+                UPDATE firmware_versions
+                SET created_at = datetime('now')
+                WHERE created_at IS NULL OR created_at = '' OR datetime(created_at) IS NULL;
 
-        // Mark migration as complete
-        self.set_metadata(migration_key, "applied")?;
-        
-        info!("Firmware metadata migration completed");
-        
+                -- Ensure all firmware records have proper status
+                UPDATE firmware_versions
+                SET status = 'Draft'
+                WHERE status IS NULL OR status = '' OR status NOT IN ('Draft', 'Approved', 'Golden', 'Archived');
+            "#)?;
+
+            self.set_metadata(migration_key, "applied")?;
+            info!("Firmware metadata migration completed");
+        }
+
         // Story 4.6 - Password rotation migration
         let rotation_migration_key = "password_rotation_migration_20250126";
         if let Ok(None) = self.get_metadata(rotation_migration_key) {
@@ -266,6 +265,36 @@ impl Database {
             info!("Metadata archive columns migration completed");
         }
         
+        // Password rotation history must never hold data-key ciphertext. An earlier
+        // bcrypt-failure fallback stored the raw ciphertext there.
+        let redact_key = "redact_rotation_history_20261019";
+        if self.get_metadata(redact_key)?.is_none() {
+            self.conn.execute(
+                "UPDATE password_rotation_history SET old_password_hash = 'redacted' WHERE old_password_hash NOT LIKE '$2%'",
+                [],
+            )?;
+            self.set_metadata(redact_key, "applied")?;
+            info!("Redacted non-bcrypt rotation history entries");
+        }
+
+        // A deactivated user must not keep a wrapped copy of the data key.
+        let revoke_key = "revoke_inactive_user_wraps_20261019";
+        if self.get_metadata(revoke_key)?.is_none() {
+            self.conn.execute(
+                "DELETE FROM data_key_wraps WHERE user_id IN (SELECT id FROM users WHERE is_active = 0)",
+                [],
+            )?;
+            self.set_metadata(revoke_key, "applied")?;
+            info!("Revoked data key wraps of inactive users");
+        }
+
+        Ok(())
+    }
+
+    /// Truncates the WAL so deleted pages (for example revoked key wraps) don't
+    /// linger in the -wal file.
+    pub fn checkpoint_wal(&self) -> Result<()> {
+        self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
         Ok(())
     }
 }
@@ -299,5 +328,46 @@ mod tests {
         // Test getting non-existent key
         let empty_value = db.get_metadata("non_existent").unwrap();
         assert_eq!(empty_value, None);
+    }
+
+    #[test]
+    fn test_later_migration_runs_when_first_already_applied() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db_path = temp_file.path().to_path_buf();
+
+        let db = Database::new(db_path).unwrap();
+        assert!(db.get_metadata("firmware_metadata_migration_20250125").unwrap().is_some());
+
+        // Simulate an existing install: first migration applied, newer ones not yet.
+        db.conn.execute(
+            "DELETE FROM app_metadata WHERE key IN ('redact_rotation_history_20261019', 'revoke_inactive_user_wraps_20261019')",
+            [],
+        ).unwrap();
+        db.conn.execute(
+            "INSERT INTO users (username, password_hash, role, is_active) VALUES ('gone', 'x', 'Engineer', 0)",
+            [],
+        ).unwrap();
+        let uid = db.conn.last_insert_rowid();
+        db.conn.execute(
+            "INSERT INTO data_key_wraps (kind, user_id, salt, wrapped_key, kdf_memory_kib, kdf_iterations, kdf_parallelism)
+             VALUES ('user', ?1, x'00', x'00', 8, 1, 1)",
+            [uid],
+        ).unwrap();
+
+        db.run_data_migrations().unwrap();
+
+        assert!(db.get_metadata("revoke_inactive_user_wraps_20261019").unwrap().is_some());
+        let wraps: i64 = db.conn.query_row(
+            "SELECT COUNT(*) FROM data_key_wraps WHERE user_id = ?1", [uid], |r| r.get(0)).unwrap();
+        assert_eq!(wraps, 0);
+    }
+
+    #[test]
+    fn test_secure_delete_and_checkpoint() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::new(temp_file.path().to_path_buf()).unwrap();
+        let secure: i64 = db.conn.query_row("PRAGMA secure_delete", [], |r| r.get(0)).unwrap();
+        assert_eq!(secure, 1);
+        db.checkpoint_wal().unwrap();
     }
 }

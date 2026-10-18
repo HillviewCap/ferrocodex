@@ -184,8 +184,9 @@ impl<'a> PasswordRotationService<'a> {
 
         // Task 2.3: Archive the current password in rotation history
         let old_encrypted_value = &secret.encrypted_value;
+        // Never fall back to storing the ciphertext itself: history must only hold hashes.
         let old_password_hash = bcrypt::hash(old_encrypted_value, 4)  // Lower cost for history
-            .unwrap_or_else(|_| old_encrypted_value.clone());
+            .map_err(|e| anyhow::anyhow!("Failed to hash previous password for history: {}", e))?;
 
         tx.execute(
             "INSERT INTO password_rotation_history (secret_id, old_password_hash, rotation_reason, rotated_by, batch_id) 
