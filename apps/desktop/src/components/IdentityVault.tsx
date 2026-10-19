@@ -50,7 +50,10 @@ import {
   UpdateCredentialPasswordRequest,
   getStrengthColor,
   getStrengthLabel,
-  VaultAccessInfo
+  VaultAccessInfo,
+  UpdateVaultSecretRequest,
+  usernameUpdate,
+  MAX_CREDENTIAL_USERNAME_LENGTH
 } from '../types/vault';
 import useAuthStore from '../store/auth';
 import PasswordGenerator from './PasswordGenerator';
@@ -66,6 +69,9 @@ const { TextArea } = Input;
 interface IdentityVaultProps {
   asset: AssetInfo;
 }
+
+// Passwords and VPN keys belong to an account; IP addresses and license files don't
+const secretTypeHasUsername = (type?: SecretType | null) => type === 'Password' || type === 'VpnKey';
 
 const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
   const { token, user } = useAuthStore();
@@ -204,6 +210,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
         vault_id: vaultInfo.vault.id,
         secret_type: values.secret_type,
         label: values.label,
+        username: secretTypeHasUsername(values.secret_type) ? values.username?.trim() || undefined : undefined,
         value: values.value,
         author_id: user.id
       };
@@ -352,6 +359,7 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     setSelectedSecret(secret);
     editSecretForm.setFieldsValue({
       label: secret.label,
+      username: secret.username ?? '',
       value: '', // Don't pre-fill the encrypted value
     });
     setEditSecretVisible(true);
@@ -361,9 +369,10 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
     if (!selectedSecret || !user) return;
 
     try {
-      const request = {
+      const request: UpdateVaultSecretRequest = {
         secret_id: selectedSecret.id,
         label: values.label !== selectedSecret.label ? values.label : undefined,
+        username: usernameUpdate(selectedSecret.username, values.username),
         value: values.value ? values.value : undefined,
         author_id: user.id,
       };
@@ -757,6 +766,12 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
                             }
                             description={
                               <div>
+                                {secret.username && (
+                                  <div style={{ marginBottom: '4px' }}>
+                                    <Text type="secondary">Username: </Text>
+                                    <Text copyable>{secret.username}</Text>
+                                  </div>
+                                )}
                                 <div style={{ marginBottom: '8px' }}>
                                   {isVisible && decryptedValue ? (
                                     <Text 
@@ -939,6 +954,17 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
             <Input placeholder="e.g., Admin Password, PLC IP Address" />
           </Form.Item>
 
+          {secretTypeHasUsername(addSecretType) && (
+            <Form.Item
+              name="username"
+              label="Username (optional)"
+              extra="Stored unencrypted, like the label"
+              rules={[{ max: MAX_CREDENTIAL_USERNAME_LENGTH, message: `Username cannot exceed ${MAX_CREDENTIAL_USERNAME_LENGTH} characters` }]}
+            >
+              <Input placeholder="e.g., admin, DOMAIN\Operator" autoComplete="off" />
+            </Form.Item>
+          )}
+
           <Form.Item
             name="value"
             label="Secret Value"
@@ -1120,6 +1146,17 @@ const IdentityVault: React.FC<IdentityVaultProps> = ({ asset }) => {
           >
             <Input placeholder="e.g., Admin Password, PLC IP Address" />
           </Form.Item>
+
+          {(secretTypeHasUsername(selectedSecret?.secret_type) || selectedSecret?.username) && (
+            <Form.Item
+              name="username"
+              label="Username (optional, leave empty to remove)"
+              extra="Stored unencrypted, like the label"
+              rules={[{ max: MAX_CREDENTIAL_USERNAME_LENGTH, message: `Username cannot exceed ${MAX_CREDENTIAL_USERNAME_LENGTH} characters` }]}
+            >
+              <Input placeholder="e.g., admin, DOMAIN\Operator" autoComplete="off" />
+            </Form.Item>
+          )}
 
           <Form.Item
             name="value"

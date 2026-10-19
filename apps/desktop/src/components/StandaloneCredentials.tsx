@@ -54,7 +54,9 @@ import {
   SearchCredentialsRequest,
   SearchCredentialsResponse,
   SecretType,
-  secretTypeDisplayNames
+  secretTypeDisplayNames,
+  usernameUpdate,
+  MAX_CREDENTIAL_USERNAME_LENGTH
 } from '../types/vault';
 import useAuthStore from '../store/auth';
 import PasswordInput from './PasswordInput';
@@ -146,6 +148,7 @@ const StandaloneCredentials: React.FC = () => {
         description: values.description || '',
         credential_type: values.credential_type,
         category_id: values.category_id,
+        username: values.username?.trim() || undefined,
         value: values.value,
         tags: values.tags ? values.tags.split(',').map((t: string) => t.trim()) : [],
         created_by: user.id
@@ -178,6 +181,7 @@ const StandaloneCredentials: React.FC = () => {
         name: values.name,
         description: values.description,
         category_id: values.category_id,
+        username: usernameUpdate(selectedCredential.credential.username, values.username),
         value: values.value,
         author_id: user.id
       };
@@ -311,6 +315,14 @@ const StandaloneCredentials: React.FC = () => {
       )
     },
     {
+      title: 'Username',
+      dataIndex: ['credential', 'username'],
+      key: 'username',
+      render: (username?: string | null) => (
+        username ? <Text copyable>{username}</Text> : <Text type="secondary">-</Text>
+      )
+    },
+    {
       title: 'Type',
       dataIndex: ['credential', 'credential_type'],
       key: 'type',
@@ -374,7 +386,8 @@ const StandaloneCredentials: React.FC = () => {
                   name: record.credential.name,
                   description: record.credential.description,
                   category_id: record.credential.category_id,
-                  credential_type: record.credential.credential_type
+                  credential_type: record.credential.credential_type,
+                  username: record.credential.username ?? ''
                 });
                 setEditCredentialVisible(true);
               }}
@@ -423,6 +436,12 @@ const StandaloneCredentials: React.FC = () => {
     return (
       <Card size="small">
         <Space orientation="vertical" style={{ width: '100%' }}>
+          {record.credential.username && (
+            <Text>
+              <Text type="secondary">Username: </Text>
+              <Text copyable>{record.credential.username}</Text>
+            </Text>
+          )}
           <Text type="secondary">Decrypted Value:</Text>
           <Input.Password
             value={value}
@@ -507,7 +526,7 @@ const StandaloneCredentials: React.FC = () => {
                   >
                     <Form.Item name="query">
                       <Input 
-                        placeholder="Search credentials..." 
+                        placeholder="Search name or username..."
                         prefix={<SearchOutlined />}
                         allowClear
                       />
@@ -632,6 +651,15 @@ const StandaloneCredentials: React.FC = () => {
           </Row>
 
           <Form.Item
+            name="username"
+            label="Username (optional)"
+            extra="Stored unencrypted, like the name"
+            rules={[{ max: MAX_CREDENTIAL_USERNAME_LENGTH, message: `Username cannot exceed ${MAX_CREDENTIAL_USERNAME_LENGTH} characters` }]}
+          >
+            <Input placeholder="e.g., admin, DOMAIN\Operator" autoComplete="off" />
+          </Form.Item>
+
+          <Form.Item
             name="value"
             label="Value"
             rules={[{ required: true, message: 'Please enter a value' }]}
@@ -719,6 +747,15 @@ const StandaloneCredentials: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item
+            name="username"
+            label="Username (optional, leave empty to remove)"
+            extra="Stored unencrypted, like the name"
+            rules={[{ max: MAX_CREDENTIAL_USERNAME_LENGTH, message: `Username cannot exceed ${MAX_CREDENTIAL_USERNAME_LENGTH} characters` }]}
+          >
+            <Input placeholder="e.g., admin, DOMAIN\Operator" autoComplete="off" />
+          </Form.Item>
 
           <Form.Item
             name="value"

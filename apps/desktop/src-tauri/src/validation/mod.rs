@@ -236,6 +236,31 @@ impl InputSanitizer {
         Ok(())
     }
 
+    /// Maximum length (characters) of a credential username.
+    pub const MAX_CREDENTIAL_USERNAME_LEN: usize = 256;
+
+    /// Validates the account name stored with a vault secret or standalone
+    /// credential, such as `DOMAIN\Operator` or `admin@plc`. Unlike
+    /// `sanitize_username` and `UsernameValidator`, which are for Ferrocodex's
+    /// own login names, it keeps case and punctuation. Returns `None` when the
+    /// name is empty after trimming.
+    pub fn validate_credential_username(input: &str) -> Result<Option<String>, String> {
+        let username = Self::sanitize_string(input);
+        if username.is_empty() {
+            return Ok(None);
+        }
+        if username.chars().count() > Self::MAX_CREDENTIAL_USERNAME_LEN {
+            return Err(format!(
+                "Username is too long (maximum {} characters)",
+                Self::MAX_CREDENTIAL_USERNAME_LEN
+            ));
+        }
+        if Self::is_potentially_malicious(&username) {
+            return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+        }
+        Ok(Some(username))
+    }
+
     pub fn is_potentially_malicious(input: &str) -> bool {
         let suspicious_patterns = vec![
             // Script injection patterns
@@ -328,6 +353,19 @@ mod tests {
         assert!(InputSanitizer::validate_secret_value(&"a".repeat(InputSanitizer::MAX_SECRET_LEN + 1)).is_err());
         // Contrast: the general sanitizer would alter it.
         assert_ne!(InputSanitizer::sanitize_string(secret), secret);
+    }
+
+    #[test]
+    fn test_credential_username_keeps_account_name_as_typed() {
+        for name in ["DOMAIN\\Operator", "admin@plc", "Maint.Tech 2", "admin"] {
+            assert_eq!(InputSanitizer::validate_credential_username(name), Ok(Some(name.to_string())));
+        }
+        assert_eq!(InputSanitizer::validate_credential_username("  root  "), Ok(Some("root".to_string())));
+        assert_eq!(InputSanitizer::validate_credential_username(""), Ok(None));
+        assert_eq!(InputSanitizer::validate_credential_username("   "), Ok(None));
+        assert!(InputSanitizer::validate_credential_username(&"a".repeat(InputSanitizer::MAX_CREDENTIAL_USERNAME_LEN)).is_ok());
+        assert!(InputSanitizer::validate_credential_username(&"a".repeat(InputSanitizer::MAX_CREDENTIAL_USERNAME_LEN + 1)).is_err());
+        assert!(InputSanitizer::validate_credential_username("<script>alert(1)</script>").is_err());
     }
 
     #[test]

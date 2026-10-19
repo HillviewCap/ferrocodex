@@ -13,6 +13,8 @@ export interface VaultSecret {
   vault_id: number;
   secret_type: SecretType;
   label: string;
+  // Account name, stored unencrypted like the label
+  username?: string | null;
   encrypted_value: string;
   created_at: string;
   updated_at: string;
@@ -54,6 +56,7 @@ export interface AddSecretRequest {
   vault_id: number;
   secret_type: SecretType;
   label: string;
+  username?: string | null;
   value: string;
   author_id: number;
 }
@@ -118,9 +121,23 @@ export interface UpdateCredentialPasswordRequest {
 export interface UpdateVaultSecretRequest {
   secret_id: number;
   label?: string;
+  // Omitted or null leaves the username unchanged; '' clears it
+  username?: string | null;
   value?: string;
   author_id: number;
 }
+
+export const MAX_CREDENTIAL_USERNAME_LENGTH = 256;
+
+// The username field of an update request: undefined when the edit left it
+// unchanged, '' when it was cleared
+export const usernameUpdate = (
+  current: string | null | undefined,
+  edited: string | null | undefined,
+): string | undefined => {
+  const next = (edited ?? '').trim();
+  return next === (current ?? '') ? undefined : next;
+};
 
 export interface DeleteVaultSecretRequest {
   secret_id: number;
@@ -157,6 +174,8 @@ export interface StandaloneCredential {
   description: string;
   credential_type: SecretType;
   category_id?: number;
+  // Account name, stored unencrypted like the name
+  username?: string | null;
   encrypted_data: string;
   created_by: number;
   created_at: string;
@@ -197,6 +216,7 @@ export interface CreateStandaloneCredentialRequest {
   description: string;
   credential_type: SecretType;
   category_id?: number;
+  username?: string | null;
   value: string;
   tags?: string[];
   created_by: number;
@@ -207,6 +227,8 @@ export interface UpdateStandaloneCredentialRequest {
   name?: string;
   description?: string;
   category_id?: number;
+  // Omitted or null leaves the username unchanged; '' clears it
+  username?: string | null;
   value?: string;
   author_id: number;
 }

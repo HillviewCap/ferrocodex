@@ -83,6 +83,14 @@ pub(crate) fn require_vault_permission(
     Err(ACCESS_DENIED.to_string())
 }
 
+/// Validates the username of an update request without changing its meaning:
+/// `None` leaves the username unchanged and an empty string clears it.
+fn sanitize_username_update(username: Option<String>) -> Result<Option<String>, String> {
+    username
+        .map(|username| InputSanitizer::validate_credential_username(&username).map(Option::unwrap_or_default))
+        .transpose()
+}
+
 /// Loads a secret and requires `permission` on the vault it belongs to.
 fn require_secret_permission(
     conn: &Connection,
@@ -191,6 +199,10 @@ pub async fn add_vault_secret(
         error!("Potentially malicious input detected in add_vault_secret");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
+    let sanitized_username = match secret_request.username {
+        Some(ref username) => InputSanitizer::validate_credential_username(username)?,
+        None => None,
+    };
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -203,6 +215,7 @@ pub async fn add_vault_secret(
                 vault_id: secret_request.vault_id,
                 secret_type: secret_request.secret_type,
                 label: sanitized_label,
+                username: sanitized_username,
                 value: sanitized_value,
                 author_id: session.user_id,
             };
@@ -735,7 +748,12 @@ pub async fn update_vault_secret(
     };
     drop(session_manager_guard);
 
-    let data_key = session.data_key()?;
+    // Only a new value needs the data key, so label and username edits still
+    // work while a key rotation is in progress
+    let data_key = match request.value {
+        Some(_) => Some(session.data_key()?),
+        None => None,
+    };
 
     // Validate inputs
     if let Some(ref label) = request.label {
@@ -745,7 +763,8 @@ pub async fn update_vault_secret(
             return Err("Invalid input detected".to_string());
         }
     }
-    
+    let username = sanitize_username_update(request.username.clone())?;
+
     if let Some(ref value) = request.value {
         // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
         InputSanitizer::validate_secret_value(value)?;
@@ -756,10 +775,10 @@ pub async fn update_vault_secret(
     match db_guard.as_ref() {
         Some(db) => {
             require_secret_permission(db.get_connection(), &session, request.secret_id, PermissionType::Write)?;
-            let request = UpdateVaultSecretRequest { author_id: session.user_id, ..request };
+            let request = UpdateVaultSecretRequest { username, author_id: session.user_id, ..request };
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
 
-            match vault_repo.update_vault_secret(request, &data_key) {
+            match vault_repo.update_vault_secret(request, data_key.as_deref()) {
                 Ok(()) => {
                     info!("Vault secret updated by {}", session.username);
                     Ok(())
@@ -865,6 +884,10 @@ pub async fn create_standalone_credential(
         error!("Potentially malicious input detected in create_standalone_credential");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
+    let sanitized_username = match credential_request.username {
+        Some(ref username) => InputSanitizer::validate_credential_username(username)?,
+        None => None,
+    };
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -877,6 +900,7 @@ pub async fn create_standalone_credential(
                 description: sanitized_description,
                 credential_type: credential_request.credential_type,
                 category_id: credential_request.category_id,
+                username: sanitized_username,
                 value: sanitized_value,
                 tags: sanitized_tags,
                 created_by: session.user_id,
@@ -1145,7 +1169,12 @@ pub async fn update_standalone_credential(
 
     drop(session_manager_guard);
 
-    let data_key = session.data_key()?;
+    // Only a new value needs the data key, so other edits still work while a
+    // key rotation is in progress
+    let data_key = match update_request.value {
+        Some(_) => Some(session.data_key()?),
+        None => None,
+    };
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1169,16 +1198,24 @@ pub async fn update_standalone_credential(
         InputSanitizer::validate_secret_value(v)?;
     }
 
+    let sanitized_name = update_request.name.map(|n| InputSanitizer::sanitize_string(&n));
+    let sanitized_description = update_request.description.map(|d| InputSanitizer::sanitize_string(&d));
+    if sanitized_name.iter().chain(&sanitized_description).any(|s| InputSanitizer::is_potentially_malicious(s)) {
+        error!("Potentially malicious input detected in update_standalone_credential");
+        return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
+    }
+
     let sanitized_request = UpdateStandaloneCredentialRequest {
         id: update_request.id,
-        name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
-        description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
+        name: sanitized_name,
+        description: sanitized_description,
         category_id: update_request.category_id,
+        username: sanitize_username_update(update_request.username)?,
         value: update_request.value.clone(),
         author_id: session.user_id,
     };
 
-    match vault_repo.update_standalone_credential(sanitized_request, &data_key) {
+    match vault_repo.update_standalone_credential(sanitized_request, data_key.as_deref()) {
         Ok(_) => {
             info!("Updated standalone credential {} by {}", update_request.id, session.username);
             Ok("Credential updated successfully".to_string())
@@ -2139,6 +2176,7 @@ mod tests {
                 description: "".to_string(),
                 credential_type: SecretType::Password,
                 category_id: None,
+                username: None,
                 value: "secret".to_string(),
                 tags: None,
                 created_by: OWNER_ID,
@@ -2195,6 +2233,7 @@ mod tests {
             name: Some("Renamed".to_string()),
             description: None,
             category_id: None,
+            username: None,
             value: None,
             // Ignored: the command sets the author from the session
             author_id: 0,
@@ -2274,6 +2313,80 @@ mod tests {
         let result = update_standalone_credential(admin_token, rename_request(credential_id + 1), app.state(), app.state()).await;
 
         assert_eq!(result, Err("Credential not found".to_string()));
+    }
+
+    fn credential_username(app: &tauri::App<MockRuntime>, credential_id: i64) -> Option<String> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteVaultRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_standalone_credential(credential_id)
+            .unwrap()
+            .unwrap()
+            .credential
+            .username
+    }
+
+    fn username_request(credential_id: i64, username: &str) -> UpdateStandaloneCredentialRequest {
+        UpdateStandaloneCredentialRequest {
+            username: Some(username.to_string()),
+            name: None,
+            ..rename_request(credential_id)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_credential_username_is_validated_set_and_cleared() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let result = update_standalone_credential(owner_token.clone(), username_request(credential_id, "  DOMAIN\\Operator "), app.state(), app.state()).await;
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(credential_username(&app, credential_id).as_deref(), Some("DOMAIN\\Operator"));
+
+        let result = update_standalone_credential(owner_token.clone(), username_request(credential_id, "<script>x</script>"), app.state(), app.state()).await;
+        assert!(result.is_err());
+        assert_eq!(credential_username(&app, credential_id).as_deref(), Some("DOMAIN\\Operator"));
+
+        let result = update_standalone_credential(owner_token, username_request(credential_id, ""), app.state(), app.state()).await;
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(credential_username(&app, credential_id), None);
+    }
+
+    #[tokio::test]
+    async fn test_credential_name_and_description_are_checked_on_update() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let request = UpdateStandaloneCredentialRequest {
+            name: Some("javascript:alert(1)".to_string()),
+            ..rename_request(credential_id)
+        };
+        assert!(update_standalone_credential(owner_token.clone(), request, app.state(), app.state()).await.is_err());
+        let request = UpdateStandaloneCredentialRequest {
+            name: None,
+            description: Some("../../etc/passwd".to_string()),
+            ..rename_request(credential_id)
+        };
+        assert!(update_standalone_credential(owner_token, request, app.state(), app.state()).await.is_err());
+        assert_eq!(credential_name(&app, credential_id), "PLC Login");
+    }
+
+    /// Only a value change needs the data key, which is unavailable while a
+    /// key rotation runs.
+    #[tokio::test]
+    async fn test_credential_username_can_change_during_key_rotation() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+        app.state::<SessionManagerState>().lock().unwrap().set_rotation_in_progress(true);
+
+        let result = update_standalone_credential(owner_token.clone(), username_request(credential_id, "operator"), app.state(), app.state()).await;
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(credential_username(&app, credential_id).as_deref(), Some("operator"));
+
+        let request = UpdateStandaloneCredentialRequest {
+            value: Some("new secret".to_string()),
+            ..username_request(credential_id, "engineer")
+        };
+        let result = update_standalone_credential(owner_token, request, app.state(), app.state()).await;
+        assert_eq!(result, Err(crate::auth::KEY_ROTATION_IN_PROGRESS_ERROR.to_string()));
+        assert_eq!(credential_username(&app, credential_id).as_deref(), Some("operator"));
     }
 
     #[tokio::test]
@@ -2470,6 +2583,7 @@ mod tests {
                     vault_id: vault.id,
                     secret_type: SecretType::Password,
                     label: "admin login".to_string(),
+                    username: None,
                     value: value.to_string(),
                     author_id: created_by,
                 }, test_key()).unwrap();
@@ -2537,6 +2651,7 @@ mod tests {
                 update_vault_secret(token.to_string(), UpdateVaultSecretRequest {
                     secret_id,
                     label: Some("renamed".to_string()),
+                    username: None,
                     value: None,
                     author_id: ADMIN_ID,
                 }, self.app.state(), self.app.state()).await
@@ -2620,6 +2735,7 @@ mod tests {
                 vault_id: f.owner_vault,
                 secret_type: SecretType::IpAddress,
                 label: "plc ip".to_string(),
+                username: None,
                 value: "10.0.0.5".to_string(),
                 author_id: 0,
             }, f.app.state(), f.app.state()).await;
@@ -2672,6 +2788,47 @@ mod tests {
             assert!(f.update_label(&f.grantee, f.admin_secret).await.is_ok());
             assert!(f.delete(&f.grantee, f.admin_secret).await.is_ok());
             assert_eq!(f.secret_count(f.admin_vault), 0);
+        }
+
+        #[tokio::test]
+        async fn test_secret_username_is_validated_and_can_change_during_key_rotation() {
+            let f = setup();
+            let username_of = |secret_id: i64| f.with_conn(|conn| {
+                SqliteVaultRepository::new(conn).get_secret_by_id(secret_id).unwrap().unwrap().username
+            });
+            let update = |username: &str, value: Option<&str>| UpdateVaultSecretRequest {
+                secret_id: f.owner_secret,
+                label: None,
+                username: Some(username.to_string()),
+                value: value.map(String::from),
+                author_id: 0,
+            };
+
+            let added = add_vault_secret(f.owner.clone(), AddSecretRequest {
+                vault_id: f.owner_vault,
+                secret_type: SecretType::VpnKey,
+                label: "vpn".to_string(),
+                username: Some(" plc@site ".to_string()),
+                value: "key".to_string(),
+                author_id: 0,
+            }, f.app.state(), f.app.state()).await.unwrap();
+            assert_eq!(added.username.as_deref(), Some("plc@site"));
+
+            let rejected = update_vault_secret(f.owner.clone(), update("<script>", None), f.app.state(), f.app.state()).await;
+            assert!(rejected.is_err());
+            assert_eq!(username_of(f.owner_secret), None);
+
+            f.app.state::<SessionManagerState>().lock().unwrap().set_rotation_in_progress(true);
+            let result = update_vault_secret(f.owner.clone(), update("DOMAIN\\Operator", None), f.app.state(), f.app.state()).await;
+            assert!(result.is_ok(), "{:?}", result);
+            assert_eq!(username_of(f.owner_secret).as_deref(), Some("DOMAIN\\Operator"));
+            let blocked = update_vault_secret(f.owner.clone(), update("", Some("new-pw")), f.app.state(), f.app.state()).await;
+            assert_eq!(blocked, Err(crate::auth::KEY_ROTATION_IN_PROGRESS_ERROR.to_string()));
+
+            f.app.state::<SessionManagerState>().lock().unwrap().set_rotation_in_progress(false);
+            let cleared = update_vault_secret(f.owner.clone(), update("", None), f.app.state(), f.app.state()).await;
+            assert!(cleared.is_ok(), "{:?}", cleared);
+            assert_eq!(username_of(f.owner_secret), None);
         }
 
         #[tokio::test]

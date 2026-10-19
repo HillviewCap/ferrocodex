@@ -32,7 +32,7 @@ Data Protection
 
 * Configuration file content is encrypted with AES-256-GCM before it is stored in the database
 * Firmware files are encrypted with AES-256-GCM before they are written to disk
-* Vault secrets are encrypted with AES-256-GCM
+* Vault secrets are encrypted with AES-256-GCM. A secret's label and username are not: they are stored in plaintext so they can be listed and searched without decrypting anything
 * All of these use one random 256-bit data key, which is never written to disk in plaintext. Copying the database without a password or the recovery key does not expose the data key.
 * User passwords are stored as bcrypt hashes
 
@@ -105,7 +105,7 @@ Threat Model
 
 * **Copies taken before rotation.** Any database copy or backup taken before rotation (with firmware files, if those were copied too) stays readable forever with the old key. That includes a pre-deactivation copy plus that user's password, or plus the old recovery key. Rotation cannot reach backward.
 * **Plaintext that has left the app.** Exported configurations, firmware exports, recovery bundles, and vault exports whose passphrase is known.
-* **Columns that were never encrypted.** Asset and vault names, labels, metadata, the audit log, and firmware analysis results. The database as a whole is not encrypted.
+* **Columns that were never encrypted.** Asset and vault names, labels, credential usernames, metadata, the audit log, and firmware analysis results. The database as a whole is not encrypted.
 * **Trusted parties turning hostile.** A malicious or compromised active administrator, or malware on the host while a session is unlocked.
 * **Leftover blocks on disk.** Ciphertext remnants on SSD or filesystem blocks after files are rewritten or deleted.
 * **Tampering by someone who can write to the database.** Ciphertexts carry no binding to their row, so someone with write access to the database file could swap them between rows.

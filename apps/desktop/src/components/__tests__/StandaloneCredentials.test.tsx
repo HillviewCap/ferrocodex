@@ -56,8 +56,9 @@ const findCreateModal = async () =>
 // First mounts of the page and the create modal pay Ant Design's style-generation cost
 const SLOW_TEST_TIMEOUT = 20000;
 
+// Actions are the last column; other cells (the copyable username) have icons too
 const rowActionButton = (row: HTMLElement, icon: string) =>
-  row.querySelector(`.anticon-${icon}`)?.closest('button') as HTMLElement | null;
+  row.querySelector(`td:last-child .anticon-${icon}`)?.closest('button') as HTMLElement | null;
 
 describe('StandaloneCredentials', () => {
   const mockInvoke = vi.mocked(invoke);
@@ -115,6 +116,7 @@ describe('StandaloneCredentials', () => {
         description: 'Test database password',
         credential_type: 'Password',
         category_id: 2,
+        username: 'DOMAIN\\dbadmin',
         created_by: 1,
         created_at: '2024-01-01T00:00:00',
         updated_at: '2024-01-01T00:00:00',
@@ -185,7 +187,7 @@ describe('StandaloneCredentials', () => {
     renderComponent();
     
     expect(screen.getByText('Vault')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search credentials...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search name or username...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add credential/i })).toBeInTheDocument();
     
     // Wait for categories and credentials to load
@@ -292,7 +294,7 @@ describe('StandaloneCredentials', () => {
     });
     
     // Search runs when the filter form is submitted
-    const searchInput = screen.getByPlaceholderText('Search credentials...');
+    const searchInput = screen.getByPlaceholderText('Search name or username...');
     fireEvent.change(searchInput, { target: { value: 'database' } });
     fireEvent.click(screen.getByText('Filter').closest('button')!);
     
@@ -355,7 +357,90 @@ describe('StandaloneCredentials', () => {
     });
     fireEvent.click(row.querySelector('.ant-table-row-expand-icon')!);
     expect(await screen.findByDisplayValue('s3cret-value')).toBeInTheDocument();
+    // The expanded area shows the username above the value
+    const expanded = screen.getByText('Decrypted Value:').closest('.ant-card') as HTMLElement;
+    expect(within(expanded).getByText('DOMAIN\\dbadmin')).toBeInTheDocument();
   });
+
+  it('shows usernames in the credentials table', async () => {
+    renderComponent();
+
+    const table = (await screen.findByText('Test DB Password')).closest('table')!;
+    expect(within(table).getByRole('columnheader', { name: 'Username' })).toBeInTheDocument();
+    const row = screen.getByText('Test DB Password').closest('tr')!;
+    expect(within(row).getByText('DOMAIN\\dbadmin')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: /copy/i })).toBeInTheDocument();
+    // A credential without a username shows a placeholder
+    const other = screen.getByText('Jump Host SSH').closest('tr')!;
+    expect(within(other).getByText('-')).toBeInTheDocument();
+  });
+
+  it('sends the username when creating a credential', async () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: /add credential/i }));
+    const modal = await findCreateModal();
+
+    fireEvent.change(within(modal).getByLabelText('Name'), { target: { value: 'HMI login' } });
+    fireEvent.mouseDown(within(modal).getByLabelText('Type'));
+    const passwordOption = await waitFor(() => {
+      const option = document.querySelector('.ant-select-item-option[title="Password"]')
+        ?? Array.from(document.querySelectorAll('.ant-select-item-option'))
+          .find(el => el.textContent?.trim() === 'Password');
+      expect(option).toBeTruthy();
+      return option as HTMLElement;
+    });
+    fireEvent.click(passwordOption);
+    fireEvent.change(within(modal).getByLabelText('Username (optional)'), { target: { value: ' admin@plc ' } });
+    fireEvent.change(within(modal).getByTestId('password-input'), { target: { value: 'test-password' } });
+    fireEvent.click(within(modal).getByText('OK').closest('button')!);
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('create_standalone_credential', {
+        token: 'test-token',
+        credentialRequest: expect.objectContaining({
+          name: 'HMI login',
+          username: 'admin@plc',
+          value: 'test-password',
+        }),
+      });
+    });
+  }, SLOW_TEST_TIMEOUT);
+
+  const editCredential = async (name: string) => {
+    renderComponent();
+    const row = (await screen.findByText(name)).closest('tr')!;
+    fireEvent.click(rowActionButton(row, 'edit')!);
+    return (await screen.findByText('Edit Credential')).closest('.ant-modal') as HTMLElement;
+  };
+
+  const sentUpdate = () => {
+    const call = mockInvoke.mock.calls.find(([command]) => command === 'update_standalone_credential');
+    return (call?.[1] as { updateRequest: Record<string, unknown> }).updateRequest;
+  };
+
+  it('prefills and clears the username when editing a credential', async () => {
+    const modal = await editCredential('Test DB Password');
+    const username = within(modal).getByLabelText('Username (optional, leave empty to remove)');
+    expect(username).toHaveValue('DOMAIN\\dbadmin');
+
+    fireEvent.change(username, { target: { value: '' } });
+    fireEvent.click(within(modal).getByText('OK').closest('button')!);
+
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith('update_standalone_credential', expect.anything()));
+    expect(sentUpdate()).toEqual(expect.objectContaining({ id: 1, username: '' }));
+  }, SLOW_TEST_TIMEOUT);
+
+  it('leaves an unchanged username out of the edit', async () => {
+    const modal = await editCredential('Test DB Password');
+
+    fireEvent.change(within(modal).getByLabelText('Name'), { target: { value: 'Renamed' } });
+    fireEvent.click(within(modal).getByText('OK').closest('button')!);
+
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith('update_standalone_credential', expect.anything()));
+    expect(sentUpdate()).toEqual(expect.objectContaining({ id: 1, name: 'Renamed' }));
+    expect(sentUpdate().username).toBeUndefined();
+  }, SLOW_TEST_TIMEOUT);
 
   it('handles empty credentials list', async () => {
     mockInvoke.mockImplementation((command: string) => {

@@ -100,6 +100,7 @@ mod tests {
                 vault_id: 1,
                 secret_type: SecretType::Password,
                 label: "admin".to_string(),
+                username: Some("DOMAIN\\Operator".to_string()),
                 encrypted_value,
                 created_at: String::new(),
                 updated_at: String::new(),
@@ -137,6 +138,22 @@ mod tests {
 
         assert_eq!(decrypt_first(&imported, &target_key), "Pl4nt-Admin!");
         assert_eq!(imported.secrets[0].label, "admin");
+        assert_eq!(imported.secrets[0].username.as_deref(), Some("DOMAIN\\Operator"));
+    }
+
+    #[test]
+    fn test_export_from_before_usernames_still_opens() {
+        let data_key = DataKey::generate();
+        let json = seal(&vault_with_secret(&data_key, "Pl4nt-Admin!"), &data_key, PASSPHRASE).unwrap();
+        let mut file: serde_json::Value = serde_json::from_str(&json).unwrap();
+        file["vault"]["secrets"][0].as_object_mut().unwrap().remove("username").unwrap();
+        let old_json = serde_json::to_string(&file).unwrap();
+        assert!(!old_json.contains("username"));
+
+        let imported = open_vault_export(&old_json, PASSPHRASE, &data_key).unwrap();
+
+        assert_eq!(imported.secrets[0].username, None);
+        assert_eq!(decrypt_first(&imported, &data_key), "Pl4nt-Admin!");
     }
 
     #[test]

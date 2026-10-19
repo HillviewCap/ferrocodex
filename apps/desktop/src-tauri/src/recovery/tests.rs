@@ -216,6 +216,7 @@ use tempfile::TempDir;
                     vault_id: 1,
                     secret_type: SecretType::Password,
                     label: "Admin Password".to_string(),
+                    username: None,
                     encrypted_value: "encrypted_password_data".to_string(),
                     created_at: "2024-01-01T00:00:00Z".to_string(),
                     updated_at: "2024-01-01T00:00:00Z".to_string(),
@@ -234,6 +235,7 @@ use tempfile::TempDir;
                     vault_id: 1,
                     secret_type: SecretType::IpAddress,
                     label: "PLC IP".to_string(),
+                    username: None,
                     encrypted_value: "encrypted_ip_data".to_string(),
                     created_at: "2024-01-01T00:00:00Z".to_string(),
                     updated_at: "2024-01-01T00:00:00Z".to_string(),
@@ -351,7 +353,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_standalone_credential(&self, _request: crate::vault::UpdateStandaloneCredentialRequest, _key: &DataKey) -> Result<()> {
+        fn update_standalone_credential(&self, _request: crate::vault::UpdateStandaloneCredentialRequest, _key: Option<&DataKey>) -> Result<()> {
             unimplemented!()
         }
         
@@ -405,7 +407,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_vault_secret(&self, _request: UpdateVaultSecretRequest, _key: &DataKey) -> Result<()> {
+        fn update_vault_secret(&self, _request: UpdateVaultSecretRequest, _key: Option<&DataKey>) -> Result<()> {
             unimplemented!()
         }
         
@@ -708,11 +710,24 @@ mod import_storage {
     use tempfile::TempDir;
 
     fn write_bundle(root: &Path, name: &str, firmware: &[u8]) -> String {
+        write_bundle_with_vault(root, name, firmware, None)
+    }
+
+    /// `vault_json` is a sealed vault export to include in the bundle.
+    fn write_bundle_with_vault(root: &Path, name: &str, firmware: &[u8], vault_json: Option<&str>) -> String {
         let dir = root.join(name);
         std::fs::create_dir_all(&dir).unwrap();
         let config = format!("config of {}", name);
         std::fs::write(dir.join("plc.cfg"), &config).unwrap();
         std::fs::write(dir.join("plc.bin"), firmware).unwrap();
+        let vault = vault_json.map(|json| {
+            std::fs::write(dir.join("plc_vault.json"), json).unwrap();
+            VaultExportInfo {
+                vault_id: 1, vault_name: "PLC vault".into(), filename: "plc_vault.json".into(),
+                checksum: RecoveryExporter::calculate_checksum(json.as_bytes()), secret_count: 1,
+                file_size: json.len() as i64, encrypted: true,
+            }
+        });
         let manifest = RecoveryManifest {
             asset_id: 1,
             export_date: "2026-10-18T00:00:00Z".into(),
@@ -726,7 +741,7 @@ mod import_storage {
                 checksum: RecoveryExporter::calculate_checksum(firmware), vendor: "v".into(), model: "m".into(),
                 file_size: firmware.len() as i64, original_filename: Some(format!("../{}\u{7}.sedp", name)),
             },
-            vault: None,
+            vault,
             compatibility_verified: false,
         };
         std::fs::write(dir.join("plc_recovery_manifest.json"), serde_json::to_string(&manifest).unwrap()).unwrap();
@@ -785,5 +800,64 @@ mod import_storage {
         files.sort();
         expected_files.sort();
         assert_eq!(files, expected_files);
+    }
+
+    /// A vault imported from a recovery bundle keeps its secrets' usernames.
+    #[test]
+    fn test_imported_vault_keeps_secret_usernames() {
+        use crate::encryption::FileEncryption;
+        use crate::vault::{IdentityVault, SecretType, VaultInfo, VaultSecret};
+
+        let db = Database::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = db.get_connection();
+        let admin = SqliteUserRepository::new(conn).create_user(CreateUserRequest {
+            username: "admin".into(), password: "password123!".into(), role: UserRole::Administrator,
+        }).unwrap().id;
+        let (key, _) = SqliteKeyStoreRepository::with_params(conn, KdfParams::fast_for_tests())
+            .create_data_key(admin, "admin-password").unwrap();
+        conn.execute("INSERT INTO assets (id, name, created_by) VALUES (1, 'plc', ?1)", [admin]).unwrap();
+
+        // A vault exported from another install
+        let source_key = DataKey::generate();
+        let exported = VaultInfo {
+            vault: IdentityVault {
+                id: 9, asset_id: 1, name: "PLC vault".into(), description: String::new(), created_by: 1,
+                created_at: String::new(), updated_at: String::new(),
+            },
+            secrets: vec![VaultSecret {
+                id: 4, vault_id: 9, secret_type: SecretType::Password, label: "HMI login".into(),
+                username: Some("DOMAIN\\Operator".into()),
+                encrypted_value: FileEncryption::new(&source_key).encrypt_to_base64(b"Pl4nt-Admin!").unwrap(),
+                created_at: String::new(), updated_at: String::new(),
+                strength_score: None, last_changed: None, generation_method: None, policy_version: None,
+                last_rotated: None, rotation_interval_days: None, next_rotation_due: None, rotation_policy_id: None,
+                key_version: 1,
+            }],
+            secret_count: 1,
+        };
+        let vault_json = seal_vault_export(&exported, &source_key, "substation-7 recovery").unwrap();
+
+        let firmware_dir = TempDir::new().unwrap();
+        let bundles = TempDir::new().unwrap();
+        let (configs, firmware, vaults, audit) = (
+            SqliteConfigurationRepository::new(conn),
+            SqliteFirmwareRepository::new(conn),
+            SqliteVaultRepository::new(conn),
+            SqliteAuditRepository::new(conn),
+        );
+        let request = RecoveryImportRequest {
+            bundle_path: write_bundle_with_vault(bundles.path(), "with-vault", b"image", Some(&vault_json)),
+            target_asset_id: 1,
+            import_vault: true,
+        };
+        RecoveryImporter::new(&configs, &firmware, &vaults, &audit).import_recovery_bundle_in(
+            firmware_dir.path(), request, admin, "admin", &UserRole::Administrator, &key, Some("substation-7 recovery"),
+        ).unwrap();
+
+        let (username, encrypted_value): (Option<String>, String) = conn.query_row(
+            "SELECT username, encrypted_value FROM vault_secrets", [], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(username.as_deref(), Some("DOMAIN\\Operator"));
+        assert_eq!(FileEncryption::new(&key).decrypt_from_base64(&encrypted_value).unwrap(), b"Pl4nt-Admin!");
     }
 }

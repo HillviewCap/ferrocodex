@@ -26,6 +26,13 @@ pub const KEY_VERSIONED_TABLES: [&str; 5] = [
     "firmware_versions",
 ];
 
+/// Tables that store the account name a secret belongs to, in plaintext next
+/// to its ciphertext.
+pub const CREDENTIAL_USERNAME_TABLES: [&str; 2] = [
+    "vault_secrets",
+    "standalone_credentials",
+];
+
 pub struct Database {
     conn: Connection,
     #[cfg(test)]
@@ -392,6 +399,29 @@ impl Database {
             info!("Firmware original filename migration completed");
         }
 
+        // Vault secrets and standalone credentials record the account name they
+        // belong to. Like labels and names it is plaintext, so existing rows and
+        // their ciphertext are left as they are (NULL username).
+        let username_key = "credential_username_columns_20261019";
+        if self.get_metadata(username_key)?.is_none() {
+            let tx = self.conn.unchecked_transaction()?;
+            for table in CREDENTIAL_USERNAME_TABLES {
+                let has_column: bool = self.conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?1) WHERE name = 'username')",
+                    [table],
+                    |row| row.get(0),
+                )?;
+                if !has_column {
+                    // Table names come from the constant list above, never from input
+                    self.conn.execute_batch(&format!("ALTER TABLE {} ADD COLUMN username TEXT;", table))?;
+                    info!("Added username column to {}", table);
+                }
+            }
+            self.set_metadata(username_key, "applied")?;
+            tx.commit()?;
+            info!("Credential username columns migration completed");
+        }
+
         Ok(())
     }
 
@@ -642,6 +672,14 @@ mod tests {
         ).unwrap()
     }
 
+    fn has_username_column(conn: &Connection, table: &str) -> bool {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?1) WHERE name = 'username')",
+            [table],
+            |r| r.get(0),
+        ).unwrap()
+    }
+
     #[test]
     fn test_firmware_original_filename_migration_upgrades_existing_table() {
         use crate::firmware::FirmwareRepository;
@@ -663,6 +701,52 @@ mod tests {
         db.run_data_migrations().unwrap();
         assert!(has_original_filename_column(&db.conn));
         assert!(db.get_metadata("firmware_original_filename_20261019").unwrap().is_some());
+    }
+
+    #[test]
+    fn test_username_migration_upgrades_schema_without_usernames() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PRE_KEY_VERSION_SCHEMA).unwrap();
+        for table in CREDENTIAL_USERNAME_TABLES {
+            assert!(!has_username_column(&conn, table));
+        }
+
+        let db = Database::from_connection(conn).unwrap();
+
+        assert_eq!(db.get_metadata("credential_username_columns_20261019").unwrap().as_deref(), Some("applied"));
+        for table in CREDENTIAL_USERNAME_TABLES {
+            assert!(has_username_column(&db.conn, table), "{} has no username", table);
+            let (rows, named): (i64, i64) = db.conn.query_row(
+                &format!("SELECT COUNT(*), COUNT(username) FROM {}", table), [], |r| Ok((r.get(0)?, r.get(1)?)),
+            ).unwrap();
+            assert_eq!((rows, named), (1, 0), "{}: existing rows keep a NULL username", table);
+        }
+        // Existing rows still load through the repository
+        let secret = SqliteVaultRepository::new(&db.conn).get_secret_by_id(1).unwrap().unwrap();
+        assert_eq!((secret.label.as_str(), secret.username), ("pw", None));
+        let credential: (String, Option<String>) = db.conn.query_row(
+            "SELECT encrypted_data, username FROM standalone_credentials", [], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(credential, ("x".to_string(), None));
+
+        // Running again is a no-op, even with the marker gone
+        db.conn.execute("UPDATE vault_secrets SET username = 'operator'", []).unwrap();
+        db.conn.execute("DELETE FROM app_metadata WHERE key = 'credential_username_columns_20261019'", []).unwrap();
+        db.run_data_migrations().unwrap();
+        assert!(db.get_metadata("credential_username_columns_20261019").unwrap().is_some());
+        let username: Option<String> = db.conn.query_row("SELECT username FROM vault_secrets", [], |r| r.get(0)).unwrap();
+        assert_eq!(username.as_deref(), Some("operator"));
+    }
+
+    #[test]
+    fn test_fresh_install_has_username_columns() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let db = Database::new(temp_file.path().to_path_buf()).unwrap();
+
+        for table in CREDENTIAL_USERNAME_TABLES {
+            assert!(has_username_column(&db.conn, table));
+        }
+        assert!(db.get_metadata("credential_username_columns_20261019").unwrap().is_some());
     }
 
     #[test]
@@ -746,7 +830,7 @@ mod tests {
         }).unwrap();
         let secret = vaults.add_secret(AddSecretRequest {
             vault_id: vault.id, secret_type: SecretType::Password, label: "pw".into(),
-            value: "Initial-Pass-1".into(), author_id: 1,
+            username: None, value: "Initial-Pass-1".into(), author_id: 1,
         }, &key).unwrap();
         assert_eq!(version_of("vault_secrets", secret.id), 3);
         assert_eq!(secret.key_version, 3);
@@ -755,16 +839,17 @@ mod tests {
         assert_eq!(vaults.get_vault_secrets(vault.id).unwrap()[0].key_version, 2);
 
         let update =|label: Option<&str>, value: Option<&str>| UpdateVaultSecretRequest {
-            secret_id: secret.id, label: label.map(String::from), value: value.map(String::from), author_id: 1,
+            secret_id: secret.id, label: label.map(String::from), username: None,
+            value: value.map(String::from), author_id: 1,
         };
         for (label, value) in [(Some("pw2"), Some("Value-Two-2")), (None, Some("Value-Three-3"))] {
             set_version("vault_secrets", secret.id, 1);
-            vaults.update_vault_secret(update(label, value), &key).unwrap();
+            vaults.update_vault_secret(update(label, value), Some(&key)).unwrap();
             assert_eq!(version_of("vault_secrets", secret.id), 3);
         }
         // A label-only change leaves the ciphertext, and so its version, alone
         set_version("vault_secrets", secret.id, 1);
-        vaults.update_vault_secret(update(Some("pw3"), None), &key).unwrap();
+        vaults.update_vault_secret(update(Some("pw3"), None), Some(&key)).unwrap();
         assert_eq!(version_of("vault_secrets", secret.id), 1);
 
         vaults.update_password(UpdateCredentialPasswordRequest {
@@ -796,22 +881,22 @@ mod tests {
         // Standalone credentials
         let credential = vaults.create_standalone_credential(CreateStandaloneCredentialRequest {
             name: "plc login".into(), description: String::new(), credential_type: SecretType::Password,
-            category_id: None, value: "Cred-Value-1".into(), tags: None, created_by: 1,
+            category_id: None, username: None, value: "Cred-Value-1".into(), tags: None, created_by: 1,
         }, &key).unwrap();
         assert_eq!(version_of("standalone_credentials", credential.id), 3);
 
         set_version("standalone_credentials", credential.id, 1);
         vaults.update_standalone_credential(UpdateStandaloneCredentialRequest {
             id: credential.id, name: Some("plc login 2".into()), description: None, category_id: None,
-            value: Some("Cred-Value-2".into()), author_id: 1,
-        }, &key).unwrap();
+            username: None, value: Some("Cred-Value-2".into()), author_id: 1,
+        }, Some(&key)).unwrap();
         assert_eq!(version_of("standalone_credentials", credential.id), 3);
 
         set_version("standalone_credentials", credential.id, 1);
         vaults.update_standalone_credential(UpdateStandaloneCredentialRequest {
             id: credential.id, name: Some("plc login 3".into()), description: None, category_id: None,
-            value: None, author_id: 1,
-        }, &key).unwrap();
+            username: None, value: None, author_id: 1,
+        }, Some(&key)).unwrap();
         assert_eq!(version_of("standalone_credentials", credential.id), 1);
     }
 
