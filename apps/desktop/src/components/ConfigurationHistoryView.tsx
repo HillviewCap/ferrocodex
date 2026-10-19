@@ -198,7 +198,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
             {
               title: (
                 <>
-                  <HistoryOutlined /> Version History
+                  <HistoryOutlined /> Configuration Manager
                 </>
               )
             }
@@ -288,7 +288,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
 
       <Divider style={{ margin: '24px 0' }} />
 
-      {/* Tabs for Version History and Branch Management */}
+      {/* Tabs for Configurations and Branch Management */}
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab}
@@ -298,7 +298,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
             label: (
               <span>
                 <HistoryOutlined />
-                Version History
+                Configurations
               </span>
             ),
             children: (
@@ -323,7 +323,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                   <div style={{ textAlign: 'center', padding: '48px' }}>
                     <Spin size="large" />
                     <div style={{ marginTop: '16px' }}>
-                      <Text type="secondary">Loading version history...</Text>
+                      <Text type="secondary">Loading configurations...</Text>
                     </div>
                   </div>
                 ) : versions.length === 0 ? (
@@ -331,7 +331,7 @@ const ConfigurationHistoryView: React.FC<ConfigurationHistoryViewProps> = ({ ass
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                       <div>
-                        <Title level={5}>No Version History</Title>
+                        <Title level={5}>No Configuration Versions</Title>
                         <Text type="secondary">
                           This asset has no configuration versions yet
                         </Text>

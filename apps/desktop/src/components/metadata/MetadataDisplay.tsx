@@ -19,7 +19,8 @@ import {
   ReloadOutlined,
   FileTextOutlined,
   CalendarOutlined,
-  UserOutlined
+  UserOutlined,
+  EnvironmentOutlined
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
@@ -30,9 +31,16 @@ const { Text, Title } = Typography;
 
 interface MetadataDisplayProps {
   assetId: number;
+  // Used only when the asset has no metadata yet; otherwise the schema its values reference wins
   schemaId?: number;
+  // Folder path of the asset (e.g. "Plant 1 › Line 3"), shown read-only at the top
+  location?: string | null;
   onRefresh?: () => void;
 }
+
+// Categories shown first, in this order; any others follow in schema order
+const CATEGORY_ORDER = ['Device', 'Network', 'Location', 'Operational'];
+const DEFAULT_SCHEMA_NAME = 'Default Equipment Schema';
 
 interface MetadataField {
   name: string;
@@ -69,11 +77,13 @@ interface MetadataSchema {
   name: string;
   description: string;
   schema_json: string;
+  is_system_template?: boolean;
 }
 
 const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
   assetId,
-  schemaId = 1,
+  schemaId,
+  location,
   onRefresh
 }) => {
   const { token } = useAuthStore();
@@ -83,6 +93,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
   const [schema, setSchema] = useState<MetadataSchema | null>(null);
   const [fields, setFields] = useState<MetadataField[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedSchemaId, setResolvedSchemaId] = useState<number | null>(schemaId ?? null);
 
   const loadMetadata = async () => {
     if (!token || !assetId) return;
@@ -91,21 +102,42 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
     setError(null);
 
     try {
-      // Load the schema first
-      const schemaData = await invoke<MetadataSchema>('get_metadata_schema_by_id', {
-        token,
-        schemaId
-      });
-      setSchema(schemaData);
-
-      // Try to load existing metadata
+      let metadataData: AssetMetadataFull | null = null;
       try {
-        const metadataData = await invoke<AssetMetadataFull>('get_asset_metadata_full', {
+        metadataData = await invoke<AssetMetadataFull>('get_asset_metadata_full', {
           token,
           assetId: assetId,
           includeHistory: false
         });
-        
+      } catch (metadataError) {
+        console.error('Failed to load metadata:', metadataError);
+      }
+
+      // Prefer the schema the asset's values already reference, then the caller's
+      // choice, then the system default schema
+      let targetSchemaId = metadataData?.current?.schema_id ?? schemaId;
+      if (targetSchemaId === undefined || targetSchemaId === null) {
+        const schemas = await invoke<MetadataSchema[]>('get_metadata_schemas', {
+          token,
+          assetTypeFilter: null
+        });
+        const systemSchemas = schemas.filter(s => s.is_system_template);
+        const defaultSchema =
+          systemSchemas.find(s => s.name === DEFAULT_SCHEMA_NAME) ?? systemSchemas[0] ?? schemas[0];
+        if (!defaultSchema) {
+          throw new Error('No metadata schema is available');
+        }
+        targetSchemaId = defaultSchema.id;
+      }
+      setResolvedSchemaId(targetSchemaId);
+
+      const schemaData = await invoke<MetadataSchema>('get_metadata_schema_by_id', {
+        token,
+        schemaId: targetSchemaId
+      });
+      setSchema(schemaData);
+
+      if (metadataData) {
         // Extract the current metadata from the full response
         if (metadataData.current) {
           // Parse the metadata_values_json string
@@ -145,9 +177,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
             setFields([]);
           }
         }
-      } catch (metadataError) {
-        // Error loading metadata
-        console.error('Failed to load metadata:', metadataError);
+      } else {
         setMetadata(null);
         setFields([]);
       }
@@ -161,7 +191,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
 
   useEffect(() => {
     loadMetadata();
-  }, [assetId, token]);
+  }, [assetId, token, schemaId]);
 
   const parseFieldsFromSchema = (
     schema: any, 
@@ -235,7 +265,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
         token,
         assetId: assetId,
         updates: {
-          schema_id: schemaId,  // Always provide schema_id for both create and update
+          schema_id: resolvedSchemaId,  // Always provide schema_id for both create and update
           field_updates: fieldUpdates,
           preserve_history: true,
           change_reason: metadata ? 'User updated metadata' : 'Initial metadata creation'
@@ -301,15 +331,28 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
       grouped[category].push(field);
     });
 
-    return grouped;
+    // Known categories first (Device leads), the rest keep schema order
+    const rank = (category: string) => {
+      const index = CATEGORY_ORDER.indexOf(category);
+      return index === -1 ? CATEGORY_ORDER.length : index;
+    };
+    return Object.entries(grouped).sort(([a], [b]) => rank(a) - rank(b));
   };
+
+  const locationRow = location ? (
+    <Space size="small" data-testid="asset-location">
+      <EnvironmentOutlined style={{ color: '#8c8c8c' }} />
+      <Text type="secondary">Location:</Text>
+      <Text>{location}</Text>
+    </Space>
+  ) : null;
 
   if (loading) {
     return (
       <div style={{ padding: '24px', textAlign: 'center' }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }}>
-          <Text type="secondary">Loading metadata...</Text>
+          <Text type="secondary">Loading additional information...</Text>
         </div>
       </div>
     );
@@ -319,7 +362,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
     return (
       <div style={{ padding: '24px' }}>
         <Alert
-          title="Error Loading Metadata"
+          title="Error Loading Additional Information"
           description={error}
           type="error"
           showIcon
@@ -341,7 +384,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
       <div style={{ padding: '16px' }}>
         <DynamicMetadataForm
           assetId={assetId}
-          schemaId={schemaId}
+          schemaId={resolvedSchemaId ?? 0}
           initialValues={preparedValues}
           onSubmit={handleSave}
           onCancel={handleCancel}
@@ -360,13 +403,14 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
             <Space orientation="vertical">
-              <Text>No metadata configured for this asset</Text>
+              {locationRow}
+              <Text>No additional information recorded for this asset</Text>
               <Button 
                 type="primary" 
                 icon={<EditOutlined />}
                 onClick={handleEdit}
               >
-                Add Metadata
+                Add Information
               </Button>
             </Space>
           }
@@ -386,7 +430,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
             <Space>
               <FileTextOutlined style={{ fontSize: 18, color: '#1890ff' }} />
               <Title level={5} style={{ margin: 0 }}>
-                {schema?.name || 'Asset Metadata'}
+                {schema?.name || 'Additional Information'}
               </Title>
             </Space>
           </Col>
@@ -411,8 +455,10 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
           </Col>
         </Row>
 
+        {locationRow}
+
         {/* Metadata Fields by Category */}
-        {Object.entries(groupedFields).map(([category, categoryFields]) => (
+        {groupedFields.map(([category, categoryFields]) => (
           <Card 
             key={category}
             size="small"
@@ -434,7 +480,7 @@ const MetadataDisplay: React.FC<MetadataDisplayProps> = ({
         ))}
 
         {/* Metadata Info */}
-        <Card size="small" title="Metadata Information" style={{ marginTop: 8 }}>
+        <Card size="small" title="Additional Information" style={{ marginTop: 8 }}>
           <Descriptions
             size="small"
             column={2}

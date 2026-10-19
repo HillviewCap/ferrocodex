@@ -531,7 +531,7 @@ const DynamicMetadataFormInner: React.FC<DynamicMetadataFormProps> = React.memo(
                 icon={<SaveOutlined />}
                 disabled={!isDirty}
               >
-                Save Metadata
+                Save
               </Button>
             </div>
           </>
