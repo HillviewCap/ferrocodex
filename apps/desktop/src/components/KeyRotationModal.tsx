@@ -22,8 +22,21 @@ const TABLE_LABELS: Array<[keyof RemainingCounts, string]> = [
 
 const KeyRotationModal: React.FC<KeyRotationModalProps> = ({ open, onClose }) => {
   const { token, user, showRecoveryCode } = useAuthStore();
-  const { status, progress, processedTotal, finalizeResult, isRunning, error, fetchStatus, begin, runUntilDone, stop, finalize } =
-    useKeyRotationStore();
+  const {
+    status,
+    progress,
+    processedTotal,
+    finalizeResult,
+    isRunning,
+    error,
+    warnings,
+    fetchStatus,
+    begin,
+    runUntilDone,
+    retryFailures,
+    stop,
+    finalize,
+  } = useKeyRotationStore();
 
   const [loaded, setLoaded] = useState(false);
   const [password, setPassword] = useState('');
@@ -63,6 +76,12 @@ const KeyRotationModal: React.FC<KeyRotationModalProps> = ({ open, onClose }) =>
     setLocalError(null);
     await runUntilDone(token);
   }, [token, runUntilDone]);
+
+  const handleRetry = useCallback(async () => {
+    if (!token) return;
+    setLocalError(null);
+    await retryFailures(token);
+  }, [token, retryFailures]);
 
   const handleBegin = async () => {
     if (!token) return;
@@ -213,7 +232,8 @@ const KeyRotationModal: React.FC<KeyRotationModalProps> = ({ open, onClose }) =>
                   ))}
                 </ul>
                 <Text>
-                  Finalizing discards these items permanently; they stay unreadable. Resume to retry them first.
+                  If an item failed because of a locked, moved, or missing file, fix that and retry. Finalizing
+                  discards these items permanently; they stay unreadable.
                 </Text>
               </div>
             }
@@ -274,7 +294,7 @@ const KeyRotationModal: React.FC<KeyRotationModalProps> = ({ open, onClose }) =>
           </Button>
         ) : needsFinalize ? (
           <Space key="actions">
-            <Button onClick={handleRun}>Resume</Button>
+            <Button onClick={handleRetry}>Retry failed items</Button>
             <Popconfirm
               title="Discard unreadable items?"
               description="These items cannot be recovered after finalizing."
@@ -317,6 +337,21 @@ const KeyRotationModal: React.FC<KeyRotationModalProps> = ({ open, onClose }) =>
     >
       {shownError && (
         <Alert type="error" showIcon title={shownError} style={{ marginBottom: 16 }} />
+      )}
+      {warnings.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          title="Warnings"
+          description={
+            <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          }
+          style={{ marginBottom: 16 }}
+        />
       )}
       {renderBody()}
     </Modal>

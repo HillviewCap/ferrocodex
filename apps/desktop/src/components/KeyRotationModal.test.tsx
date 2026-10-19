@@ -157,6 +157,77 @@ describe('KeyRotationModal', () => {
     expect(screen.getByText('Unreadable items discarded: 1')).toBeInTheDocument();
   });
 
+  it('retries failed items and finishes when they succeed', async () => {
+    const failure = {
+      id: 1,
+      table_name: 'firmware_versions',
+      row_id: 4,
+      from_version: 1,
+      error: 'Firmware file is missing',
+      attempted_at: 'x',
+    };
+    let retried = false;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case 'get_key_rotation_status':
+          return retried ? status(false) : status(true, { failures: [failure] });
+        case 'retry_key_rotation_failures':
+          retried = true;
+          return 1;
+        case 'continue_data_key_rotation':
+          return {
+            from_version: 1,
+            to_version: 2,
+            processed: 1,
+            failed: 0,
+            remaining: counts(0),
+            failure_count: 0,
+            done: true,
+            finalized: true,
+          };
+        default:
+          throw new Error(`unexpected ${cmd}`);
+      }
+    });
+    renderModal();
+    expect(await screen.findByText(/firmware_versions row 4: Firmware file is missing/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry failed items' }));
+
+    await screen.findByText('Encryption key rotated');
+    expect(calls('retry_key_rotation_failures')[0][1]).toEqual({ token: 'tok' });
+    expect(calls('continue_data_key_rotation')).toHaveLength(1);
+    expect(calls('finalize_data_key_rotation')).toHaveLength(0);
+  });
+
+  it('shows warnings returned by finalize', async () => {
+    const failure = { id: 1, table_name: 'vault_secrets', row_id: 9, from_version: 1, error: 'bad tag', attempted_at: 'x' };
+    let finalized = false;
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case 'get_key_rotation_status':
+          return finalized ? status(false) : status(true, { failures: [failure] });
+        case 'finalize_data_key_rotation':
+          finalized = true;
+          return {
+            retired_version: 1,
+            active_version: 2,
+            discarded: 1,
+            orphaned_files_removed: 0,
+            already_finalized: false,
+            warnings: ['Old firmware files were kept because the database checkpoint was busy'],
+          };
+        default:
+          throw new Error(`unexpected ${cmd}`);
+      }
+    });
+    renderModal();
+    fireEvent.click(await screen.findByRole('button', { name: 'Finalize and discard unreadable items' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard and finalize' }));
+
+    expect(await screen.findByText(/checkpoint was busy/)).toBeInTheDocument();
+  });
+
   it('shows failures after the loop ends done but not finalized', async () => {
     const failure = {
       id: 1,

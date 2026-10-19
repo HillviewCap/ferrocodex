@@ -16,6 +16,8 @@ interface KeyRotationState {
   finalizeResult: KeyRotationFinalized | null;
   isRunning: boolean;
   error: string | null;
+  // Non-fatal warnings from begin or finalize
+  warnings: string[];
 }
 
 interface KeyRotationActions {
@@ -26,6 +28,8 @@ interface KeyRotationActions {
     acknowledgeUsersWithoutKeys: boolean
   ) => Promise<BeginKeyRotationResponse>;
   runUntilDone: (token: string) => Promise<KeyRotationProgress | null>;
+  // Clears recorded failures so the next run retries them, then runs
+  retryFailures: (token: string) => Promise<KeyRotationProgress | null>;
   // Asks a running loop to stop after the current batch
   stop: () => void;
   finalize: (token: string, discardUnreadable: boolean) => Promise<KeyRotationFinalized>;
@@ -39,6 +43,7 @@ const initialState: KeyRotationState = {
   finalizeResult: null,
   isRunning: false,
   error: null,
+  warnings: [],
 };
 
 let abortRequested = false;
@@ -73,7 +78,7 @@ const useKeyRotationStore = create<KeyRotationState & KeyRotationActions>()((set
         password,
         acknowledgeUsersWithoutKeys,
       });
-      set({ progress: null, processedTotal: 0, finalizeResult: null });
+      set({ progress: null, processedTotal: 0, finalizeResult: null, warnings: response.warnings ?? [] });
       setAuthFlag(true);
       return response;
     } catch (error) {
@@ -107,6 +112,19 @@ const useKeyRotationStore = create<KeyRotationState & KeyRotationActions>()((set
     return last;
   },
 
+  retryFailures: async (token) => {
+    set({ error: null });
+    try {
+      await invoke<number>('retry_key_rotation_failures', { token });
+    } catch (error) {
+      set({ error: String(error) });
+      return get().progress;
+    }
+    // The previous run's done flag no longer holds once failures are back in the queue
+    set({ progress: null });
+    return get().runUntilDone(token);
+  },
+
   stop: () => {
     abortRequested = true;
   },
@@ -118,7 +136,7 @@ const useKeyRotationStore = create<KeyRotationState & KeyRotationActions>()((set
         token,
         discardUnreadable,
       });
-      set({ finalizeResult: result });
+      set((state) => ({ finalizeResult: result, warnings: [...state.warnings, ...(result.warnings ?? [])] }));
       setAuthFlag(false);
       await get().fetchStatus(token);
       return result;

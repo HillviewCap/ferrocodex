@@ -44,6 +44,8 @@ export interface BeginKeyRotationResponse {
   from_version: number;
   to_version: number;
   users_without_access: UserKeyAccess[];
+  // Non-fatal problems after the rotation started, e.g. the session could not be switched
+  warnings: string[];
 }
 
 export interface KeyRotationProgress {
@@ -62,4 +64,8 @@ export interface KeyRotationFinalized {
   active_version: number;
   discarded: number;
   orphaned_files_removed: number;
+  // True when the rotation had already been finalized; only file cleanup was retried
+  already_finalized: boolean;
+  // e.g. old files kept because the WAL checkpoint was busy
+  warnings: string[];
 }

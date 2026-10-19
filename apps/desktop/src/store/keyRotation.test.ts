@@ -137,4 +137,14 @@ describe('keyRotation store', () => {
     vi.mocked(invoke).mockRejectedValueOnce('boom');
     await expect(useKeyRotationStore.getState().fetchStatus('tok')).resolves.toBeNull();
   });
+
+  it('retryFailures does not run the loop when the retry is refused', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === 'retry_key_rotation_failures') throw 'No key rotation is in progress';
+      throw new Error(`unexpected ${cmd}`);
+    });
+    await useKeyRotationStore.getState().retryFailures('tok');
+    expect(continueCalls()).toHaveLength(0);
+    expect(useKeyRotationStore.getState().error).toBe('No key rotation is in progress');
+  });
 });
