@@ -26,6 +26,10 @@ interface SecurityClassificationSelectorProps {
   allowElevation?: boolean;
   currentUserRole?: 'Administrator' | 'Engineer';
   inheritedClassification?: SecurityClassificationLevel;
+  // Levels below this are disabled with `minimumClassificationReason`, e.g. when
+  // only an Administrator may lower an existing classification
+  minimumClassification?: SecurityClassificationLevel;
+  minimumClassificationReason?: string;
   placeholder?: string;
   size?: 'small' | 'middle' | 'large';
 }
@@ -39,6 +43,8 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
   allowElevation = true,
   currentUserRole = 'Engineer',
   inheritedClassification,
+  minimumClassification,
+  minimumClassificationReason = 'Not available',
   placeholder = 'Select security classification',
   size = 'middle'
 }) => {
@@ -54,7 +60,8 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
   const isElevatedForRole = (level: SecurityClassificationLevel): boolean =>
     currentUserRole === 'Engineer' &&
     (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET) &&
-    level !== inheritedClassification;
+    level !== inheritedClassification &&
+    level !== minimumClassification;
 
   const getIcon = (iconName: string) => {
     const iconMap = {
@@ -76,6 +83,10 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
     
     // Cannot select lower than inherited classification
     if (inheritedClassification && isHigherClassification(inheritedClassification, level)) {
+      return true;
+    }
+
+    if (minimumClassification && isHigherClassification(minimumClassification, level)) {
       return true;
     }
     
@@ -108,6 +119,10 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
     
     if (inheritedClassification && isHigherClassification(inheritedClassification, level)) {
       return `Cannot select lower than inherited classification (${SECURITY_CLASSIFICATIONS[inheritedClassification].displayName})`;
+    }
+
+    if (minimumClassification && isHigherClassification(minimumClassification, level)) {
+      return minimumClassificationReason;
     }
     
     return 'Not available';

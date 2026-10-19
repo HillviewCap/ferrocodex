@@ -12,6 +12,7 @@ import { SecurityClassificationLevel, SECURITY_CLASSIFICATIONS } from '../../typ
 import SecurityClassificationSelector from '../security/SecurityClassificationSelector';
 import ClassificationTag from '../security/ClassificationTag';
 import useAuthStore from '../../store/auth';
+import { isAdministrator } from '../../utils/roleUtils';
 
 const { Text } = Typography;
 
@@ -37,6 +38,8 @@ export const AssetClassificationEditor: React.FC<AssetClassificationEditorProps>
   const parent = asset.parent_id != null ? findAssetInHierarchy(hierarchyData, asset.parent_id) : null;
   const raiseCount = countDescendantsBelow(asset, level);
   const levelName = SECURITY_CLASSIFICATIONS[level]?.displayName ?? level;
+  // The backend refuses to lower a classification for anyone but an Administrator
+  const canLower = isAdministrator(user);
 
   const handleOpen = () => {
     setLevel(asset.security_classification);
@@ -93,8 +96,15 @@ export const AssetClassificationEditor: React.FC<AssetClassificationEditorProps>
             onChange={setLevel}
             currentUserRole={user?.role}
             inheritedClassification={parent?.security_classification}
+            minimumClassification={canLower ? undefined : asset.security_classification}
+            minimumClassificationReason="Only Administrators can lower a classification"
             showDescription={false}
           />
+          {!canLower && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Only Administrators can lower a classification.
+            </Text>
+          )}
           {raiseCount > 0 && (
             <Alert
               type="warning"

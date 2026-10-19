@@ -4,6 +4,7 @@ use crate::auth::SessionManager;
 use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, DashboardStats, AssetType, AssetHierarchy, MoveAssetRequest, SecurityClassification};
 use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType};
 use crate::database::Database;
+use crate::users::UserRole;
 use crate::validation::InputSanitizer;
 use std::sync::Mutex;
 use tauri::State;
@@ -501,7 +502,9 @@ pub async fn update_asset_classification(
         Some(db) => {
             let asset_repo = SqliteAssetRepository::new(db.get_connection());
 
-            match asset_repo.update_asset_classification(asset_id, classification) {
+            // Anyone may raise a classification; only Administrators may lower one
+            let allow_lowering = session.role == UserRole::Administrator;
+            match asset_repo.update_asset_classification(asset_id, classification, allow_lowering) {
                 Ok(change) => {
                     let raised: Vec<serde_json::Value> = change.raised.iter()
                         .map(|a| serde_json::json!({

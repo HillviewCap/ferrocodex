@@ -94,6 +94,22 @@ describe('AssetClassificationEditor', () => {
     });
   });
 
+  it('lets an Engineer raise but not lower a classification', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({
+      user: { id: 2, username: 'eng', role: 'Engineer', created_at: '2024-01-01', is_active: true },
+    });
+    render(<AssetClassificationEditor asset={cell} hierarchyData={hierarchy} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Change/ }));
+    expect(await screen.findByText('Only Administrators can lower a classification.')).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox'));
+    await waitFor(() => expect(optionFor('Internal')).toBeDefined());
+    // Cell A is Confidential; its folder is only Internal
+    expect(optionFor('Internal')).toHaveClass('ant-select-item-option-disabled');
+    expect(optionFor('Restricted')).not.toHaveClass('ant-select-item-option-disabled');
+  });
+
   it('shows the backend rejection', async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockRejectedValue("Cannot set 'PLC-1' to PUBLIC: its folder 'Line 1' is classified INTERNAL.");

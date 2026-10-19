@@ -772,14 +772,23 @@ impl<'a> SqliteAssetRepository<'a> {
     /// Change an asset's classification. It may not go below its parent
     /// folder's level. Raising a folder also raises every descendant that would
     /// otherwise sit below it; lowering one leaves its descendants as they are.
+    /// Lowering is refused unless `allow_lowering` (Administrators only).
     /// All updates happen in one transaction.
     pub fn update_asset_classification(
         &self,
         asset_id: i64,
         classification: SecurityClassification,
+        allow_lowering: bool,
     ) -> Result<ClassificationChange> {
         let asset = self.get_asset_by_id(asset_id)?
             .ok_or_else(|| anyhow::anyhow!("Asset not found"))?;
+
+        if classification < asset.security_classification && !allow_lowering {
+            return Err(anyhow::anyhow!(
+                "Only Administrators can lower a security classification ('{}' is {})",
+                asset.name, asset.security_classification
+            ));
+        }
 
         if let Some(parent_id) = asset.parent_id {
             if let Some(parent) = self.get_asset_by_id(parent_id)? {
@@ -1777,15 +1786,15 @@ mod tests {
         let folder = create_classified(&repo, "Zone C", AssetType::Folder, None, Some(SecurityClassification::Confidential)).unwrap();
         let device = create_classified(&repo, "PLC-1", AssetType::Device, Some(folder.id), None).unwrap();
 
-        let err = repo.update_asset_classification(device.id, SecurityClassification::Internal).unwrap_err().to_string();
+        let err = repo.update_asset_classification(device.id, SecurityClassification::Internal, true).unwrap_err().to_string();
         assert!(err.contains("INTERNAL") && err.contains("CONFIDENTIAL") && err.contains("Zone C"), "{}", err);
         assert_eq!(classification_of(&repo, device.id), SecurityClassification::Confidential);
 
-        let change = repo.update_asset_classification(device.id, SecurityClassification::Secret).unwrap();
+        let change = repo.update_asset_classification(device.id, SecurityClassification::Secret, false).unwrap();
         assert_eq!(change.previous, SecurityClassification::Confidential);
         assert_eq!(change.asset.security_classification, SecurityClassification::Secret);
         assert!(change.raised.is_empty());
-        assert!(repo.update_asset_classification(999, SecurityClassification::Secret).is_err());
+        assert!(repo.update_asset_classification(999, SecurityClassification::Secret, false).is_err());
     }
 
     #[test]
@@ -1800,7 +1809,7 @@ mod tests {
         let high = create_classified(&repo, "PLC-3", AssetType::Device, Some(sub.id), Some(SecurityClassification::Secret)).unwrap();
         let unrelated = create_classified(&repo, "Office", AssetType::Folder, None, None).unwrap();
 
-        let change = repo.update_asset_classification(root.id, SecurityClassification::Restricted).unwrap();
+        let change = repo.update_asset_classification(root.id, SecurityClassification::Restricted, false).unwrap();
         assert_eq!(change.previous, SecurityClassification::Internal);
         let mut raised: Vec<(i64, SecurityClassification)> = change.raised.iter().map(|a| (a.id, a.security_classification)).collect();
         raised.sort();
@@ -1827,9 +1836,27 @@ mod tests {
         let root = create_classified(&repo, "Plant", AssetType::Folder, None, Some(SecurityClassification::Secret)).unwrap();
         let child = create_classified(&repo, "PLC-1", AssetType::Device, Some(root.id), None).unwrap();
 
-        let change = repo.update_asset_classification(root.id, SecurityClassification::Public).unwrap();
+        let change = repo.update_asset_classification(root.id, SecurityClassification::Public, true).unwrap();
         assert!(change.raised.is_empty());
         assert_eq!(classification_of(&repo, root.id), SecurityClassification::Public);
         assert_eq!(classification_of(&repo, child.id), SecurityClassification::Secret);
+    }
+
+    #[test]
+    fn test_update_classification_lowering_requires_permission() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let device = create_classified(&repo, "PLC-1", AssetType::Device, None, Some(SecurityClassification::Secret)).unwrap();
+
+        let err = repo.update_asset_classification(device.id, SecurityClassification::Internal, false).unwrap_err().to_string();
+        assert!(err.contains("Only Administrators"), "{}", err);
+        assert_eq!(classification_of(&repo, device.id), SecurityClassification::Secret);
+
+        // Keeping or raising the level needs no permission
+        repo.update_asset_classification(device.id, SecurityClassification::Secret, false).unwrap();
+        let raisable = create_classified(&repo, "PLC-2", AssetType::Device, None, None).unwrap();
+        repo.update_asset_classification(raisable.id, SecurityClassification::Confidential, false).unwrap();
+        assert_eq!(classification_of(&repo, raisable.id), SecurityClassification::Confidential);
     }
 }

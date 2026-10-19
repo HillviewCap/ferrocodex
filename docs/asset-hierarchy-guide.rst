@@ -385,7 +385,7 @@ The classification appears as a tag in the asset tree and the details panel. Fol
 
 * **Inheritance**: A new asset starts at its parent folder's classification, or **Internal** at the root. It can be set higher, never lower.
 * **Moves**: Moving an asset into a folder classified above it, or above anything inside it, is rejected with a message naming the levels. Nothing is raised automatically.
-* **Changes**: Click **"Change"** next to the tag in the details panel. An asset can't go below its parent folder. Raising a folder raises everything inside it that is classified lower, in one step that is recorded in the audit log; the dialog shows how many items will be raised first. Lowering a folder leaves its contents unchanged.
+* **Changes**: Click **"Change"** next to the tag in the details panel. An asset can't go below its parent folder. Raising a folder raises everything inside it that is classified lower, in one step that is recorded in the audit log; the dialog shows how many items will be raised first. Only Administrators can lower a classification, and lowering a folder leaves its contents unchanged.
 * **Existing assets**: Assets created before classifications were introduced start at **Internal** and are left as they are.
 
 Bulk Operations

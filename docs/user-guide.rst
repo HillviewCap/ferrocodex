@@ -120,7 +120,7 @@ Folders pass their classification down:
 * An asset can't be moved into a folder classified above it, or above anything inside it. The move is rejected with a message naming the levels. Raise the asset's classification first.
 * To change a classification, select the asset and click **"Change"** next to its classification tag. It can't go below its parent folder's level.
 * Raising a folder also raises everything inside it that is classified lower. The dialog shows how many items will be raised before you save, and the change is recorded in the audit log.
-* Lowering a folder leaves the items inside it unchanged.
+* Lowering a classification is limited to Administrators. Lowering a folder leaves the items inside it unchanged.
 
 Assets created before classifications were introduced start at **Internal**.
 
