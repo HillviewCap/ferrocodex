@@ -26,7 +26,6 @@ import {
   validateFirmwareVersion,
   validateFirmwareNotes,
   validateFirmwareFileSize,
-  validateFirmwareFileExtension,
   formatFirmwareFileSize
 } from '../types/firmware';
 import useFirmwareStore from '../store/firmware';
@@ -78,11 +77,10 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
     try {
       const selected = await dialog.open({
         multiple: false,
+        // Any file type: vendors use many proprietary firmware formats
         filters: [{
-          name: 'Firmware Files',
-          extensions: ['bin', 'hex', 'img', 'rom', 'fw', 'elf', 'dfu', 'upd', 
-                      'dat', 'firmware', 'update', 'pkg', 'ipk', 'tar', 'gz',
-                      'bz2', 'xz', 'zip', 'rar', '7z', 'cab', 'iso', 'dmg']
+          name: 'All Files',
+          extensions: ['*']
         }]
       });
 
@@ -92,13 +90,6 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           const metadata = await invoke<{name: string, size: number, content_type: string, hash: string}>('get_file_metadata', {
             filePath: selected
           });
-
-          // Validate file extension
-          const extensionValidation = validateFirmwareFileExtension(metadata.name);
-          if (!extensionValidation.isValid) {
-            message.error(extensionValidation.message || 'Invalid file extension');
-            return;
-          }
 
           // Validate file size (2GB limit)
           const sizeValidation = validateFirmwareFileSize(metadata.size);
@@ -199,7 +190,7 @@ const FirmwareUploadModal: React.FC<FirmwareUploadModalProps> = ({
           Click to select firmware file
         </p>
         <p style={{ color: '#8c8c8c', fontSize: '14px' }}>
-          Support for binary firmware files (max 2GB)
+          Any file type is accepted (max 2GB)
         </p>
       </div>
       

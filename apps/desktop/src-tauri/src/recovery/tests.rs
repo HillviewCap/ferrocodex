@@ -141,6 +141,7 @@ use tempfile::TempDir;
                 status_changed_at: None,
                 status_changed_by: None,
                 created_at: "2024-01-01T00:00:00Z".to_string(),
+                original_filename: None,
             });
             Self { firmwares }
         }
@@ -528,6 +529,27 @@ use tempfile::TempDir;
         assert_eq!(RecoveryExporter::sanitize_filename("  Trimmed  "), "Trimmed");
     }
 
+    /// A firmware export keeps the uploaded file's extension (a Modicon .sedp
+    /// used to come out as .bin), but only a plain one; anything else is .bin.
+    #[test]
+    fn test_firmware_export_filename_uses_original_extension() {
+        let name = |original: Option<&str>| RecoveryExporter::firmware_export_filename("PLC-1", "3.2", original);
+        assert_eq!(name(Some("M580_fw.sedp")), "PLC-1_firmware_v3.2.sedp");
+        assert_eq!(name(Some("image.HEX")), "PLC-1_firmware_v3.2.HEX");
+        assert_eq!(name(Some("archive.tar.gz")), "PLC-1_firmware_v3.2.gz");
+        // Unknown (records from before the name was kept) or no extension
+        assert_eq!(name(None), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("FIRMWARE")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some(".hidden")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("trailing.")), "PLC-1_firmware_v3.2.bin");
+        // Extensions that are not plain ASCII alphanumeric, or are too long
+        assert_eq!(name(Some("evil.b/../x")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("evil.b\\..\\x")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("evil.b n")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("fw.bïn")), "PLC-1_firmware_v3.2.bin");
+        assert_eq!(name(Some("fw.abcdefghijklmnopq")), "PLC-1_firmware_v3.2.bin");
+    }
+
     #[test]
     fn test_calculate_checksum() {
         let data = b"test data";
@@ -636,6 +658,7 @@ use tempfile::TempDir;
                 vendor: "Test Vendor".to_string(),
                 model: "Test Model".to_string(),
                 file_size: 2048,
+                original_filename: None,
             },
             vault: Some(VaultExportInfo {
                 vault_id: 1,
@@ -701,7 +724,7 @@ mod import_storage {
             firmware: FirmwareExportInfo {
                 version_id: 1, version: name.into(), filename: "plc.bin".into(),
                 checksum: RecoveryExporter::calculate_checksum(firmware), vendor: "v".into(), model: "m".into(),
-                file_size: firmware.len() as i64,
+                file_size: firmware.len() as i64, original_filename: Some(format!("../{}\u{7}.sedp", name)),
             },
             vault: None,
             compatibility_verified: false,
@@ -742,14 +765,16 @@ mod import_storage {
             ).unwrap();
         }
 
-        let rows: Vec<(i64, String, String)> = conn
-            .prepare("SELECT id, version, file_path FROM firmware_versions ORDER BY id").unwrap()
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap()
+        let rows: Vec<(i64, String, String, Option<String>)> = conn
+            .prepare("SELECT id, version, file_path, original_filename FROM firmware_versions ORDER BY id").unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap()
             .collect::<rusqlite::Result<_>>().unwrap();
         assert_eq!(rows.len(), 2);
         let mut expected_files = Vec::new();
-        for (id, version, path) in &rows {
+        for (id, version, path, original) in &rows {
             assert_eq!(Path::new(path), Path::new("1").join(format!("{}.enc", id)));
+            // The bundle's original name is kept, sanitized, as a label only
+            assert_eq!(original.as_deref(), Some(format!("{}.sedp", version).as_str()));
             let content = FirmwareFileStorage::read_firmware_file_in(firmware_dir.path(), path, &key).unwrap();
             assert_eq!(content, format!("{} image", version).into_bytes());
             expected_files.push(format!("{}.enc", id));

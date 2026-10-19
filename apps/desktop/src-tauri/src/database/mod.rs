@@ -375,6 +375,23 @@ impl Database {
             info!("Key version indexes created");
         }
 
+        // Firmware records keep the uploaded file's name, so an export can
+        // restore its extension. Records from before this stay NULL.
+        let firmware_filename_key = "firmware_original_filename_20261019";
+        if self.get_metadata(firmware_filename_key)?.is_none() {
+            let has_column: bool = self.conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('firmware_versions') WHERE name = 'original_filename')",
+                [],
+                |row| row.get(0),
+            )?;
+            if !has_column {
+                self.conn.execute_batch("ALTER TABLE firmware_versions ADD COLUMN original_filename TEXT;")?;
+                info!("Added original_filename column to firmware_versions");
+            }
+            self.set_metadata(firmware_filename_key, "applied")?;
+            info!("Firmware original filename migration completed");
+        }
+
         Ok(())
     }
 
@@ -617,6 +634,37 @@ mod tests {
         assert_eq!(rows, 1);
     }
 
+    fn has_original_filename_column(conn: &Connection) -> bool {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('firmware_versions') WHERE name = 'original_filename')",
+            [],
+            |r| r.get(0),
+        ).unwrap()
+    }
+
+    #[test]
+    fn test_firmware_original_filename_migration_upgrades_existing_table() {
+        use crate::firmware::FirmwareRepository;
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PRE_KEY_VERSION_SCHEMA).unwrap();
+        assert!(!has_original_filename_column(&conn));
+
+        let db = Database::from_connection(conn).unwrap();
+
+        assert_eq!(db.get_metadata("firmware_original_filename_20261019").unwrap().as_deref(), Some("applied"));
+        assert!(has_original_filename_column(&db.conn));
+        // The existing record has no known name and still loads
+        let firmware = SqliteFirmwareRepository::new(&db.conn).get_firmware_by_id(1).unwrap().unwrap();
+        assert_eq!(firmware.original_filename, None);
+
+        // Running again is a no-op, even with the marker gone
+        db.conn.execute("DELETE FROM app_metadata WHERE key = 'firmware_original_filename_20261019'", []).unwrap();
+        db.run_data_migrations().unwrap();
+        assert!(has_original_filename_column(&db.conn));
+        assert!(db.get_metadata("firmware_original_filename_20261019").unwrap().is_some());
+    }
+
     #[test]
     fn test_fresh_install_has_key_version_columns_and_no_data_key_yet() {
         let temp_file = NamedTempFile::new().unwrap();
@@ -687,7 +735,7 @@ mod tests {
 
         // Firmware
         let firmware = SqliteFirmwareRepository::new(conn).create_firmware(CreateFirmwareRequest {
-            asset_id: 1, vendor: None, model: None, version: "1.0".into(), notes: None,
+            asset_id: 1, vendor: None, model: None, version: "1.0".into(), notes: None, original_filename: None,
         }, 1, "1/1.enc".into(), "h".into(), 1, key.version()).unwrap();
         assert_eq!(version_of("firmware_versions", firmware.id), 3);
 

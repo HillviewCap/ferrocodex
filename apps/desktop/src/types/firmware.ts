@@ -15,6 +15,7 @@ export interface FirmwareVersion {
   file_hash: string;
   file_size: number;
   created_at: string;
+  originalFilename?: string | null;
 }
 
 export interface FirmwareVersionInfo {
@@ -34,6 +35,8 @@ export interface FirmwareVersionInfo {
   fileHash: string;
   fileSize: number;
   createdAt: string;
+  // Name of the uploaded file, for display only; null for older records
+  originalFilename?: string | null;
 }
 
 export interface FirmwareStatusHistory {
@@ -94,12 +97,7 @@ export const FirmwareValidation = {
   fileSize: {
     maxSize: 2 * 1024 * 1024 * 1024, // 2GB
     message: 'File size cannot exceed 2GB'
-  },
-  allowedExtensions: [
-    'bin', 'hex', 'img', 'rom', 'fw', 'elf', 'dfu', 'upd', 
-    'dat', 'firmware', 'update', 'pkg', 'ipk', 'tar', 'gz',
-    'bz2', 'xz', 'zip', 'rar', '7z', 'cab', 'iso', 'dmg'
-  ]
+  }
 };
 
 // Helper functions
@@ -203,11 +201,6 @@ export const sortFirmwareVersions = (versions: FirmwareVersionInfo[]): FirmwareV
     // Sort by createdAt descending (latest first)
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-};
-
-export const validateFirmwareFileExtension = (_filename: string): ValidationResult => {
-  // Accept all file types - no extension validation
-  return { isValid: true };
 };
 
 // Firmware Analysis Types

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Layout, 
   Card, 
@@ -78,7 +78,9 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [firmwareModalVisible, setFirmwareModalVisible] = useState(false);
   const [vaultModalVisible, setVaultModalVisible] = useState(false);
-  const [assetFileStats, setAssetFileStats] = useState<{configCount: number, firmwareCount: number} | null>(null);
+  // A null count means it could not be loaded; it is shown as unknown rather than 0.
+  const [assetFileStats, setAssetFileStats] = useState<{configCount: number | null, firmwareCount: number | null} | null>(null);
+  const fileStatsAssetId = useRef<number | null>(null);
 
   // Load hierarchy on mount
   useEffect(() => {
@@ -121,26 +123,36 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
   }, [selectedAsset, token]);
 
   // Load asset file statistics
+  const loadFileStats = useCallback(async (assetId: number) => {
+    if (!token) return;
+    fileStatsAssetId.current = assetId;
+    const [configs, firmware] = await Promise.allSettled([
+      invoke<unknown[]>('get_configuration_versions', { token, assetId }),
+      invoke<unknown[]>('get_firmware_list', { token, assetId })
+    ]);
+    if (configs.status === 'rejected') {
+      console.error('Failed to load configuration count:', configs.reason);
+    }
+    if (firmware.status === 'rejected') {
+      console.error('Failed to load firmware count:', firmware.reason);
+    }
+    // Ignore responses for an asset that is no longer selected
+    if (fileStatsAssetId.current !== assetId) return;
+    setAssetFileStats({
+      configCount: configs.status === 'fulfilled' ? configs.value.length : null,
+      firmwareCount: firmware.status === 'fulfilled' ? firmware.value.length : null
+    });
+  }, [token]);
+
   useEffect(() => {
     if (selectedAsset && selectedAsset.asset_type === 'Device' && token) {
-      Promise.all([
-        invoke<any[]>('list_configurations_for_asset', { token, assetId: selectedAsset.id }).catch(() => []),
-        invoke<any[]>('list_firmware_for_asset', { token, assetId: selectedAsset.id }).catch(() => [])
-      ])
-        .then(([configs, firmware]) => {
-          setAssetFileStats({
-            configCount: configs.length,
-            firmwareCount: firmware.length
-          });
-        })
-        .catch(err => {
-          console.error('Failed to load asset file stats:', err);
-          setAssetFileStats({ configCount: 0, firmwareCount: 0 });
-        });
+      setAssetFileStats(null);
+      loadFileStats(selectedAsset.id);
     } else {
+      fileStatsAssetId.current = null;
       setAssetFileStats(null);
     }
-  }, [selectedAsset, token]);
+  }, [selectedAsset, token, loadFileStats]);
 
   const handleAssetSelect = (asset: AssetHierarchy | null) => {
     selectAsset(asset);
@@ -216,26 +228,16 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
   const handleConfigImportSuccess = () => {
     setConfigModalVisible(false);
     message.success('Configuration imported successfully!');
-    // Refresh file stats
-    if (selectedAsset && token) {
-      invoke<any[]>('list_configurations_for_asset', { token, assetId: selectedAsset.id })
-        .then(configs => {
-          setAssetFileStats(prev => prev ? { ...prev, configCount: configs.length } : null);
-        })
-        .catch(console.error);
+    if (selectedAsset) {
+      loadFileStats(selectedAsset.id);
     }
   };
 
   const handleFirmwareUploadSuccess = () => {
     setFirmwareModalVisible(false);
     message.success('Firmware uploaded successfully!');
-    // Refresh file stats
-    if (selectedAsset && token) {
-      invoke<any[]>('list_firmware_for_asset', { token, assetId: selectedAsset.id })
-        .then(firmware => {
-          setAssetFileStats(prev => prev ? { ...prev, firmwareCount: firmware.length } : null);
-        })
-        .catch(console.error);
+    if (selectedAsset) {
+      loadFileStats(selectedAsset.id);
     }
   };
 
@@ -412,11 +414,11 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
                   <Space>
                     <div>
                       <DatabaseOutlined style={{ color: '#1890ff', marginRight: 4 }} />
-                      <Text type="secondary">{assetFileStats.configCount} Config{assetFileStats.configCount !== 1 ? 's' : ''}</Text>
+                      <Text type="secondary">{assetFileStats.configCount ?? '–'} Config{assetFileStats.configCount !== 1 ? 's' : ''}</Text>
                     </div>
                     <div>
                       <CloudUploadOutlined style={{ color: '#52c41a', marginRight: 4 }} />
-                      <Text type="secondary">{assetFileStats.firmwareCount} Firmware</Text>
+                      <Text type="secondary">{assetFileStats.firmwareCount ?? '–'} Firmware</Text>
                     </div>
                   </Space>
                 </div>

@@ -803,7 +803,7 @@ mod tests {
             let mut firmware = Vec::new();
             for n in 0..2 {
                 let record = repo.create_firmware(CreateFirmwareRequest {
-                    asset_id: 1, vendor: None, model: None, version: format!("{}.0", n), notes: None,
+                    asset_id: 1, vendor: None, model: None, version: format!("{}.0", n), notes: None, original_filename: None,
                 }, author, "pending".into(), "h".into(), 1, key.version()).unwrap();
                 let (path, _, _) = FirmwareFileStorage::store_firmware_file_in(
                     dir, 1, record.id, format!("firmware {}", n).as_bytes(), key,
@@ -1222,7 +1222,7 @@ mod tests {
             let repo = SqliteFirmwareRepository::new(conn);
             let (path, hash, size) = FirmwareFileStorage::store_firmware_file_in(dir, 1, 0, b"imported image", &k1).unwrap();
             repo.create_firmware(CreateFirmwareRequest {
-                asset_id: 1, vendor: None, model: None, version: "imported".into(), notes: None,
+                asset_id: 1, vendor: None, model: None, version: "imported".into(), notes: None, original_filename: None,
             }, setup.user.id, path, hash, size, k1.version()).unwrap().id
         });
 

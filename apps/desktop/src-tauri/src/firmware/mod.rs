@@ -24,6 +24,10 @@ pub struct FirmwareVersion {
     pub status_changed_at: Option<String>,
     pub status_changed_by: Option<i64>,
     pub created_at: String,
+    /// Name of the uploaded file, for display and export naming only; never a
+    /// storage path. `None` for records from before it was kept.
+    #[serde(default)]
+    pub original_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -54,6 +58,9 @@ pub struct CreateFirmwareRequest {
     pub model: Option<String>,
     pub version: String,
     pub notes: Option<String>,
+    /// Already sanitized with [`sanitize_original_filename`].
+    #[serde(default)]
+    pub original_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +79,8 @@ pub struct FirmwareVersionInfo {
     pub file_hash: String,
     pub file_size: i64,
     pub created_at: String,
+    #[serde(default)]
+    pub original_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +146,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
                 status_changed_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 key_version INTEGER NOT NULL DEFAULT 1,
+                original_filename TEXT,
                 FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                 FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT,
                 FOREIGN KEY (status_changed_by) REFERENCES users(id) ON DELETE RESTRICT
@@ -186,6 +196,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
             status_changed_at: row.get("status_changed_at")?,
             status_changed_by: row.get("status_changed_by")?,
             created_at: row.get("created_at")?,
+            original_filename: row.get("original_filename")?,
         })
     }
 
@@ -209,6 +220,7 @@ impl<'a> SqliteFirmwareRepository<'a> {
             file_hash: row.get("file_hash")?,
             file_size: row.get("file_size")?,
             created_at: row.get("created_at")?,
+            original_filename: row.get("original_filename")?,
         })
     }
 }
@@ -235,11 +247,12 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
             status_changed_at: None,
             status_changed_by: None,
             created_at: String::new(), // Will be set by database
+            original_filename: request.original_filename,
         };
 
         tx.execute(
-            "INSERT INTO firmware_versions (asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size, key_version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO firmware_versions (asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size, key_version, original_filename)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 firmware.asset_id,
                 firmware.author_id,
@@ -252,6 +265,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
                 firmware.file_hash,
                 file_size,
                 key_version,
+                firmware.original_filename,
             ],
         )?;
 
@@ -268,7 +282,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT f.id, f.asset_id, f.author_id, u.username as author_username, 
                     f.vendor, f.model, f.version, f.notes, f.status, 
-                    f.file_path, f.file_hash, f.file_size, f.created_at
+                    f.file_path, f.file_hash, f.file_size, f.created_at, f.original_filename
              FROM firmware_versions f
              JOIN users u ON f.author_id = u.id
              WHERE f.asset_id = ?1
@@ -287,7 +301,7 @@ impl<'a> FirmwareRepository for SqliteFirmwareRepository<'a> {
     fn get_firmware_by_id(&self, firmware_id: i64) -> Result<Option<FirmwareVersion>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, asset_id, author_id, vendor, model, version, notes, status, file_path, file_hash, file_size,
-                    status_changed_at, status_changed_by, created_at
+                    status_changed_at, status_changed_by, created_at, original_filename
              FROM firmware_versions
              WHERE id = ?1"
         )?;
@@ -517,6 +531,29 @@ pub fn get_firmware_storage_dir(app_handle: &AppHandle) -> Result<PathBuf> {
         .map_err(|e| anyhow::anyhow!("Failed to create firmware directory: {}", e))?;
     
     Ok(firmware_dir)
+}
+
+/// Longest original file name kept, in characters.
+const MAX_ORIGINAL_FILENAME_CHARS: usize = 255;
+
+/// The final component of `path`, made safe to store and show as a firmware
+/// record's original file name: control characters and path separators are
+/// removed, and it is capped at 255 characters. `None` if nothing usable is
+/// left. The result is a label only and is never used as a storage path.
+pub fn sanitize_original_filename(path: &str) -> Option<String> {
+    // Split on both separators: the name may come from another platform (a recovery bundle)
+    let name = path.rsplit(['/', '\\']).next().unwrap_or_default();
+    let name: String = name
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_ORIGINAL_FILENAME_CHARS)
+        .collect();
+    let name = name.trim();
+    if name.is_empty() || name == "." || name == ".." {
+        None
+    } else {
+        Some(name.to_string())
+    }
 }
 
 pub struct FirmwareFileStorage;
@@ -1118,6 +1155,16 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_original_filename() {
+        assert_eq!(sanitize_original_filename("/home/eng/M580.sedp").as_deref(), Some("M580.sedp"));
+        assert_eq!(sanitize_original_filename("C:\\Firmware\\M580.sedp").as_deref(), Some("M580.sedp"));
+        assert_eq!(sanitize_original_filename("fw\u{0}\u{7}.bin").as_deref(), Some("fw.bin"));
+        assert_eq!(sanitize_original_filename("/firmware/").as_deref(), None);
+        assert_eq!(sanitize_original_filename("..").as_deref(), None);
+        assert_eq!(sanitize_original_filename(&"a".repeat(300)).map(|n| n.chars().count()), Some(255));
+    }
+
+    #[test]
     fn test_create_firmware() {
         let conn = setup_test_db();
         let repo = SqliteFirmwareRepository::new(&conn);
@@ -1128,6 +1175,7 @@ mod tests {
             model: Some("Test Model".to_string()),
             version: "1.0.0".to_string(),
             notes: Some("Test firmware".to_string()),
+            original_filename: None,
         };
 
         let result = repo.create_firmware(
@@ -1157,6 +1205,7 @@ mod tests {
             model: Some("Model".to_string()),
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         repo.create_firmware(
@@ -1174,6 +1223,7 @@ mod tests {
             model: Some("Model".to_string()),
             version: "2.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         repo.create_firmware(
@@ -1203,6 +1253,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(
@@ -1529,6 +1580,7 @@ mod tests {
             model: Some("Test Model".to_string()),
             version: "1.0.0".to_string(),
             notes: Some("Test firmware".to_string()),
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(
@@ -1569,6 +1621,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(
@@ -1618,6 +1671,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(
@@ -1671,6 +1725,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware1 = repo.create_firmware(
@@ -1688,6 +1743,7 @@ mod tests {
             model: None,
             version: "2.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware2 = repo.create_firmware(
@@ -1739,6 +1795,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: Some("Initial notes".to_string()),
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(
@@ -1777,6 +1834,7 @@ mod tests {
             model: None,
             version: "1.0.0".to_string(),
             notes: None,
+            original_filename: None,
         };
 
         let firmware = repo.create_firmware(

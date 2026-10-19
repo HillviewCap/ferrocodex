@@ -239,14 +239,7 @@ pub async fn upload_firmware(
 
     // Validate file path first
     let file_path = file_path.trim();
-    if file_path.is_empty() {
-        return Err("File path cannot be empty".to_string());
-    }
-    
-    if let Err(e) = InputSanitizer::validate_file_path(&file_path) {
-        error!("Invalid file path: {}", e);
-        return Err(format!("Invalid file path: {}", e));
-    }
+    validate_firmware_upload_path(file_path)?;
 
     // Validate inputs
     let version = InputSanitizer::sanitize_string(&version);
@@ -285,65 +278,7 @@ pub async fn upload_firmware(
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
     
-    // Validate file extension
-    let allowed_extensions = vec![
-        "bin", "hex", "img", "rom", "fw", "elf", "dfu", "upd", 
-        "dat", "firmware", "update", "pkg", "ipk", "tar", "gz",
-        "bz2", "xz", "zip", "rar", "7z", "cab", "iso", "dmg"
-    ];
-    
-    let file_extension = std::path::Path::new(&file_path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_lowercase())
-        .unwrap_or_default();
-    
-    if file_extension.is_empty() {
-        error!("Firmware file has no extension: {}", file_path);
-        return Err("Firmware file must have a valid extension".to_string());
-    }
-    
-    if !allowed_extensions.contains(&file_extension.as_str()) {
-        error!("Invalid firmware file type: .{}", file_extension);
-        return Err(format!(
-            "File type .{} is not allowed. Allowed types: {}", 
-            file_extension, 
-            allowed_extensions.join(", ")
-        ));
-    }
-    
-    info!("Validated firmware file extension: .{}", file_extension);
-    
-    // Read file content
-    let file_size = std::fs::metadata(&file_path)
-        .map_err(|e| format!("Failed to get file metadata: {}", e))?
-        .len();
-    info!("Reading file content: {} bytes expected", file_size);
-    let file_data = match file_utils::read_firmware_file_content(&file_path) {
-        Ok(content) => {
-            info!("Successfully read file content: {} bytes", content.len());
-            content
-        },
-        Err(e) => {
-            error!("Failed to read file {}: {}", file_path, e);
-            return Err(format!("Failed to read file: {}", e));
-        }
-    };
-
-    // Basic MIME type validation - check for common executable signatures
-    if file_data.len() >= 2 {
-        let header = &file_data[0..2];
-        // Check for Windows executable (MZ header)
-        if header == b"MZ" {
-            error!("Detected Windows executable file signature");
-            return Err("Executable files are not allowed as firmware".to_string());
-        }
-        // Check for ELF executable (common on Linux)
-        if file_data.len() >= 4 && &file_data[0..4] == b"\x7FELF" {
-            // ELF is actually allowed for firmware, so we'll permit this
-            info!("Detected ELF format firmware file");
-        }
-    }
+    let (file_data, original_filename) = read_firmware_upload(file_path)?;
 
     // Encrypt, store, and record the firmware under the DB lock. The key was
     // fetched before the (possibly long) file read, so store_uploaded_firmware
@@ -355,7 +290,7 @@ pub async fn upload_firmware(
             Some(db) => {
                 let firmware_dir = get_firmware_storage_dir(&app)
                     .map_err(|e| format!("Failed to locate firmware storage: {}", e))?;
-                let request = CreateFirmwareRequest { asset_id, vendor, model, version, notes };
+                let request = CreateFirmwareRequest { asset_id, vendor, model, version, notes, original_filename };
                 store_uploaded_firmware(
                     db.get_connection(), &firmware_dir, request, session.user_id, &session.username, &file_data, &data_key,
                 )
@@ -423,6 +358,54 @@ pub async fn upload_firmware(
         }
         Err(e) => Err(e),
     }
+}
+
+/// Checks the path of a firmware file chosen for upload. Any file type is
+/// accepted, with or without an extension: OT vendors use many proprietary
+/// formats (a Modicon M580 image is a `.sedp`), and firmware is only stored,
+/// encrypted, never executed.
+fn validate_firmware_upload_path(file_path: &str) -> Result<(), String> {
+    if file_path.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    if let Err(e) = InputSanitizer::validate_file_path(file_path) {
+        error!("Invalid file path: {}", e);
+        return Err(format!("Invalid file path: {}", e));
+    }
+    Ok(())
+}
+
+/// Reads a firmware file for upload (up to 2 GB), after checking its path
+/// with [`validate_firmware_upload_path`], and returns its content and its
+/// sanitized file name, kept as a label for display and export naming.
+fn read_firmware_upload(file_path: &str) -> Result<(Vec<u8>, Option<String>), String> {
+    validate_firmware_upload_path(file_path)?;
+    let original_filename = crate::firmware::sanitize_original_filename(file_path);
+
+    let file_size = std::fs::metadata(file_path)
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?
+        .len();
+    info!("Reading file content: {} bytes expected", file_size);
+    let file_data = match file_utils::read_firmware_file_content(file_path) {
+        Ok(content) => {
+            info!("Successfully read file content: {} bytes", content.len());
+            content
+        },
+        Err(e) => {
+            error!("Failed to read file {}: {}", file_path, e);
+            return Err(format!("Failed to read file: {}", e));
+        }
+    };
+
+    // Informational only: executable formats are legitimate firmware
+    // packages, and firmware analysis flags them
+    if file_data.starts_with(b"MZ") {
+        info!("Firmware file has a Windows PE (MZ) signature");
+    } else if file_data.starts_with(b"\x7FELF") {
+        info!("Detected ELF format firmware file");
+    }
+
+    Ok((file_data, original_filename))
 }
 
 /// Encrypts `file_data` under `key`, stores it as `<asset>/<id>.enc`, and
@@ -508,6 +491,7 @@ pub(crate) fn store_uploaded_firmware(
         file_hash: firmware.file_hash,
         file_size,
         created_at: firmware.created_at,
+        original_filename: firmware.original_filename,
     };
     Ok((firmware_info, firmware.id))
 }
@@ -1244,7 +1228,7 @@ mod tests {
     }
 
     fn request(version: &str) -> CreateFirmwareRequest {
-        CreateFirmwareRequest { asset_id: 1, vendor: None, model: None, version: version.into(), notes: None }
+        CreateFirmwareRequest { asset_id: 1, vendor: None, model: None, version: version.into(), notes: None, original_filename: None }
     }
 
     fn files(dir: &Path) -> Vec<String> {
@@ -1285,6 +1269,44 @@ mod tests {
         let (_, id) = store_uploaded_firmware(conn, dir, request("2.0"), admin, "admin", b"image", &k2).unwrap();
         let version: u32 = conn.query_row("SELECT key_version FROM firmware_versions WHERE id = ?1", [id], |r| r.get(0)).unwrap();
         assert_eq!(version, 2);
+    }
+
+    /// Uploads used to be limited to an extension allowlist (a Modicon M580
+    /// `.sedp` image was rejected) and refused anything starting with `MZ`.
+    /// Any file is accepted now, and its name is kept as a label only.
+    #[test]
+    fn test_upload_accepts_any_firmware_file_type() {
+        let (db, admin, key) = setup();
+        let conn = db.get_connection();
+        let source = tempfile::TempDir::new().unwrap();
+        let storage = tempfile::TempDir::new().unwrap();
+
+        let cases: [(&str, &[u8]); 4] = [
+            ("M580_v3.20.sedp", b"\x00\x01modicon image"),
+            ("FIRMWARE", b"no extension at all"),
+            ("updater.exe", b"MZ\x90\x00 pe package"),
+            ("bundle.bin", b"MZ"),
+        ];
+        for (i, (name, content)) in cases.iter().enumerate() {
+            let path = source.path().join(name);
+            std::fs::write(&path, content).unwrap();
+            let (data, original) = read_firmware_upload(path.to_str().unwrap()).unwrap();
+            assert_eq!(&data, content);
+            assert_eq!(original.as_deref(), Some(*name));
+
+            let request = CreateFirmwareRequest { original_filename: original, ..request(&format!("{}.0", i)) };
+            let (info, id) = store_uploaded_firmware(conn, storage.path(), request, admin, "admin", &data, &key).unwrap();
+            // Stored under the record id, never under the uploaded name
+            assert_eq!(Path::new(&info.file_path), Path::new("1").join(format!("{}.enc", id)));
+            assert_eq!(info.original_filename.as_deref(), Some(*name));
+            let stored = SqliteFirmwareRepository::new(conn).get_firmware_by_id(id).unwrap().unwrap();
+            assert_eq!(stored.original_filename.as_deref(), Some(*name));
+        }
+
+        // The path checks still apply
+        assert!(read_firmware_upload("").is_err());
+        assert!(read_firmware_upload("../../etc/firmware.bin").is_err());
+        assert!(read_firmware_upload(source.path().join("missing.sedp").to_str().unwrap()).is_err());
     }
 
     /// L2: callers racing to create the analysis queue all get the managed

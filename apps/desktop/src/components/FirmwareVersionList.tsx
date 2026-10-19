@@ -30,7 +30,8 @@ import {
   EditOutlined,
   SwapOutlined,
   CrownOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  PaperClipOutlined
 } from '@ant-design/icons';
 import { FirmwareVersionInfo, FirmwareStatus, formatFirmwareFileSize, formatFirmwareHash, sortFirmwareVersions } from '../types/firmware';
 import useAuthStore from '../store/auth';
@@ -314,6 +315,15 @@ const FirmwareVersionList: React.FC<FirmwareVersionListProps> = ({
               <Divider style={{ margin: '8px 0' }} />
               
               <Space wrap size="large">
+                {firmware.originalFilename && (
+                  <Tooltip title="Original File Name">
+                    <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
+                      <PaperClipOutlined style={{ color: '#8c8c8c' }} />
+                      <Text type="secondary">{firmware.originalFilename}</Text>
+                    </Space>
+                  </Tooltip>
+                )}
+
                 <Tooltip title="File Size">
                   <Space size={6} style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <FileOutlined style={{ color: '#8c8c8c' }} />

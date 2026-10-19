@@ -6,11 +6,13 @@ import PasswordInput from './PasswordInput';
 import useAuthStore from '../store/auth';
 import { useConsoleGuard } from '../test-utils/consoleGuard';
 
+// Like the real generator, it never closes itself: the parent must hide it
 vi.mock('./PasswordGenerator', () => ({
-  default: ({ visible, onGenerated }: { visible: boolean; onGenerated: (p: string) => void }) =>
+  default: ({ visible, onGenerated, onCancel }: { visible: boolean; onGenerated: (p: string) => void; onCancel: () => void }) =>
     visible ? (
       <div data-testid="password-generator">
         <button onClick={() => onGenerated('Generated!Pass123')}>use generated</button>
+        <button onClick={onCancel}>cancel generator</button>
       </div>
     ) : null,
 }));
@@ -87,15 +89,33 @@ describe('PasswordInput', () => {
     expect(invoke).not.toHaveBeenCalledWith('check_password_reuse', expect.anything());
   });
 
-  it('opens the generator and applies the generated password', async () => {
+  it('opens the generator from a labelled primary button, applies the password and closes it', async () => {
     const onChange = vi.fn();
     renderInput({ onChange });
 
-    fireEvent.click(screen.getByRole('button', { name: 'key' }));
+    const generate = screen.getByRole('button', { name: /Generate Password/ });
+    expect(generate).toHaveClass('ant-btn-primary');
+    fireEvent.click(generate);
     expect(screen.getByTestId('password-generator')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('use generated'));
     expect(onChange).toHaveBeenCalledWith('Generated!Pass123');
     expect(await screen.findByText('Generated password applied')).toBeInTheDocument();
+    expect(screen.queryByTestId('password-generator')).not.toBeInTheDocument();
+
+    // It can be opened again, and cancelling closes it too
+    fireEvent.click(generate);
+    fireEvent.click(screen.getByText('cancel generator'));
+    expect(screen.queryByTestId('password-generator')).not.toBeInTheDocument();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the generator button when showGenerator is false and disables it with the field', () => {
+    const { unmount } = renderInput({ showGenerator: false });
+    expect(screen.queryByRole('button', { name: /Generate Password/ })).not.toBeInTheDocument();
+    unmount();
+
+    renderInput({ disabled: true });
+    expect(screen.getByRole('button', { name: /Generate Password/ })).toBeDisabled();
   });
 });

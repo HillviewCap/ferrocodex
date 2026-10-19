@@ -25,7 +25,6 @@ import {
   validateFirmwareVersion,
   validateFirmwareNotes,
   validateFirmwareFileSize,
-  validateFirmwareFileExtension,
   formatFirmwareFileSize
 } from '../../types/firmware';
 import useAuthStore from '../../store/auth';
@@ -94,13 +93,6 @@ const QuickFirmwareUploadModal: React.FC<QuickFirmwareUploadModalProps> = ({
         const sizeValidation = validateFirmwareFileSize(fileInfo.size);
         if (!sizeValidation.isValid) {
           message.error(sizeValidation.message);
-          return;
-        }
-
-        // Validate file extension
-        const extensionValidation = validateFirmwareFileExtension(fileInfo.name);
-        if (!extensionValidation.isValid) {
-          message.error(extensionValidation.message);
           return;
         }
 

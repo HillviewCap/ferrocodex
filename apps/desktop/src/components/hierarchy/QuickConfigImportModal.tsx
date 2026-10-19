@@ -20,7 +20,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import * as dialog from '@tauri-apps/plugin-dialog';
-import { validateConfigurationNotes, formatFileSize, validateFileSize, validateFileExtension } from '../../types/assets';
+import { validateConfigurationNotes, formatFileSize, validateFileSize } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 
 const { Title, Text } = Typography;
@@ -94,12 +94,6 @@ const QuickConfigImportModal: React.FC<QuickConfigImportModalProps> = ({
         const sizeValidation = validateFileSize(fileInfo.size);
         if (!sizeValidation.isValid) {
           message.error(sizeValidation.message);
-          return;
-        }
-
-        const extensionValidation = validateFileExtension(fileInfo.name);
-        if (!extensionValidation.isValid) {
-          message.error(extensionValidation.message);
           return;
         }
 
