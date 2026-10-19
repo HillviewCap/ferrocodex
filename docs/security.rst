@@ -14,6 +14,7 @@ Core Security Features
 ^^^^^^^^^^^^^^^^^^^^^^
 
 * **AES-256-GCM Encryption**: Configuration content, firmware files, and vault secrets encrypted at rest
+* **Per-User Key Access and Key Rotation**: Each user opens the data key through their own X25519 keypair, and administrators can replace the data key (see :ref:`data-key-rotation`)
 * **Bcrypt Password Hashing**: Industry-standard password protection
 * **Identity Vault**: Secure credential storage with rotation tracking
 * **Role-Based Access Control**: Granular permission system
@@ -32,10 +33,19 @@ Data Protection
 * Configuration file content is encrypted with AES-256-GCM before it is stored in the database
 * Firmware files are encrypted with AES-256-GCM before they are written to disk
 * Vault secrets are encrypted with AES-256-GCM
-* All of these use one random 256-bit data key, which is never written to disk in plaintext. Each user holds a copy wrapped with a key derived from their password (Argon2id), and one more copy is wrapped with the recovery key shown at setup. Copying the database without a password or the recovery key does not expose the data key.
+* All of these use one random 256-bit data key, which is never written to disk in plaintext. Copying the database without a password or the recovery key does not expose the data key.
 * User passwords are stored as bcrypt hashes
 
 The SQLite database file itself is not encrypted as a whole. Asset names, metadata, audit entries, and other records are stored in plaintext. Protect the application data directory with operating-system permissions and full-disk encryption.
+
+**Key Management:**
+
+* **The data key**: One random 256-bit key, generated when the first administrator logs in. It exists in plaintext only in memory, inside a session. It carries a version number (the first key is version 1), and every encrypted item records the version of the key that encrypted it.
+* **Per-user keypairs**: Each user has an X25519 keypair. The private key is wrapped (encrypted with AES-256-GCM) under a key derived from the user's login password with Argon2id. The public key is stored in the clear.
+* **Public-key wraps**: The data key is sealed to each user's public key (an ephemeral X25519 exchange, HKDF-SHA256, and AES-256-GCM, bound to the user and the key version). At login the user's password opens their private key, which opens their wrap of the active data key. Because sealing needs only the public key, an administrator can give every user the new key during a rotation without knowing any password.
+* **Recovery-key wrap**: One more copy of the data key is wrapped under the recovery key shown at setup. Anyone holding the recovery key can reset any account's password, which gives that account a fresh keypair.
+* **Lazy migration at login**: Accounts created before keypairs existed still have a copy of the data key wrapped directly under their password. At their next login Ferrocodex opens that copy, creates a keypair, stores the public-key wrap, and deletes the old copy in one transaction. The upgrade is recorded in the audit log. An active user who has not logged in since the upgrade has no keypair, which matters for rotation (see :ref:`data-key-rotation`).
+* **Key versions**: Each configuration version, vault secret, standalone credential, and firmware file records the data-key version that encrypted it. Only one version is active. While a rotation runs, the old version is retiring, and it is retired once everything has been re-encrypted.
 
 **Encryption in Transit:**
 
@@ -43,6 +53,81 @@ The SQLite database file itself is not encrypted as a whole. Asset names, metada
 * Communication between the user interface and the backend stays inside the application process
 * Recovery bundles contain the configuration and firmware files in plaintext so they can be loaded onto devices; protect them in transit and at rest
 * Vault secrets in vault exports and recovery bundles are re-encrypted with an export passphrase chosen at export time, and the same passphrase is needed to import them
+
+.. _data-key-rotation:
+
+Data-Key Rotation
+-----------------
+
+An administrator can replace the data key with a new one and re-encrypt everything under it. This is called rotation. It is run from **User Management** with **Rotate Encryption Key**; the step-by-step procedure is in the :doc:`admin-guide`.
+
+When to Rotate
+^^^^^^^^^^^^^^
+
+Rotate the data key:
+
+* After deactivating a user who had access to encrypted data. Deactivation removes the user's key access from the current database right away (see below), but anyone who kept a copy of the data key, or a copy of the database from before the deactivation, can still read old data. Rotation makes the key they hold useless against the current database.
+* After a suspected compromise of the data key, of an administrator password, of a session, or of the workstation while a session was unlocked.
+* After the recovery key has been lost or exposed. **Replace Recovery Key** issues a new code but keeps the same data key, so the old code still opens any older copy of the database. Rotation replaces the data key as well as the recovery key.
+
+What Rotation Does
+^^^^^^^^^^^^^^^^^^
+
+1. Checks that no firmware analysis jobs are running (each holds a copy of the key) and that every active user has a keypair, or that the administrator acknowledges the users who do not.
+2. Generates a new data key with the next version number. The old key is kept only while the rotation runs, encrypted under the new key.
+3. Seals the new key to the public key of every active user, so those users get access without any password being entered.
+4. Deletes every other copy of the old key: legacy password wraps, old public-key wraps, and the keypairs of deactivated users.
+5. Replaces the recovery key. The new recovery key is shown once.
+6. Ends every other session and blocks access to encrypted data for everyone, including the administrator who started it, until the rotation is finished.
+7. Re-encrypts every configuration version, vault secret, standalone credential, and firmware file under the new key, in small batches. Firmware files are written to a new file first; the old file is deleted only after the database points at the new one.
+8. Retires the old key, flushes the database write-ahead log, and removes leftover firmware files. Encrypted data becomes available again.
+
+If the application closes part-way, the rotation is resumed from the next administrator login. Re-encryption is safe to repeat.
+
+.. warning::
+   **Copies and backups taken before rotation stay readable with the old key.** Any database copy or backup made before rotation (together with the firmware files, if those were copied too) can be opened forever with the old data key. That includes a copy taken before a user was deactivated, opened with that user's password, and any copy opened with the old recovery key. Rotation cannot reach backward. Destroy or secure old backups yourself.
+
+   **Rotation does not protect plaintext that has already been exported.** Exported configurations, firmware exports, recovery bundles, and vault exports whose passphrase is known stay readable no matter what happens to the data key.
+
+Threat Model
+^^^^^^^^^^^^
+
+**What rotation protects against:**
+
+* **Old key plus the current database.** Once rotation finishes, someone holding the old data key can't read anything in the current database file or the firmware directory. That applies however they got the old key: an old database copy plus their password, the old recovery key plus an old copy, or process memory. Data that existed before rotation is covered too, because it was re-encrypted, unless they kept their own copy of that ciphertext.
+* **Old recovery key.** It no longer opens anything in the current database.
+
+**What deactivation alone protects against** (no rotation needed):
+
+* **A deactivated user's password plus the current database.** Once their key copies are deleted, their password opens nothing in the current database. This relies on the database deleting data securely and on the write-ahead log having been flushed, which Ferrocodex does when it deactivates the user.
+
+**What neither protects against:**
+
+* **Copies taken before rotation.** Any database copy or backup taken before rotation (with firmware files, if those were copied too) stays readable forever with the old key. That includes a pre-deactivation copy plus that user's password, or plus the old recovery key. Rotation cannot reach backward.
+* **Plaintext that has left the app.** Exported configurations, firmware exports, recovery bundles, and vault exports whose passphrase is known.
+* **Columns that were never encrypted.** Asset and vault names, labels, metadata, the audit log, and firmware analysis results. The database as a whole is not encrypted.
+* **Trusted parties turning hostile.** A malicious or compromised active administrator, or malware on the host while a session is unlocked.
+* **Leftover blocks on disk.** Ciphertext remnants on SSD or filesystem blocks after files are rewritten or deleted.
+* **Tampering by someone who can write to the database.** Ciphertexts carry no binding to their row, so someone with write access to the database file could swap them between rows.
+
+Deactivation Revokes Key Access
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Deactivating a user now takes effect on encrypted data immediately:
+
+* The user's keypair and every copy of the data key they hold are deleted in the same transaction as the deactivation, so their password opens nothing in the current database.
+* The user's live sessions end at once, because a session holds the unlocked key in memory.
+* The write-ahead log is flushed so the deleted copies do not linger in it.
+* Reactivating the account requires an administrator to set a temporary password, because the administrator does not know the old one. That gives the user a new keypair and a fresh copy of the key.
+
+The same rule applies to a password reset by an administrator: the user's sessions end and a new keypair is created under the temporary password.
+
+Deactivation does not change the data key, so it does not protect against copies made earlier. Rotate the key afterwards if that matters.
+
+Users Who Lose Access
+^^^^^^^^^^^^^^^^^^^^^
+
+Rotation can only give the new key to active users who have a keypair. An active user without one (an account that has not logged in since keypairs were introduced) can still log in after a rotation but cannot open encrypted data. The preflight lists these users and requires the administrator to acknowledge them. An administrator restores their access with **Reset password**, which gives them a keypair holding the new key. An administrator can also reset any account with the recovery key.
 
 Access Control
 --------------
@@ -281,8 +366,8 @@ Vault Encryption Architecture
 
 **Encryption Layers:**
 
-1. **Data Key**: A random 256-bit key, generated when the administrator account is created, encrypts every secret
-2. **Key Wrapping**: The data key is stored only in wrapped form, under a key derived with Argon2id from each user's password and under the recovery key. It is unwrapped into memory at login and discarded at logout
+1. **Data Key**: A random 256-bit key, generated when the first administrator logs in, encrypts every secret
+2. **Key Wrapping**: The data key is stored only in wrapped form: sealed to each user's X25519 public key (the private key is wrapped under the user's password with Argon2id) and wrapped under the recovery key. It is unwrapped into memory at login and discarded at logout
 3. **Data Encryption**: All secrets are encrypted with AES-256-GCM
 4. **Access Control**: Vault permissions are checked before any secret is decrypted
 
@@ -308,13 +393,14 @@ Password Security Features
 
 * Never stored in plaintext
 * Encrypted immediately on entry
+* Stored byte-for-byte as typed: secret values are not trimmed, stripped, or filtered, so leading or trailing spaces and special characters survive. The only checks are that the value is not empty and is at most 4096 bytes
+* Never written to logs
 * Memory cleared after use
-* No password logging
 * Secure clipboard operations
 
 **Password History:**
 
-* Previous passwords retained encrypted
+* Previous passwords are retained only as bcrypt hashes, used to prevent reuse
 * Prevents reuse across rotations
 * Configurable history depth
 * Audit trail for all changes
@@ -359,12 +445,22 @@ Vault Access Control
    * **Export**: Include in bundles
    * **Share**: Grant permissions
 
-2. **Access Patterns**:
+2. **Who Holds What**:
+
+   * **Administrators** hold every permission on every vault
+   * **The vault's creator** holds Read, Write, and Export on their own vault without a grant, so they can manage and back up its secrets. Creating a vault does not give Share
+   * **Everyone else** needs an explicit, active, unexpired grant for each permission on each vault
+   * **Share is administrator-only**: only administrators can grant vault permissions
+
+3. **Access Patterns**:
 
    * Default deny principle
-   * Explicit grant required
-   * No permission inheritance
+   * No permission inheritance between permissions: a Read grant does not imply Write or Export
    * Time-limited access option
+
+**Server-Side Enforcement:**
+
+The backend checks the permission on every vault and secret operation, not only in the user interface. A user without the permission gets an "Access denied" error, and the denial is recorded in the vault access log and the audit log.
 
 **Access Security:**
 

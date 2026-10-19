@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -34,30 +35,67 @@ pub struct AnalysisEvent {
     pub message: Option<String>,
 }
 
+/// Counts analysis jobs that are queued or running. Each holds a copy of a
+/// data key, so a key rotation must not start while any exist.
+#[derive(Debug, Clone, Default)]
+pub struct ActiveJobCounter(Arc<AtomicUsize>);
+
+impl ActiveJobCounter {
+    pub fn count(&self) -> usize {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    /// Counts one more job until the returned guard is dropped.
+    pub fn start(&self) -> ActiveJobGuard {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        ActiveJobGuard(self.0.clone())
+    }
+}
+
+/// Keeps one job counted by an [`ActiveJobCounter`] while alive.
+#[derive(Debug)]
+pub struct ActiveJobGuard(Arc<AtomicUsize>);
+
+impl Drop for ActiveJobGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 pub struct AnalysisQueue {
-    sender: mpsc::Sender<AnalysisJob>,
+    sender: mpsc::Sender<(AnalysisJob, ActiveJobGuard)>,
     handle: tokio::sync::Mutex<Option<JoinHandle<()>>>,
     app_handle: AppHandle,
+    active_jobs: ActiveJobCounter,
 }
 
 impl AnalysisQueue {
     pub fn new(app_handle: AppHandle) -> Self {
-        let (sender, receiver) = mpsc::channel::<AnalysisJob>(100);
-        
+        let (sender, receiver) = mpsc::channel::<(AnalysisJob, ActiveJobGuard)>(100);
+
         let app_handle_clone = app_handle.clone();
         let handle = tokio::spawn(Self::process_queue(app_handle_clone, receiver));
-        
+
         Self {
             sender,
             handle: tokio::sync::Mutex::new(Some(handle)),
             app_handle,
+            active_jobs: ActiveJobCounter::default(),
         }
     }
-    
+
     pub async fn queue_analysis(&self, job: AnalysisJob) -> Result<()> {
-        self.sender.send(job).await
+        // The guard travels with the job and is dropped when it finishes, or
+        // right away if it can't be queued
+        let guard = self.active_jobs.start();
+        self.sender.send((job, guard)).await
             .map_err(|e| anyhow::anyhow!("Failed to queue analysis job: {}", e))?;
         Ok(())
+    }
+
+    /// How many jobs are queued or running.
+    pub fn active_jobs(&self) -> usize {
+        self.active_jobs.count()
     }
     
     pub async fn shutdown(&self) {
@@ -72,19 +110,20 @@ impl AnalysisQueue {
     
     async fn process_queue(
         app_handle: AppHandle,
-        mut receiver: mpsc::Receiver<AnalysisJob>,
+        mut receiver: mpsc::Receiver<(AnalysisJob, ActiveJobGuard)>,
     ) {
         info!("Analysis queue processor started");
-        
-        while let Some(job) = receiver.recv().await {
+
+        while let Some((job, guard)) = receiver.recv().await {
             info!("Processing analysis job for firmware ID: {}", job.firmware_id);
-            
+
             // Clone values for the spawned task
             let app_handle_clone = app_handle.clone();
             let job_clone = job.clone();
-            
+
             // Spawn a task to handle this analysis
             tokio::spawn(async move {
+                let _guard = guard;
                 if let Err(e) = Self::analyze_firmware(
                     app_handle_clone,
                     job_clone
@@ -154,6 +193,19 @@ impl AnalysisQueue {
                 }
             };
             
+            // The job holds the key of the session that queued it, maybe from
+            // before a data-key rotation began (begin's count of active jobs
+            // is only a preflight and can race a new upload). Fail closed:
+            // never use a key that is not the active one, or any key while a
+            // rotation is in progress.
+            if let Err(e) = crate::keystore::ensure_key_is_current(db.get_connection(), &job.data_key) {
+                let message = format!("Analysis failed: {}", e);
+                let _ = analysis_repo.update_analysis_status(analysis_id, AnalysisStatus::Failed, Some(message.clone()));
+                drop(db_guard);
+                Self::emit_progress_event(&app_handle, &job.firmware_id, AnalysisStatus::Failed, None, Some(&message));
+                return Err(anyhow::anyhow!(message));
+            }
+
             // Get firmware path
             let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
             let firmware = firmware_repo.get_firmware_by_id(job.firmware_id)?
@@ -338,6 +390,36 @@ mod tests {
         assert_eq!(received.username, job.username);
     }
     
+    #[test]
+    fn test_active_job_counter_counts_live_guards() {
+        let counter = ActiveJobCounter::default();
+        assert_eq!(counter.count(), 0);
+        let first = counter.start();
+        let second = counter.clone().start();
+        assert_eq!(counter.count(), 2);
+        drop(first);
+        assert_eq!(counter.count(), 1);
+        drop(second);
+        assert_eq!(counter.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_job_guard_is_released_when_a_queued_job_is_dropped() {
+        let counter = ActiveJobCounter::default();
+        let (sender, receiver) = mpsc::channel::<(AnalysisJob, ActiveJobGuard)>(10);
+        let job = AnalysisJob {
+            firmware_id: 1,
+            user_id: 1,
+            username: "testuser".to_string(),
+            data_key: Arc::new(DataKey::generate()),
+        };
+        sender.send((job, counter.start())).await.unwrap();
+        assert_eq!(counter.count(), 1);
+        // Queued jobs that never run (receiver gone) release their count too
+        drop(receiver);
+        assert_eq!(counter.count(), 0);
+    }
+
     #[tokio::test]
     async fn test_multiple_jobs_queuing() {
         let (sender, mut receiver) = mpsc::channel::<AnalysisJob>(10);

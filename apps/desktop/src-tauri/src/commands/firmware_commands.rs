@@ -10,7 +10,7 @@ use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, Au
 use crate::firmware::{FirmwareRepository, SqliteFirmwareRepository, CreateFirmwareRequest, FirmwareVersionInfo, FirmwareFileStorage, FirmwareStatus, FirmwareStatusHistory, get_firmware_storage_dir};
 use crate::firmware_analysis::{FirmwareAnalysisRepository, SqliteFirmwareAnalysisRepository, FirmwareAnalysisResult, AnalysisQueue, AnalysisJob};
 use crate::recovery::{RecoveryExporter, RecoveryExportRequest, RecoveryManifest};
-use crate::vault::{VaultRepository, SqliteVaultRepository};
+use crate::vault::{VaultRepository, SqliteVaultRepository, PermissionType};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State, Manager};
 use tracing::{error, info, warn};
@@ -20,16 +20,33 @@ type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
 type RateLimiterState = Mutex<RateLimiter>;
 
+/// The app's analysis queue, created on first use.
+///
+/// Creation is serialized: two uploads racing here used to both create a
+/// queue, and the loser's queue (whose jobs hold a data key) was used without
+/// being managed, so `begin_data_key_rotation` could not count its jobs.
 fn get_or_create_analysis_queue(app: &AppHandle) -> Arc<AnalysisQueue> {
-    match app.try_state::<Arc<AnalysisQueue>>() {
-        Some(queue) => queue.inner().clone(),
-        None => {
-            // Initialize the queue on first use
-            let new_queue = Arc::new(AnalysisQueue::new(app.clone()));
-            app.manage(new_queue.clone());
-            new_queue
-        }
+    static CREATE: Mutex<()> = Mutex::new(());
+    get_or_create_managed(app, &CREATE, || Arc::new(AnalysisQueue::new(app.clone())))
+}
+
+/// Returns the managed `T`, creating and managing it first if needed. Only
+/// one caller at a time creates (under `create_lock`), and every caller gets
+/// the managed instance back, never an unmanaged one that lost a race.
+pub(crate) fn get_or_create_managed<R, T>(app: &AppHandle<R>, create_lock: &Mutex<()>, create: impl FnOnce() -> T) -> T
+where
+    R: tauri::Runtime,
+    T: Clone + Send + Sync + 'static,
+{
+    if let Some(existing) = app.try_state::<T>() {
+        return existing.inner().clone();
     }
+    let _creating = create_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(existing) = app.try_state::<T>() {
+        return existing.inner().clone();
+    }
+    app.manage(create());
+    app.state::<T>().inner().clone()
 }
 
 #[tauri::command]
@@ -328,124 +345,25 @@ pub async fn upload_firmware(
         }
     }
 
-    // Store values needed for analysis before acquiring lock
+    // Encrypt, store, and record the firmware under the DB lock. The key was
+    // fetched before the (possibly long) file read, so store_uploaded_firmware
+    // re-checks that it is still the active key.
     let firmware_result = {
         let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
         match db_guard.as_ref() {
             Some(db) => {
-                let firmware_repo = SqliteFirmwareRepository::new(db.get_connection());
-                
-                // Generate a temporary firmware ID for file storage
-            let temp_firmware_id = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64;
-            
-            // Store the firmware file
-            info!("Starting firmware file storage process for {} bytes", file_data.len());
-            let (file_path, file_hash, file_size) = match FirmwareFileStorage::store_firmware_file(
-                &app,
-                asset_id,
-                temp_firmware_id,
-                &file_data,
-                &data_key,
-            ) {
-                Ok(result) => {
-                    info!("Successfully stored firmware file: path={}, hash={}, size={}", result.0, result.1, result.2);
-                    result
-                },
-                Err(e) => {
-                    error!("Failed to store firmware file: {}", e);
-                    return Err(format!("Failed to store firmware file: {}", e));
-                }
-            };
-            
-            // Create firmware record
-            let request = CreateFirmwareRequest {
-                asset_id,
-                vendor,
-                model,
-                version,
-                notes,
-            };
-            
-            info!("Creating firmware database record");
-            match firmware_repo.create_firmware(request, session.user_id, file_path.clone(), file_hash, file_size) {
-                Ok(firmware) => {
-                    info!("Successfully created firmware record with ID: {}", firmware.id);
-                    // Update the file with the actual firmware ID
-                    info!("Checking if file rename is needed");
-                    let new_file_path = std::path::PathBuf::from(asset_id.to_string())
-                        .join(format!("{}.enc", firmware.id))
-                        .to_string_lossy()
-                        .to_string();
-                    info!("Comparing paths - old: '{}', new: '{}'", file_path, new_file_path);
-                    if file_path != new_file_path {
-                        // Rename the file if needed
-                        let firmware_dir = get_firmware_storage_dir(&app).unwrap();
-                        let old_path = firmware_dir.join(&file_path);
-                        let new_path = firmware_dir.join(&new_file_path);
-                        if let Err(e) = std::fs::rename(&old_path, &new_path) {
-                            error!("Failed to rename firmware file: {}", e);
-                            // Clean up on failure
-                            let _ = firmware_repo.delete_firmware(firmware.id);
-                            let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
-                            return Err("Failed to finalize firmware storage".to_string());
-                        }
-                        info!("File renamed successfully from {:?} to {:?}", old_path, new_path);
-                        
-                        // Update the database with the new file path
-                        if let Err(e) = firmware_repo.update_firmware_file_path(firmware.id, new_file_path.clone()) {
-                            error!("Failed to update firmware file path in database: {}", e);
-                            // Try to rename back on failure
-                            let _ = std::fs::rename(&new_path, &old_path);
-                            let _ = firmware_repo.delete_firmware(firmware.id);
-                            return Err("Failed to update firmware file path".to_string());
-                        }
-                        info!("Database updated with new file path");
-                    } else {
-                        info!("File rename not needed, paths match");
-                    }
-                    
-                    // Note: Audit logging moved outside database transaction to prevent deadlock
-                    
-                    info!("Creating FirmwareVersionInfo");
-                    info!("Firmware uploaded by {}: v{} for asset {} (ID: {})", 
-                         session.username, firmware.version, asset_id, firmware.id);
-                    
-                    // Convert to FirmwareVersionInfo
-                    let firmware_info = FirmwareVersionInfo {
-                        id: firmware.id,
-                        asset_id: firmware.asset_id,
-                        author_id: firmware.author_id,
-                        author_username: session.username.clone(),
-                        vendor: firmware.vendor,
-                        model: firmware.model,
-                        version: firmware.version,
-                        notes: firmware.notes,
-                        status: firmware.status,
-                        file_path: new_file_path,
-                        file_hash: firmware.file_hash,
-                        file_size,
-                        created_at: firmware.created_at,
-                    };
-                    
-                    info!("Returning from database scope with firmware info");
-                    Ok((firmware_info, firmware.id))
-                }
-                Err(e) => {
-                    // Clean up file on database error
-                    let _ = FirmwareFileStorage::delete_firmware_file(&app, &file_path);
-                    error!("Failed to create firmware record: {}", e);
-                    Err(format!("Failed to create firmware record: {}", e))
-                }
+                let firmware_dir = get_firmware_storage_dir(&app)
+                    .map_err(|e| format!("Failed to locate firmware storage: {}", e))?;
+                let request = CreateFirmwareRequest { asset_id, vendor, model, version, notes };
+                store_uploaded_firmware(
+                    db.get_connection(), &firmware_dir, request, session.user_id, &session.username, &file_data, &data_key,
+                )
             }
-        }
-        None => Err("Database not initialized".to_string()),
+            None => Err("Database not initialized".to_string()),
         }
     };
-    
+
     // Handle the result and queue analysis if successful
     match firmware_result {
         Ok((firmware_info, firmware_id)) => {
@@ -505,6 +423,93 @@ pub async fn upload_firmware(
         }
         Err(e) => Err(e),
     }
+}
+
+/// Encrypts `file_data` under `key`, stores it as `<asset>/<id>.enc`, and
+/// records it. Call under the DB lock.
+///
+/// `key` must still be the active data key with no rotation in progress: an
+/// upload fetches it before reading the file (up to 2 GB, without any lock),
+/// and a rotation may have begun or finished meanwhile. Data stored under the
+/// old key would be unreadable and invisible to every future rotation. The
+/// key is checked before anything is written, and again by the insert itself
+/// (`create_firmware` and the key-version triggers); if the insert fails, the
+/// file just written is deleted.
+pub(crate) fn store_uploaded_firmware(
+    conn: &rusqlite::Connection,
+    firmware_dir: &std::path::Path,
+    request: CreateFirmwareRequest,
+    author_id: i64,
+    author_username: &str,
+    file_data: &[u8],
+    key: &crate::encryption::DataKey,
+) -> Result<(FirmwareVersionInfo, i64), String> {
+    crate::keystore::ensure_key_is_current(conn, key).map_err(|e| e.to_string())?;
+    let firmware_repo = SqliteFirmwareRepository::new(conn);
+    let asset_id = request.asset_id;
+
+    // Stored under a temporary name first: the record id is only known after the insert
+    let temp_firmware_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    info!("Starting firmware file storage process for {} bytes", file_data.len());
+    let (file_path, file_hash, file_size) = FirmwareFileStorage::store_firmware_file_in(
+        firmware_dir, asset_id, temp_firmware_id, file_data, key,
+    ).map_err(|e| {
+        error!("Failed to store firmware file: {}", e);
+        format!("Failed to store firmware file: {}", e)
+    })?;
+
+    let firmware = match firmware_repo.create_firmware(request, author_id, file_path.clone(), file_hash, file_size, key.version()) {
+        Ok(firmware) => firmware,
+        Err(e) => {
+            // Never leave a file nobody records (it may be under an old key)
+            let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &file_path);
+            error!("Failed to create firmware record: {}", e);
+            return Err(format!("Failed to create firmware record: {}", e));
+        }
+    };
+    info!("Successfully created firmware record with ID: {}", firmware.id);
+
+    let new_file_path = std::path::PathBuf::from(asset_id.to_string())
+        .join(format!("{}.enc", firmware.id))
+        .to_string_lossy()
+        .to_string();
+    if file_path != new_file_path {
+        let old_path = firmware_dir.join(&file_path);
+        let new_path = firmware_dir.join(&new_file_path);
+        if let Err(e) = std::fs::rename(&old_path, &new_path) {
+            error!("Failed to rename firmware file: {}", e);
+            let _ = firmware_repo.delete_firmware(firmware.id);
+            let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &file_path);
+            return Err("Failed to finalize firmware storage".to_string());
+        }
+        if let Err(e) = firmware_repo.update_firmware_file_path(firmware.id, new_file_path.clone()) {
+            error!("Failed to update firmware file path in database: {}", e);
+            let _ = firmware_repo.delete_firmware(firmware.id);
+            let _ = FirmwareFileStorage::delete_firmware_file_in(firmware_dir, &new_file_path);
+            return Err("Failed to update firmware file path".to_string());
+        }
+    }
+
+    info!("Firmware uploaded by {}: v{} for asset {} (ID: {})", author_username, firmware.version, asset_id, firmware.id);
+    let firmware_info = FirmwareVersionInfo {
+        id: firmware.id,
+        asset_id: firmware.asset_id,
+        author_id: firmware.author_id,
+        author_username: author_username.to_string(),
+        vendor: firmware.vendor,
+        model: firmware.model,
+        version: firmware.version,
+        notes: firmware.notes,
+        status: firmware.status,
+        file_path: new_file_path,
+        file_hash: firmware.file_hash,
+        file_size,
+        created_at: firmware.created_at,
+    };
+    Ok((firmware_info, firmware.id))
 }
 
 #[tauri::command]
@@ -730,6 +735,15 @@ pub async fn export_complete_recovery(
             };
 
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
+            if include_vault.unwrap_or(false) {
+                let vault = vault_repo.get_vault_by_asset_id(asset_id)
+                    .map_err(|e| format!("Failed to get vault: {}", e))?;
+                if let Some(vault) = vault {
+                    super::vault_commands::require_vault_permission(
+                        db.get_connection(), &session, vault.vault.id, PermissionType::Export,
+                    )?;
+                }
+            }
             let exporter = RecoveryExporter::new(&config_repo, &firmware_repo, &vault_repo, &audit_repo);
             
             let request = RecoveryExportRequest {
@@ -1204,5 +1218,103 @@ pub async fn update_firmware_notes(
             }
         }
         None => Err("Database not initialized".to_string()),
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::KEY_ROTATION_IN_PROGRESS_ERROR;
+    use crate::encryption::{DataKey, KdfParams};
+    use crate::keystore::rotation::KeyRotation;
+    use crate::keystore::{KeyStoreRepository, SqliteKeyStoreRepository, STALE_KEY_ERROR};
+    use crate::users::{CreateUserRequest, SqliteUserRepository, UserRepository};
+    use rusqlite::Connection;
+    use std::path::Path;
+
+    fn setup() -> (Database, i64, DataKey) {
+        let db = Database::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = db.get_connection();
+        let admin = SqliteUserRepository::new(conn).create_user(CreateUserRequest {
+            username: "admin".into(), password: "password123!".into(), role: UserRole::Administrator,
+        }).unwrap().id;
+        let (key, _) = SqliteKeyStoreRepository::with_params(conn, KdfParams::fast_for_tests())
+            .create_data_key(admin, "admin-password").unwrap();
+        conn.execute("INSERT INTO assets (id, name, created_by) VALUES (1, 'plc', ?1)", [admin]).unwrap();
+        (db, admin, key)
+    }
+
+    fn request(version: &str) -> CreateFirmwareRequest {
+        CreateFirmwareRequest { asset_id: 1, vendor: None, model: None, version: version.into(), notes: None }
+    }
+
+    fn files(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir.join("1")).unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// M3: an upload fetches the key, then reads the file (up to 2 GB)
+    /// without any lock. If a rotation began meanwhile, storing it under the
+    /// old key would make it unreadable for good; it is refused, and no file
+    /// is left behind.
+    #[test]
+    fn test_upload_with_a_key_from_before_a_rotation_is_refused() {
+        let (db, admin, k1) = setup();
+        let conn = db.get_connection();
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = temp.path();
+
+        let (first, id) = store_uploaded_firmware(conn, dir, request("1.0"), admin, "admin", b"image", &k1).unwrap();
+        assert_eq!(Path::new(&first.file_path), Path::new("1").join(format!("{}.enc", id)));
+
+        let rotation = KeyRotation::with_params(conn, KdfParams::fast_for_tests());
+        let k2 = rotation.begin(admin, "admin", &k1, 0, false).unwrap().new_key;
+        let err = store_uploaded_firmware(conn, dir, request("2.0"), admin, "admin", b"late image", &k1).unwrap_err();
+        assert_eq!(err, KEY_ROTATION_IN_PROGRESS_ERROR);
+        assert_eq!(files(dir), vec![format!("{}.enc", id)]);
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM firmware_versions", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+
+        // After the rotation the old key is still refused; the new one works
+        conn.execute("DELETE FROM firmware_versions", []).unwrap();
+        rotation.finalize(admin, "admin", false).unwrap();
+        let err = store_uploaded_firmware(conn, dir, request("2.0"), admin, "admin", b"late image", &k1).unwrap_err();
+        assert_eq!(err, STALE_KEY_ERROR);
+        let (_, id) = store_uploaded_firmware(conn, dir, request("2.0"), admin, "admin", b"image", &k2).unwrap();
+        let version: u32 = conn.query_row("SELECT key_version FROM firmware_versions WHERE id = ?1", [id], |r| r.get(0)).unwrap();
+        assert_eq!(version, 2);
+    }
+
+    /// L2: callers racing to create the analysis queue all get the managed
+    /// instance; none keeps an unmanaged one whose jobs nobody can count.
+    #[test]
+    fn test_racing_creators_all_get_the_managed_instance() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        static CREATE: Mutex<()> = Mutex::new(());
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let created = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        let threads: Vec<_> = (0..8).map(|_| {
+            let (handle, barrier, created) = (handle.clone(), barrier.clone(), created.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                get_or_create_managed(&handle, &CREATE, || {
+                    created.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    // Widen the race window
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                    Arc::new(std::sync::atomic::AtomicUsize::new(0))
+                })
+            })
+        }).collect();
+        let results: Vec<Arc<std::sync::atomic::AtomicUsize>> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+
+        let managed = app.state::<Arc<std::sync::atomic::AtomicUsize>>().inner().clone();
+        assert!(results.iter().all(|r| Arc::ptr_eq(r, &managed)));
+        assert_eq!(created.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }

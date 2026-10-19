@@ -1,17 +1,17 @@
 // Vault management commands
 // Extracted from lib.rs.backup
 
-use crate::auth::{SessionManager, verify_password};
+use crate::auth::{Session, SessionManager, verify_password};
 use crate::users::{UserRepository, SqliteUserRepository, UserRole, UserInfo};
-use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_vault_access_granted_event, create_vault_access_revoked_event};
+use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_vault_access_granted_event, create_vault_access_revoked_event, create_vault_access_denied_event};
 use crate::validation::{InputSanitizer};
 use crate::vault::{
-    VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, 
+    VaultRepository, SqliteVaultRepository, CreateVaultRequest, AddSecretRequest, VaultInfo, VaultSecret,
     IdentityVault, GeneratePasswordRequest, UpdateCredentialPasswordRequest, UpdateVaultSecretRequest, 
     DeleteVaultSecretRequest, PasswordStrength, PasswordHistory, PasswordGenerator, PasswordStrengthAnalyzer,
     CreateStandaloneCredentialRequest, UpdateStandaloneCredentialRequest, SearchCredentialsRequest, 
     CreateCategoryRequest, StandaloneCredentialInfo, CategoryWithChildren, VaultAccessControlService,
-    PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
+    password_services::PasswordReuseChecker, PermissionType, VaultAccessInfo, GrantVaultAccessRequest, VaultPermission, RevokeVaultAccessRequest,
     VaultAccessLog, CreatePermissionRequest, PermissionRequest, open_vault_export, seal_vault_export,
     rotation::{
         PasswordRotationService, PasswordRotationRequest, RotationScheduler, RotationSchedule,
@@ -25,10 +25,81 @@ use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 use tracing::{error, info, warn};
+use zeroize::Zeroizing;
 use serde::{Serialize, Deserialize};
 
 type DatabaseState = Mutex<Option<Database>>;
 type SessionManagerState = Mutex<SessionManager>;
+
+const ACCESS_DENIED: &str = "Access denied";
+
+/// Whether the session user holds `permission` on a vault. Logs nothing, so
+/// list commands can use it to filter results.
+pub(crate) fn can_access_vault(
+    conn: &Connection,
+    session: &Session,
+    vault_id: i64,
+    permission: PermissionType,
+) -> Result<bool, String> {
+    VaultAccessControlService::new(conn)
+        .evaluate_access(session.user_id, &session.role, vault_id, permission)
+        .map(|access| access.has_access)
+        .map_err(|e| {
+            error!("Failed to check vault access: {}", e);
+            "Failed to check vault access".to_string()
+        })
+}
+
+/// Fails with "Access denied" unless the session user holds `permission` on the
+/// vault. Non-administrator checks go to the vault access log, and denials are
+/// also written to the audit trail.
+pub(crate) fn require_vault_permission(
+    conn: &Connection,
+    session: &Session,
+    vault_id: i64,
+    permission: PermissionType,
+) -> Result<(), String> {
+    let access = VaultAccessControlService::new(conn)
+        .check_access(session.user_id, &session.role, vault_id, permission)
+        .map_err(|e| {
+            error!("Failed to check vault access: {}", e);
+            "Failed to check vault access".to_string()
+        })?;
+    if access.has_access {
+        return Ok(());
+    }
+
+    warn!("User {} denied {} access to vault {}", session.username, permission.to_string(), vault_id);
+    let event = create_vault_access_denied_event(
+        session.user_id,
+        &session.username,
+        vault_id,
+        &permission.to_string(),
+        "no matching vault permission",
+    );
+    if let Err(e) = SqliteAuditRepository::new(conn).log_event(&event) {
+        error!("Failed to record vault access denial: {}", e);
+    }
+    Err(ACCESS_DENIED.to_string())
+}
+
+/// Loads a secret and requires `permission` on the vault it belongs to.
+fn require_secret_permission(
+    conn: &Connection,
+    session: &Session,
+    secret_id: i64,
+    permission: PermissionType,
+) -> Result<VaultSecret, String> {
+    let secret = SqliteVaultRepository::new(conn)
+        .get_secret_by_id(secret_id)
+        .map_err(|e| {
+            error!("Failed to get secret {}: {}", secret_id, e);
+            format!("Failed to get secret: {}", e)
+        })?
+        .ok_or("Secret not found")?;
+    require_vault_permission(conn, session, secret.vault_id, permission)?;
+    Ok(secret)
+}
 
 #[tauri::command]
 pub async fn create_identity_vault(
@@ -112,10 +183,11 @@ pub async fn add_vault_secret(
 
     // Validate inputs
     let sanitized_label = InputSanitizer::sanitize_string(&secret_request.label);
-    let sanitized_value = InputSanitizer::sanitize_string(&secret_request.value);
+    // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+    let sanitized_value = secret_request.value.clone();
+    InputSanitizer::validate_secret_value(&sanitized_value)?;
     
-    if InputSanitizer::is_potentially_malicious(&sanitized_label) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_value) {
+    if InputSanitizer::is_potentially_malicious(&sanitized_label) {
         error!("Potentially malicious input detected in add_vault_secret");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
@@ -124,8 +196,9 @@ pub async fn add_vault_secret(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_vault_permission(db.get_connection(), &session, secret_request.vault_id, PermissionType::Write)?;
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             let sanitized_request = AddSecretRequest {
                 vault_id: secret_request.vault_id,
                 secret_type: secret_request.secret_type,
@@ -177,12 +250,17 @@ pub async fn get_vault_by_asset_id(
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
             
             match vault_repo.get_vault_by_asset_id(asset_id) {
-                Ok(vault_info) => {
-                    if vault_info.is_some() {
-                        info!("Vault retrieved for asset {} by {}", asset_id, session.username);
+                Ok(Some(mut vault_info)) => {
+                    // Without Read, show that the vault exists (so access can be
+                    // requested) but not its secrets
+                    if !can_access_vault(db.get_connection(), &session, vault_info.vault.id, PermissionType::Read)? {
+                        vault_info.secrets.clear();
+                        vault_info.secret_count = 0;
                     }
-                    Ok(vault_info)
+                    info!("Vault retrieved for asset {} by {}", asset_id, session.username);
+                    Ok(Some(vault_info))
                 }
+                Ok(None) => Ok(None),
                 Err(e) => {
                     error!("Failed to get vault for asset {}: {}", asset_id, e);
                     Err(format!("Failed to get vault: {}", e))
@@ -217,8 +295,9 @@ pub async fn get_vault_history(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_vault_permission(db.get_connection(), &session, vault_id, PermissionType::Read)?;
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             match vault_repo.get_vault_history(vault_id) {
                 Ok(history) => {
                     info!("Vault history retrieved for vault {} by {}", vault_id, session.username);
@@ -277,7 +356,8 @@ pub async fn import_vault_from_recovery(
             }
             
             // Import the vault
-            match vault_repo.import_vault(&vault_info, session.user_id) {
+            // open_vault_export re-encrypted the secrets under the session key
+            match vault_repo.import_vault(&vault_info, session.user_id, data_key.version()) {
                 Ok(imported_vault) => {
                     info!("Vault imported from recovery by {}: Vault '{}' for Asset {}", 
                           session.username, imported_vault.name, asset_id);
@@ -320,30 +400,28 @@ pub async fn decrypt_vault_secret(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
-            let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
-            match vault_repo.get_secret_by_id(secret_id) {
-                Ok(Some(secret)) if secret.vault_id == vault_id => {
-                    // Decrypt the secret value
-                    let decrypted = FileEncryption::new(&data_key)
-                        .decrypt_from_base64(&secret.encrypted_value)
-                        .and_then(|bytes| Ok(String::from_utf8(bytes)?));
-                    match decrypted {
-                        Ok(decrypted_value) => {
-                            info!("Secret decrypted for user {}: {} ({})", 
-                                  session.username, secret.label, secret.secret_type.to_string());
-                            Ok(decrypted_value)
-                        }
-                        Err(e) => {
-                            error!("Failed to decrypt secret: {}", e);
-                            Err("Failed to decrypt secret".to_string())
-                        }
-                    }
+            // Check the vault the secret actually belongs to, not just the one passed in
+            let secret = require_secret_permission(db.get_connection(), &session, secret_id, PermissionType::Read)?;
+            if secret.vault_id != vault_id {
+                warn!("User {} requested secret {} through vault {}, but it belongs to vault {}",
+                      session.username, secret_id, vault_id, secret.vault_id);
+                return Err("Secret not found".to_string());
+            }
+
+            // Decrypt the secret value
+            let decrypted = FileEncryption::new(&data_key)
+                .decrypt_from_base64(&secret.encrypted_value)
+                .map(Zeroizing::new)
+                .and_then(|bytes| Ok(std::str::from_utf8(&bytes)?.to_owned()));
+            match decrypted {
+                Ok(decrypted_value) => {
+                    info!("Secret decrypted for user {}: {} ({})",
+                          session.username, secret.label, secret.secret_type.to_string());
+                    Ok(decrypted_value)
                 }
-                Ok(_) => Err("Secret not found".to_string()),
                 Err(e) => {
-                    error!("Failed to get secret {}: {}", secret_id, e);
-                    Err(format!("Failed to get secret: {}", e))
+                    error!("Failed to decrypt secret: {}", e);
+                    Err("Failed to decrypt secret".to_string())
                 }
             }
         }
@@ -378,8 +456,9 @@ pub async fn export_vault(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_vault_permission(db.get_connection(), &session, vault_id, PermissionType::Export)?;
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             // Get the vault by ID
             match vault_repo.get_vault_by_id(vault_id) {
                 Ok(Some(vault)) => {
@@ -477,11 +556,15 @@ pub async fn validate_password_strength(
     Ok(strength)
 }
 
+/// Checks whether `password` matches anything in the password history of one secret.
+///
+/// This is deliberately scoped to a single secret the caller holds Write on. A global
+/// reuse check would be an oracle for other vaults' current passwords.
 #[tauri::command]
 pub async fn check_password_reuse(
     token: String,
     password: String,
-    exclude_secret_id: Option<i64>,
+    secret_id: i64,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<bool, String> {
@@ -498,34 +581,35 @@ pub async fn check_password_reuse(
     };
     drop(session_manager_guard);
 
-    // Hash the password for comparison
-    let password_hash = match PasswordGenerator::hash_password(&password) {
-        Ok(hash) => hash,
-        Err(e) => {
-            error!("Failed to hash password for reuse check: {}", e);
-            return Err("Failed to process password".to_string());
-        }
+    // Fetch the hashes under the DB lock; verify (slow bcrypt) after releasing it.
+    let hashes: Vec<String> = {
+        let db_guard = db_state.lock()
+            .map_err(|_| "Failed to acquire database lock".to_string())?;
+        let db = db_guard.as_ref().ok_or("Database not initialized")?;
+        secret_reuse_hashes(db.get_connection(), &session, secret_id)?
     };
 
-    let db_guard = db_state.lock()
-        .map_err(|_| "Failed to acquire database lock".to_string())?;
-    match db_guard.as_ref() {
-        Some(db) => {
-            let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
-            match vault_repo.check_password_reuse(&password_hash, exclude_secret_id) {
-                Ok(is_reused) => {
-                    info!("Password reuse check by {}: {}", session.username, is_reused);
-                    Ok(is_reused)
-                }
-                Err(e) => {
-                    error!("Failed to check password reuse: {}", e);
-                    Err(format!("Failed to check password reuse: {}", e))
-                }
-            }
-        }
-        None => Err("Database not initialized".to_string()),
-    }
+    let is_reused = PasswordReuseChecker::is_password_reused(&password, &hashes);
+    info!("Password reuse check by {} for secret {}: {}", session.username, secret_id, is_reused);
+    Ok(is_reused)
+}
+
+/// Authorizes (Write on the secret's vault) and returns the hashes of one secret's own history.
+fn secret_reuse_hashes(
+    conn: &Connection,
+    session: &Session,
+    secret_id: i64,
+) -> Result<Vec<String>, String> {
+    require_secret_permission(conn, session, secret_id, PermissionType::Write)?;
+    Ok(SqliteVaultRepository::new(conn)
+        .get_password_history(secret_id)
+        .map_err(|e| {
+            error!("Failed to load password history: {}", e);
+            format!("Failed to check password reuse: {}", e)
+        })?
+        .into_iter()
+        .map(|h| h.password_hash)
+        .collect())
 }
 
 #[tauri::command]
@@ -552,8 +636,9 @@ pub async fn get_password_history(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_secret_permission(db.get_connection(), &session, secret_id, PermissionType::Read)?;
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             match vault_repo.get_password_history(secret_id) {
                 Ok(history) => {
                     info!("Password history retrieved by {} for secret {}", session.username, secret_id);
@@ -592,11 +677,8 @@ pub async fn update_credential_password(
     let data_key = session.data_key()?;
 
     // Validate inputs
-    let sanitized_password = InputSanitizer::sanitize_string(&request.new_password);
-    if InputSanitizer::is_potentially_malicious(&sanitized_password) {
-        error!("Potentially malicious input detected in update_credential_password");
-        return Err("Invalid input detected".to_string());
-    }
+    // Passwords are opaque: preserved byte-for-byte, not run through the heuristic.
+    InputSanitizer::validate_secret_value(&request.new_password)?;
 
     // Analyze password strength
     let strength = PasswordStrengthAnalyzer::analyze(&request.new_password);
@@ -614,21 +696,10 @@ pub async fn update_credential_password(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_secret_permission(db.get_connection(), &session, request.secret_id, PermissionType::Write)?;
+            let request = UpdateCredentialPasswordRequest { author_id: session.user_id, ..request };
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
-            // Check for password reuse
-            match vault_repo.check_password_reuse(&password_hash, Some(request.secret_id)) {
-                Ok(is_reused) => {
-                    if is_reused {
-                        return Err("Password has been used before on another credential".to_string());
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to check password reuse: {}", e);
-                    return Err("Failed to validate password uniqueness".to_string());
-                }
-            }
-            
+
             match vault_repo.update_password(request, &password_hash, strength.score, &data_key) {
                 Ok(()) => {
                     info!("Password updated by {} for secret with strength score {}", session.username, strength.score);
@@ -676,19 +747,18 @@ pub async fn update_vault_secret(
     }
     
     if let Some(ref value) = request.value {
-        let sanitized_value = InputSanitizer::sanitize_string(value);
-        if InputSanitizer::is_potentially_malicious(&sanitized_value) {
-            error!("Potentially malicious input detected in update_vault_secret");
-            return Err("Invalid input detected".to_string());
-        }
+        // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+        InputSanitizer::validate_secret_value(value)?;
     }
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_secret_permission(db.get_connection(), &session, request.secret_id, PermissionType::Write)?;
+            let request = UpdateVaultSecretRequest { author_id: session.user_id, ..request };
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             match vault_repo.update_vault_secret(request, &data_key) {
                 Ok(()) => {
                     info!("Vault secret updated by {}", session.username);
@@ -728,8 +798,10 @@ pub async fn delete_vault_secret(
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     match db_guard.as_ref() {
         Some(db) => {
+            require_secret_permission(db.get_connection(), &session, request.secret_id, PermissionType::Write)?;
+            let request = DeleteVaultSecretRequest { author_id: session.user_id, ..request };
             let vault_repo = SqliteVaultRepository::new(db.get_connection());
-            
+
             match vault_repo.delete_vault_secret(request) {
                 Ok(()) => {
                     info!("Vault secret deleted by {}", session.username);
@@ -746,6 +818,14 @@ pub async fn delete_vault_secret(
 }
 
 // Standalone credential commands for Story 4.3
+//
+// Authorization model (deliberate, see PR #187): standalone credentials are shared
+// across the organization. They have no vault and no per-credential grants, so any
+// authenticated user may list, search, view the history of, and decrypt any of them.
+// Only the creator or an Administrator may update or delete a credential. Credential
+// categories have no owner, so updating or deleting one is Administrator-only, while
+// any user may create one. Every decryption is written to the audit trail
+// (`VaultSecretAccessed`).
 
 #[tauri::command]
 pub async fn create_standalone_credential(
@@ -772,15 +852,16 @@ pub async fn create_standalone_credential(
     // Sanitize input
     let sanitized_name = InputSanitizer::sanitize_string(&credential_request.name);
     let sanitized_description = InputSanitizer::sanitize_string(&credential_request.description);
-    let sanitized_value = InputSanitizer::sanitize_string(&credential_request.value);
+    // Secret values are opaque: preserved byte-for-byte, not run through the heuristic.
+    let sanitized_value = credential_request.value.clone();
+    InputSanitizer::validate_secret_value(&sanitized_value)?;
     let sanitized_tags = credential_request.tags.as_ref().map(|tags| 
         tags.iter().map(|tag| InputSanitizer::sanitize_string(tag)).collect()
     );
 
     // Check for malicious input
     if InputSanitizer::is_potentially_malicious(&sanitized_name) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_description) ||
-       InputSanitizer::is_potentially_malicious(&sanitized_value) {
+       InputSanitizer::is_potentially_malicious(&sanitized_description) {
         error!("Potentially malicious input detected in create_standalone_credential");
         return Err("Invalid input detected. Please avoid using special characters or script-like patterns.".to_string());
     }
@@ -843,6 +924,7 @@ pub async fn search_credentials(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -893,6 +975,7 @@ pub async fn get_credential_categories(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -924,7 +1007,7 @@ pub async fn manage_credential_categories(
     // Validate session
     let session_manager_guard = session_manager.lock()
         .map_err(|_| "Failed to acquire session lock".to_string())?;
-    let _session = match session_manager_guard.validate_session(&token) {
+    let session = match session_manager_guard.validate_session(&token) {
         Ok(Some(session)) => session,
         Ok(None) => return Err("Invalid or expired session".to_string()),
         Err(e) => {
@@ -932,6 +1015,13 @@ pub async fn manage_credential_categories(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
+
+    // Categories have no owner: anyone may create one, only administrators may change or remove one
+    if matches!(action.as_str(), "update" | "delete") && session.role != UserRole::Administrator {
+        warn!("User {} denied '{}' on credential category", session.username, action);
+        return Err("Only administrators can update or delete credential categories".to_string());
+    }
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1011,6 +1101,7 @@ pub async fn get_credential_history(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1074,12 +1165,16 @@ pub async fn update_standalone_credential(
         return Err("Only administrators or the credential's creator can edit it".to_string());
     }
 
+    if let Some(ref v) = update_request.value {
+        InputSanitizer::validate_secret_value(v)?;
+    }
+
     let sanitized_request = UpdateStandaloneCredentialRequest {
         id: update_request.id,
         name: update_request.name.map(|n| InputSanitizer::sanitize_string(&n)),
         description: update_request.description.map(|d| InputSanitizer::sanitize_string(&d)),
         category_id: update_request.category_id,
-        value: update_request.value.map(|v| InputSanitizer::sanitize_string(&v)),
+        value: update_request.value.clone(),
         author_id: session.user_id,
     };
 
@@ -1193,6 +1288,7 @@ pub async fn get_standalone_credential(
             return Err("Session validation error".to_string());
         }
     };
+    drop(session_manager_guard);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
@@ -1244,13 +1340,42 @@ pub async fn decrypt_standalone_credential(
             match vault_repo.get_standalone_credential(credential_id) {
                 Ok(Some(credential_info)) => {
                     // Decrypt the credential value
-                    let decrypted_bytes = FileEncryption::new(&data_key)
-                        .decrypt_from_base64(&credential_info.credential.encrypted_data)
-                        .map_err(|e| format!("Failed to decrypt credential: {}", e))?;
+                    // The plaintext bytes are wiped on drop, including on the error path.
+                    // Only the returned String (handed to the IPC layer) outlives this scope.
+                    let decrypted_bytes = Zeroizing::new(
+                        FileEncryption::new(&data_key)
+                            .decrypt_from_base64(&credential_info.credential.encrypted_data)
+                            .map_err(|e| format!("Failed to decrypt credential: {}", e))?,
+                    );
+
+                    let decrypted_value = std::str::from_utf8(&decrypted_bytes)
+                        .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?
+                        .to_owned();
                     
-                    let decrypted_value = String::from_utf8(decrypted_bytes)
-                        .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))?;
-                    
+                    let audit_event = AuditEventRequest {
+                        event_type: AuditEventType::VaultSecretAccessed,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: Some(credential_info.credential.created_by),
+                        target_username: None,
+                        description: format!("Decrypted standalone credential '{}'", credential_info.credential.name),
+                        metadata: Some(serde_json::json!({
+                            "standalone_credential_id": credential_id,
+                            "name": credential_info.credential.name,
+                            "credential_type": credential_info.credential.credential_type.to_string(),
+                            "created_by": credential_info.credential.created_by,
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    SqliteAuditRepository::new(db.get_connection()).log_event(&audit_event)
+                        .map_err(|e| {
+                            error!("Failed to record credential access audit event: {}", e);
+                            "Failed to record audit event".to_string()
+                        })?;
+
                     info!("Decrypted standalone credential {} for user {}", credential_id, session.username);
                     Ok(decrypted_value)
                 }
@@ -1300,11 +1425,12 @@ pub async fn rotate_password(
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
+            require_secret_permission(conn, &session, request.secret_id, PermissionType::Write)?;
             let vault_repo = Box::new(SqliteVaultRepository::new(conn));
             let audit_repo = Box::new(SqliteAuditRepository::new(conn));
-            
+
             let rotation_service = PasswordRotationService::new(conn, vault_repo, audit_repo);
-            
+
             // Validate rotation before executing
             rotation_service.validate_rotation(request.secret_id, &request.new_password)
                 .map_err(|e| e.to_string())?;
@@ -1349,8 +1475,9 @@ pub async fn get_rotation_schedule(
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
+            require_vault_permission(conn, &session, vault_id, PermissionType::Read)?;
             let scheduler = RotationScheduler::new(conn);
-            
+
             scheduler.get_active_schedule(vault_id)
                 .map_err(|e| format!("Failed to get rotation schedule: {}", e))
         }
@@ -1425,11 +1552,12 @@ pub async fn get_rotation_history(
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
+            require_secret_permission(conn, &session, secret_id, PermissionType::Read)?;
             let vault_repo = Box::new(SqliteVaultRepository::new(conn));
             let audit_repo = Box::new(SqliteAuditRepository::new(conn));
-            
+
             let rotation_service = PasswordRotationService::new(conn, vault_repo, audit_repo);
-            
+
             rotation_service.get_rotation_history(secret_id)
                 .map_err(|e| format!("Failed to get rotation history: {}", e))
         }
@@ -1764,9 +1892,27 @@ pub async fn get_rotation_alerts(
         Some(db) => {
             let conn = db.get_connection();
             let scheduler = RotationScheduler::new(conn);
-            
-            scheduler.get_rotation_alerts(days_ahead)
-                .map_err(|e| format!("Failed to get rotation alerts: {}", e))
+
+            let alerts = scheduler.get_rotation_alerts(days_ahead)
+                .map_err(|e| format!("Failed to get rotation alerts: {}", e))?;
+
+            // Only show alerts for vaults the user can read
+            let mut readable = std::collections::HashMap::new();
+            let mut visible = Vec::with_capacity(alerts.len());
+            for alert in alerts {
+                let can_read = match readable.get(&alert.vault_id) {
+                    Some(&can_read) => can_read,
+                    None => {
+                        let can_read = can_access_vault(conn, &session, alert.vault_id, PermissionType::Read)?;
+                        readable.insert(alert.vault_id, can_read);
+                        can_read
+                    }
+                };
+                if can_read {
+                    visible.push(alert);
+                }
+            }
+            Ok(visible)
         }
         None => Err("Database not initialized".to_string()),
     }
@@ -1801,11 +1947,15 @@ pub async fn execute_batch_rotation(
     match db_guard.as_ref() {
         Some(db) => {
             let conn = db.get_connection();
+            // Every secret in the batch must be writable before any is rotated
+            for item in &request.items {
+                require_secret_permission(conn, &session, item.secret_id, PermissionType::Write)?;
+            }
             let vault_repo = Box::new(SqliteVaultRepository::new(conn));
             let audit_repo = Box::new(SqliteAuditRepository::new(conn));
-            
+
             let batch_service = BatchRotationService::new(conn, vault_repo, audit_repo);
-            
+
             // Set author_id to session user
             let mut batch_request = request;
             batch_request.author_id = session.user_id;
@@ -2136,6 +2286,127 @@ mod tests {
         }
     }
 
+    fn access_audit_events(app: &tauri::App<MockRuntime>) -> Vec<crate::audit::AuditEvent> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        SqliteAuditRepository::new(db_guard.as_ref().unwrap().get_connection())
+            .get_events_by_type(&AuditEventType::VaultSecretAccessed)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_decrypting_standalone_credential_is_audited() {
+        let (app, credential_id, [admin_token, _, other_token]) = setup_test_app();
+
+        decrypt_standalone_credential(other_token, credential_id, app.state(), app.state()).await.unwrap();
+        decrypt_standalone_credential(admin_token, credential_id, app.state(), app.state()).await.unwrap();
+
+        let events = access_audit_events(&app);
+        assert_eq!(events.len(), 2);
+        let users: Vec<_> = events.iter().map(|e| e.user_id).collect();
+        assert!(users.contains(&Some(OTHER_ID)) && users.contains(&Some(ADMIN_ID)));
+        assert!(events[0].description.contains("PLC Login"));
+        // The secret itself never reaches the audit trail
+        assert!(events.iter().all(|e| !e.description.contains("secret\"") && !e.metadata.clone().unwrap_or_default().contains("\"secret\"")));
+    }
+
+    #[tokio::test]
+    async fn test_failed_decrypt_is_not_audited() {
+        let (app, credential_id, [_, owner_token, _]) = setup_test_app();
+
+        let result = decrypt_standalone_credential(owner_token, credential_id + 1, app.state(), app.state()).await;
+
+        assert_eq!(result, Err("Credential not found".to_string()));
+        assert!(access_audit_events(&app).is_empty());
+    }
+
+    fn category_request(name: &str) -> Option<CreateCategoryRequest> {
+        Some(CreateCategoryRequest {
+            name: name.to_string(),
+            description: None,
+            parent_category_id: None,
+            color_code: None,
+            icon: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_any_user_can_create_but_only_admin_can_change_categories() {
+        let (app, _, [admin_token, _, other_token]) = setup_test_app();
+
+        let created = manage_credential_categories(
+            other_token.clone(), "create".into(), None, category_request("Vendors"), app.state(), app.state(),
+        ).await;
+        assert!(created.is_ok(), "{:?}", created);
+        let category_id = {
+            let categories = get_credential_categories(other_token.clone(), app.state(), app.state()).await.unwrap();
+            categories.iter().find(|c| c.category.name == "Vendors").unwrap().category.id
+        };
+
+        let denied_update = manage_credential_categories(
+            other_token.clone(), "update".into(), Some(category_id), category_request("Renamed"), app.state(), app.state(),
+        ).await;
+        assert!(denied_update.unwrap_err().contains("Only administrators"));
+        let denied_delete = manage_credential_categories(
+            other_token, "delete".into(), Some(category_id), None, app.state(), app.state(),
+        ).await;
+        assert!(denied_delete.unwrap_err().contains("Only administrators"));
+
+        let updated = manage_credential_categories(
+            admin_token.clone(), "update".into(), Some(category_id), category_request("Renamed"), app.state(), app.state(),
+        ).await;
+        assert!(updated.is_ok(), "{:?}", updated);
+        let deleted = manage_credential_categories(
+            admin_token, "delete".into(), Some(category_id), None, app.state(), app.state(),
+        ).await;
+        assert!(deleted.is_ok(), "{:?}", deleted);
+    }
+
+    /// Runs `$call` on another thread while this one holds the DB lock, so the command
+    /// blocks waiting for the DB. A command that still holds the session-manager guard at
+    /// that point would invert the lock order used elsewhere (DB first, then session).
+    macro_rules! assert_session_lock_released_while_waiting_for_db {
+        ($app:expr, |$db:ident, $sm:ident| $call:expr) => {{
+            let db_state = $app.state::<DatabaseState>();
+            let sm_state = $app.state::<SessionManagerState>();
+            let db_guard = db_state.lock().unwrap();
+            std::thread::scope(|scope| {
+                let (thread_db, thread_sm) = (db_state.clone(), sm_state.clone());
+                let handle = scope.spawn(move || {
+                    let $db = thread_db;
+                    let $sm = thread_sm;
+                    let _ = tauri::async_runtime::block_on($call);
+                });
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                let session_lock_free = sm_state.try_lock().is_ok();
+                drop(db_guard);
+                handle.join().unwrap();
+                assert!(session_lock_free, "session manager lock is held while waiting for the database lock");
+            });
+        }};
+    }
+
+    #[test]
+    fn test_standalone_read_commands_do_not_hold_session_lock_while_taking_db_lock() {
+        let (app, credential_id, [admin_token, _, _]) = setup_test_app();
+        let admin_token = &admin_token;
+
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| search_credentials(
+            admin_token.clone(),
+            SearchCredentialsRequest {
+                query: None, credential_type: None, category_id: None, tags: None,
+                created_after: None, created_before: None, limit: None, offset: None,
+            },
+            db, sm,
+        ));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_credential_categories(admin_token.clone(), db, sm));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| manage_credential_categories(
+            admin_token.clone(), "create".into(), None, category_request("Locks"), db, sm,
+        ));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_credential_history(admin_token.clone(), credential_id, db, sm));
+        assert_session_lock_released_while_waiting_for_db!(app, |db, sm| get_standalone_credential(admin_token.clone(), credential_id, db, sm));
+    }
+
     #[tokio::test]
     async fn test_session_without_data_key_cannot_decrypt() {
         let (app, credential_id, _) = setup_test_app();
@@ -2150,5 +2421,335 @@ mod tests {
         let result = decrypt_standalone_credential(keyless_token, credential_id, app.state(), app.state()).await;
 
         assert!(result.unwrap_err().contains("Encrypted data is unavailable"));
+    }
+
+    /// Server-side vault permission enforcement
+    mod vault_permissions {
+        use super::*;
+        use crate::vault::{AccessResult, GrantVaultAccessRequest};
+
+        const GRANTEE_ID: i64 = 4;
+
+        struct VaultFixture {
+            app: tauri::App<MockRuntime>,
+            /// Vault created by the administrator
+            admin_vault: i64,
+            admin_secret: i64,
+            /// Vault created by OWNER_ID, an engineer
+            owner_vault: i64,
+            owner_secret: i64,
+            admin: String,
+            owner: String,
+            other: String,
+            grantee: String,
+        }
+
+        fn setup() -> VaultFixture {
+            let db = Database::new(":memory:".into()).unwrap();
+            let conn = db.get_connection();
+            conn.execute_batch(
+                r#"
+                INSERT INTO users (id, username, password_hash, role) VALUES (1, 'admin', 'hash', 'Administrator');
+                INSERT INTO users (id, username, password_hash, role) VALUES (2, 'owner', 'hash', 'Engineer');
+                INSERT INTO users (id, username, password_hash, role) VALUES (3, 'other', 'hash', 'Engineer');
+                INSERT INTO users (id, username, password_hash, role) VALUES (4, 'grantee', 'hash', 'Engineer');
+                INSERT INTO assets (id, name, created_by) VALUES (1, 'PLC-1', 1);
+                INSERT INTO assets (id, name, created_by) VALUES (2, 'PLC-2', 2);
+                "#,
+            ).unwrap();
+
+            let repo = SqliteVaultRepository::new(conn);
+            let add_vault = |asset_id: i64, created_by: i64, value: &str| {
+                let vault = repo.create_vault(CreateVaultRequest {
+                    asset_id,
+                    name: format!("Vault {}", asset_id),
+                    description: String::new(),
+                    created_by,
+                }).unwrap();
+                let secret = repo.add_secret(AddSecretRequest {
+                    vault_id: vault.id,
+                    secret_type: SecretType::Password,
+                    label: "admin login".to_string(),
+                    value: value.to_string(),
+                    author_id: created_by,
+                }, test_key()).unwrap();
+                (vault.id, secret.id)
+            };
+            let (admin_vault, admin_secret) = add_vault(1, ADMIN_ID, "admin-vault-pw");
+            let (owner_vault, owner_secret) = add_vault(2, OWNER_ID, "owner-vault-pw");
+
+            let session_manager = SessionManager::new();
+            let user_repo = SqliteUserRepository::new(conn);
+            let [admin, owner, other, grantee] = [ADMIN_ID, OWNER_ID, OTHER_ID, GRANTEE_ID].map(|id| {
+                let user = user_repo.find_by_id(id).unwrap().unwrap();
+                session_manager.create_session_with_key(&user, Some(test_key().clone())).unwrap().token
+            });
+
+            let app = mock_builder()
+                .manage(DatabaseState::new(Some(db)))
+                .manage(SessionManagerState::new(session_manager))
+                .build(mock_context(noop_assets()))
+                .unwrap();
+
+            VaultFixture { app, admin_vault, admin_secret, owner_vault, owner_secret, admin, owner, other, grantee }
+        }
+
+        impl VaultFixture {
+            fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> T) -> T {
+                let db_state = self.app.state::<DatabaseState>();
+                let db_guard = db_state.lock().unwrap();
+                f(db_guard.as_ref().unwrap().get_connection())
+            }
+
+            fn grant(&self, user_id: i64, vault_id: i64, permission_type: PermissionType, expires_at: Option<String>) {
+                self.with_conn(|conn| {
+                    SqliteVaultRepository::new(conn).grant_vault_access(GrantVaultAccessRequest {
+                        user_id,
+                        vault_id,
+                        permission_type,
+                        granted_by: ADMIN_ID,
+                        expires_at,
+                    }).unwrap();
+                });
+            }
+
+            fn denial_events(&self) -> Vec<crate::audit::AuditEvent> {
+                self.with_conn(|conn| {
+                    SqliteAuditRepository::new(conn)
+                        .get_events_by_type(&AuditEventType::VaultAccessDenied)
+                        .unwrap()
+                })
+            }
+
+            fn secret_count(&self, vault_id: i64) -> usize {
+                self.with_conn(|conn| SqliteVaultRepository::new(conn).get_vault_secrets(vault_id).unwrap().len())
+            }
+
+            async fn decrypt(&self, token: &str, secret_id: i64, vault_id: i64) -> Result<String, String> {
+                decrypt_vault_secret(token.to_string(), secret_id, vault_id, self.app.state(), self.app.state()).await
+            }
+
+            async fn export(&self, token: &str, vault_id: i64) -> Result<String, String> {
+                export_vault(token.to_string(), vault_id, "export passphrase".to_string(), self.app.state(), self.app.state()).await
+            }
+
+            async fn update_label(&self, token: &str, secret_id: i64) -> Result<(), String> {
+                update_vault_secret(token.to_string(), UpdateVaultSecretRequest {
+                    secret_id,
+                    label: Some("renamed".to_string()),
+                    value: None,
+                    author_id: ADMIN_ID,
+                }, self.app.state(), self.app.state()).await
+            }
+
+            async fn delete(&self, token: &str, secret_id: i64) -> Result<(), String> {
+                delete_vault_secret(token.to_string(), DeleteVaultSecretRequest {
+                    secret_id,
+                    author_id: ADMIN_ID,
+                }, self.app.state(), self.app.state()).await
+            }
+        }
+
+        fn assert_denied<T: std::fmt::Debug>(result: Result<T, String>) {
+            assert_eq!(result.unwrap_err(), ACCESS_DENIED);
+        }
+
+        #[tokio::test]
+        async fn test_engineer_without_grant_cannot_decrypt_and_denial_is_recorded() {
+            let f = setup();
+
+            assert_denied(f.decrypt(&f.other, f.admin_secret, f.admin_vault).await);
+
+            let events = f.denial_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].user_id, Some(OTHER_ID));
+            let log = f.with_conn(|conn| SqliteVaultRepository::new(conn).get_user_access_log(OTHER_ID, None).unwrap());
+            assert_eq!(log.len(), 1);
+            assert_eq!(log[0].result, AccessResult::Denied);
+        }
+
+        #[tokio::test]
+        async fn test_engineer_without_grant_cannot_export() {
+            let f = setup();
+
+            assert_denied(f.export(&f.other, f.admin_vault).await);
+            assert_eq!(f.denial_events().len(), 1);
+        }
+
+        #[tokio::test]
+        async fn test_engineer_with_read_grant_can_decrypt_but_not_export() {
+            let f = setup();
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, None);
+
+            assert_eq!(f.decrypt(&f.grantee, f.admin_secret, f.admin_vault).await, Ok("admin-vault-pw".to_string()));
+            assert_denied(f.export(&f.grantee, f.admin_vault).await);
+        }
+
+        #[tokio::test]
+        async fn test_engineer_with_export_grant_can_export() {
+            let f = setup();
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Export, None);
+
+            assert!(f.export(&f.grantee, f.admin_vault).await.is_ok());
+        }
+
+        #[tokio::test]
+        async fn test_expired_grant_is_denied() {
+            let f = setup();
+            let expired = (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339();
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, Some(expired));
+
+            assert_denied(f.decrypt(&f.grantee, f.admin_secret, f.admin_vault).await);
+        }
+
+        #[tokio::test]
+        async fn test_admin_can_decrypt_and_export_any_vault() {
+            let f = setup();
+
+            assert_eq!(f.decrypt(&f.admin, f.owner_secret, f.owner_vault).await, Ok("owner-vault-pw".to_string()));
+            assert!(f.export(&f.admin, f.owner_vault).await.is_ok());
+            assert!(f.denial_events().is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_creator_can_read_write_and_export_own_vault() {
+            let f = setup();
+
+            assert_eq!(f.decrypt(&f.owner, f.owner_secret, f.owner_vault).await, Ok("owner-vault-pw".to_string()));
+            let added = add_vault_secret(f.owner.clone(), AddSecretRequest {
+                vault_id: f.owner_vault,
+                secret_type: SecretType::IpAddress,
+                label: "plc ip".to_string(),
+                value: "10.0.0.5".to_string(),
+                author_id: 0,
+            }, f.app.state(), f.app.state()).await;
+            assert!(added.is_ok(), "{:?}", added);
+            assert!(f.export(&f.owner, f.owner_vault).await.is_ok());
+            // Creating one vault gives no access to another
+            assert_denied(f.decrypt(&f.owner, f.admin_secret, f.admin_vault).await);
+            assert_denied(f.export(&f.owner, f.admin_vault).await);
+        }
+
+        #[tokio::test]
+        async fn test_secret_from_another_vault_is_rejected() {
+            let f = setup();
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, None);
+
+            // Readable vault id paired with a secret from an unreadable vault
+            assert_denied(f.decrypt(&f.grantee, f.owner_secret, f.admin_vault).await);
+            // Even with access to both vaults, the pair must match
+            assert_eq!(
+                f.decrypt(&f.admin, f.owner_secret, f.admin_vault).await,
+                Err("Secret not found".to_string())
+            );
+        }
+
+        #[tokio::test]
+        async fn test_vault_lookup_hides_secrets_without_read() {
+            let f = setup();
+
+            let hidden = get_vault_by_asset_id(f.other.clone(), 1, f.app.state(), f.app.state()).await.unwrap().unwrap();
+            assert_eq!(hidden.vault.id, f.admin_vault);
+            assert!(hidden.secrets.is_empty());
+            assert_eq!(hidden.secret_count, 0);
+
+            let visible = get_vault_by_asset_id(f.admin.clone(), 1, f.app.state(), f.app.state()).await.unwrap().unwrap();
+            assert_eq!(visible.secret_count, 1);
+            // Filtering is silent
+            assert!(f.denial_events().is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_modifying_secrets_requires_write() {
+            let f = setup();
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, None);
+
+            assert_denied(f.update_label(&f.grantee, f.admin_secret).await);
+            assert_denied(f.delete(&f.grantee, f.admin_secret).await);
+            assert_eq!(f.secret_count(f.admin_vault), 1);
+
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Write, None);
+            assert!(f.update_label(&f.grantee, f.admin_secret).await.is_ok());
+            assert!(f.delete(&f.grantee, f.admin_secret).await.is_ok());
+            assert_eq!(f.secret_count(f.admin_vault), 0);
+        }
+
+        #[tokio::test]
+        async fn test_password_history_requires_read() {
+            let f = setup();
+
+            assert_denied(get_password_history(f.other.clone(), f.admin_secret, f.app.state(), f.app.state()).await);
+            assert!(get_password_history(f.admin.clone(), f.admin_secret, f.app.state(), f.app.state()).await.is_ok());
+        }
+
+        async fn set_password(f: &VaultFixture, token: &str, secret_id: i64, pw: &str) {
+            update_credential_password(token.to_string(), UpdateCredentialPasswordRequest {
+                secret_id,
+                new_password: pw.to_string(),
+                author_id: 0,
+            }, f.app.state(), f.app.state()).await.unwrap();
+        }
+
+        async fn reuse(f: &VaultFixture, token: &str, pw: &str, secret_id: i64) -> Result<bool, String> {
+            check_password_reuse(token.to_string(), pw.to_string(), secret_id, f.app.state(), f.app.state()).await
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_requires_write_on_the_secrets_vault() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Target-Default-Pw-1!").await;
+
+            assert_denied(reuse(&f, &f.other, "Target-Default-Pw-1!", f.admin_secret).await);
+            // Read alone is not enough
+            f.grant(GRANTEE_ID, f.admin_vault, PermissionType::Read, None);
+            assert_denied(reuse(&f, &f.grantee, "Target-Default-Pw-1!", f.admin_secret).await);
+            assert_eq!(f.denial_events().len(), 2);
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_is_not_a_cross_vault_oracle() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Target-Default-Pw-1!").await;
+            set_password(&f, &f.owner, f.owner_secret, "Owner-Own-Pw-2222!").await;
+
+            // The owner can only test against their own secret: the other vault's current
+            // password never matches, and the other vault's secret id is denied outright.
+            assert_eq!(reuse(&f, &f.owner, "Target-Default-Pw-1!", f.owner_secret).await, Ok(false));
+            assert_denied(reuse(&f, &f.owner, "Target-Default-Pw-1!", f.admin_secret).await);
+        }
+
+        #[tokio::test]
+        async fn test_reuse_check_detects_own_history() {
+            let f = setup();
+            set_password(&f, &f.owner, f.owner_secret, "First-Password-111!").await;
+            set_password(&f, &f.owner, f.owner_secret, "Second-Password-222!").await;
+
+            assert_eq!(reuse(&f, &f.owner, "First-Password-111!", f.owner_secret).await, Ok(true));
+            assert_eq!(reuse(&f, &f.owner, "Second-Password-222!", f.owner_secret).await, Ok(true));
+            assert_eq!(reuse(&f, &f.owner, "Never-Used-Password-3!", f.owner_secret).await, Ok(false));
+        }
+
+        #[tokio::test]
+        async fn test_changing_password_is_not_blocked_by_other_secrets_passwords() {
+            let f = setup();
+            set_password(&f, &f.admin, f.admin_secret, "Shared-Password-123!").await;
+            // Previously rejected with "used before on another credential"; that global
+            // check was an oracle and is gone.
+            set_password(&f, &f.owner, f.owner_secret, "Shared-Password-123!").await;
+        }
+
+        #[tokio::test]
+        async fn test_rotation_alerts_are_filtered_to_readable_vaults() {
+            let f = setup();
+            f.with_conn(|conn| {
+                conn.execute("UPDATE vault_secrets SET next_rotation_due = datetime('now', '-1 day')", []).unwrap();
+            });
+
+            let alerts = get_rotation_alerts(f.owner.clone(), 30, f.app.state(), f.app.state()).await.unwrap();
+            assert_eq!(alerts.iter().map(|a| a.vault_id).collect::<Vec<_>>(), vec![f.owner_vault]);
+
+            let alerts = get_rotation_alerts(f.admin.clone(), 30, f.app.state(), f.app.state()).await.unwrap();
+            assert_eq!(alerts.len(), 2);
+        }
     }
 }

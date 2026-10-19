@@ -7,7 +7,7 @@ import {
   Input,
   Form,
   Alert,
-  Divider,
+  Descriptions,
   Row,
   Col,
   Progress,
@@ -24,7 +24,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { ConfigurationVersionInfo, formatFileSize } from '../types/assets';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface ExportConfirmationModalProps {
   visible: boolean;
@@ -241,79 +241,73 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
           Export
         </Button>
       ]}
-      width={550}
+      width={520}
       destroyOnHidden
     >
-      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="small">
         {/* Version Information */}
-        <div>
-          <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Configuration Details</Title>
-          <Row gutter={[16, 4]}>
-            <Col span={12}>
-              <Text type="secondary">Version:</Text> <Text strong>{version.version_number}</Text>
-            </Col>
-            <Col span={12}>
-              <Text type="secondary">Status:</Text> <Text>{version.status}</Text>
-            </Col>
-            <Col span={12}>
-              <Text type="secondary">File:</Text> <Text strong>{version.file_name}</Text>
-            </Col>
-            <Col span={12}>
-              <Text type="secondary">Size:</Text> <Text>{formatFileSize(version.file_size)}</Text>
-            </Col>
-            <Col span={12}>
-              <Text type="secondary">Author:</Text> <Text>{version.author_username}</Text>
-            </Col>
-          </Row>
-        </div>
-
-        <Divider style={{ margin: '12px 0' }} />
+        <Descriptions
+          title="Configuration Details"
+          size="small"
+          bordered
+          column={2}
+          styles={{ label: { width: 80 } }}
+          items={[
+            { key: 'version', label: 'Version', children: <Text strong>{version.version_number}</Text> },
+            { key: 'status', label: 'Status', children: version.status },
+            {
+              key: 'file',
+              label: 'File',
+              children: <Text strong ellipsis={{ tooltip: version.file_name }}>{version.file_name}</Text>
+            },
+            { key: 'size', label: 'Size', children: formatFileSize(version.file_size) },
+            { key: 'author', label: 'Author', span: 2, children: version.author_username }
+          ]}
+        />
 
         {/* Export Location */}
-        <div>
-          <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Export Location</Title>
-          <Input
-            value={selectedPath}
-            placeholder="Click 'Select Location' to choose where to save the file"
-            readOnly
-            suffix={
-              <Button
-                type="link"
-                icon={<FolderOpenOutlined />}
-                onClick={handleSelectPath}
-                disabled={isExporting}
-                style={{ padding: 0 }}
-              >
-                Browse
-              </Button>
-            }
-          />
-        </div>
+        <Form form={form} layout="vertical" size="small" component={false}>
+          <Form.Item label="Export Location" htmlFor="export-location-input" style={{ marginBottom: 0 }}>
+            <Input
+              id="export-location-input"
+              value={selectedPath}
+              placeholder="Click 'Select Location' to choose where to save the file"
+              readOnly
+              suffix={
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<FolderOpenOutlined />}
+                  onClick={handleSelectPath}
+                  disabled={isExporting}
+                  style={{ padding: 0 }}
+                >
+                  Browse
+                </Button>
+              }
+            />
+          </Form.Item>
+        </Form>
 
         {/* Progress Section */}
         {(selectedPath || isExporting) && (
-          <>
-            <Divider style={{ margin: '12px 0' }} />
-            <div>
-              <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>Export Progress</Title>
-              <Space orientation="vertical" style={{ width: '100%' }}>
-                <Row align="middle" gutter={[8, 0]}>
-                  <Col flex="none">
-                    {getProgressIcon()}
-                  </Col>
-                  <Col flex="auto">
-                    <Text>{exportProgress.message}</Text>
-                  </Col>
-                </Row>
-                <Progress
-                  percent={exportProgress.progress}
-                  strokeColor={getProgressColor()}
-                  showInfo={false}
-                  size="small"
-                />
-              </Space>
-            </div>
-          </>
+          <div>
+            <Row align="middle" gutter={8} wrap={false}>
+              <Col flex="none">{getProgressIcon()}</Col>
+              <Col flex="none">
+                <Text strong>Export Progress</Text>
+              </Col>
+              <Col flex="auto">
+                <Text type="secondary">{exportProgress.message}</Text>
+              </Col>
+            </Row>
+            <Progress
+              percent={exportProgress.progress}
+              strokeColor={getProgressColor()}
+              showInfo={false}
+              size="small"
+            />
+          </div>
         )}
 
         {/* Error Display */}
@@ -324,27 +318,36 @@ const ExportConfirmationModal: React.FC<ExportConfirmationModalProps> = ({
             type="error"
             showIcon
             closable={{ onClose: () => setError('') }}
+            style={{ padding: '6px 12px' }}
           />
         )}
 
-        {/* Export Information */}
-        <Alert
-          title="Export Information"
-          description="The export process includes integrity verification to ensure the configuration file is complete and accurate."
-          type="info"
-          showIcon
-        />
-
-        {/* Success Information */}
-        {exportProgress.step === 'completed' && (
+        {/* Success / general information */}
+        {exportProgress.step === 'completed' ? (
           <Alert
-            title="Export Successful"
-            description="The configuration file has been exported successfully and verified for integrity."
             type="success"
             showIcon
+            style={{ padding: '6px 12px' }}
+            title={
+              <>
+                <Text strong>Export Successful</Text>
+                <Text> - The configuration file has been exported successfully and verified for integrity.</Text>
+              </>
+            }
+          />
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            style={{ padding: '6px 12px' }}
+            title={
+              <>
+                <Text strong>Export Information</Text>
+                <Text> - The export process includes integrity verification to ensure the configuration file is complete and accurate.</Text>
+              </>
+            }
           />
         )}
-
       </Space>
     </Modal>
   );

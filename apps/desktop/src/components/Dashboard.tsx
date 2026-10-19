@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Button, Typography, Space, Card, Row, Col, message } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Button, Typography, Space, Card, Row, Col, Alert, message } from 'antd';
 import { 
   UserOutlined, 
   LogoutOutlined, 
@@ -20,6 +20,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { DashboardStats } from '../types/dashboard';
 import { AssetInfo } from '../types/assets';
+import useKeyRotationStore from '../store/keyRotation';
+import KeyRotationModal from './KeyRotationModal';
+import { KEY_ROTATION_GATE_MESSAGE } from '../utils/keyRotationErrors';
 import UserManagement from './UserManagement';
 import AssetManagement from './AssetManagement';
 import StandaloneCredentials from './StandaloneCredentials';
@@ -35,11 +38,23 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const Dashboard: React.FC = () => {
-  const { user, logout, token } = useAuthStore();
+  const { user, logout, token, keyRotationInProgress } = useAuthStore();
+  const rotationStatus = useKeyRotationStore((state) => state.status);
+  const fetchRotationStatus = useKeyRotationStore((state) => state.fetchStatus);
+  const [rotationModalOpen, setRotationModalOpen] = useState(false);
   const navigateToHistory = useAssetStore((state) => state.navigateToHistory);
   const [selectedMenuItem, setSelectedMenuItem] = useState('dashboard');
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (token) {
+      fetchRotationStatus(token);
+    }
+  }, [token, fetchRotationStatus]);
+
+  // The fetched status is authoritative; the login flag covers the moment before it arrives
+  const rotationActive = rotationStatus ? rotationStatus.in_progress : keyRotationInProgress === true;
 
   useEffect(() => {
     if (selectedMenuItem === 'dashboard' && token) {
@@ -296,6 +311,26 @@ const Dashboard: React.FC = () => {
         </Sider>
 
         <Layout style={{ padding: '24px' }}>
+          {rotationActive && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title="Encryption key rotation in progress"
+              description={
+                user?.role === 'Administrator'
+                  ? 'Encrypted data is unavailable to other users until you finish the rotation.'
+                  : KEY_ROTATION_GATE_MESSAGE
+              }
+              action={
+                user?.role === 'Administrator' ? (
+                  <Button size="small" type="primary" onClick={() => setRotationModalOpen(true)}>
+                    Resume
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
           <Content
             style={{
               background: '#fff',
@@ -410,6 +445,15 @@ const Dashboard: React.FC = () => {
           </Content>
         </Layout>
       </Layout>
+      {user?.role === 'Administrator' && (
+        <KeyRotationModal
+          open={rotationModalOpen}
+          onClose={() => {
+            setRotationModalOpen(false);
+            if (token) fetchRotationStatus(token);
+          }}
+        />
+      )}
     </Layout>
   );
 };

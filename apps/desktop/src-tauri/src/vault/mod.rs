@@ -56,6 +56,15 @@ pub struct VaultSecret {
     pub rotation_interval_days: Option<i32>,
     pub next_rotation_due: Option<String>,
     pub rotation_policy_id: Option<i64>,
+    /// Version of the data key `encrypted_value` is encrypted under. Kept out
+    /// of IPC and vault exports: an exported secret is re-encrypted under the
+    /// export passphrase, so the install's key version means nothing there.
+    #[serde(skip, default = "default_key_version")]
+    pub key_version: u32,
+}
+
+fn default_key_version() -> u32 {
+    crate::encryption::INITIAL_KEY_VERSION
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,7 +182,7 @@ pub struct CreateVaultRequest {
     pub created_by: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AddSecretRequest {
     pub vault_id: i64,
     pub secret_type: SecretType,
@@ -212,14 +221,14 @@ impl Default for GeneratePasswordRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateCredentialPasswordRequest {
     pub secret_id: i64,
     pub new_password: String,
     pub author_id: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateVaultSecretRequest {
     pub secret_id: i64,
     pub label: Option<String>,
@@ -308,7 +317,7 @@ impl StandaloneChangeType {
 }
 
 // Request/Response types for standalone credentials
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CreateStandaloneCredentialRequest {
     pub name: String,
     pub description: String,
@@ -319,7 +328,7 @@ pub struct CreateStandaloneCredentialRequest {
     pub created_by: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateStandaloneCredentialRequest {
     pub id: i64,
     pub name: Option<String>,
@@ -593,20 +602,22 @@ pub trait VaultRepository {
     fn add_secret(&self, request: AddSecretRequest, key: &DataKey) -> Result<VaultSecret>;
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>>;
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>>;
-    fn update_secret(&self, secret: &VaultSecret, author_id: i64) -> Result<()>;
+    /// Writes `secret.encrypted_value` as-is; `key_version` is the version of
+    /// the data key it is encrypted under.
+    fn update_secret(&self, secret: &VaultSecret, author_id: i64, key_version: u32) -> Result<()>;
     fn delete_secret(&self, secret_id: i64, author_id: i64) -> Result<()>;
     
     fn add_version_history(&self, vault_id: i64, change_type: ChangeType, author: i64, notes: &str, changes: HashMap<String, String>) -> Result<()>;
     fn get_vault_history(&self, vault_id: i64) -> Result<Vec<VaultVersion>>;
     
-    /// Imports a vault whose secrets are already encrypted under this install's data key.
-    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault>;
+    /// Imports a vault whose secrets are already encrypted under this install's
+    /// data key, at version `key_version`.
+    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64, key_version: u32) -> Result<IdentityVault>;
     fn initialize_schema(&self) -> Result<()>;
     
     // Password management methods
     fn add_password_history(&self, secret_id: i64, password_hash: &str) -> Result<()>;
     fn get_password_history(&self, secret_id: i64) -> Result<Vec<PasswordHistory>>;
-    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool>;
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()>;
     fn get_default_password_policy(&self) -> Result<PasswordPolicy>;
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
@@ -694,14 +705,15 @@ impl<'a> SqliteVaultRepository<'a> {
             encrypted_value: row.get("encrypted_value")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
-            strength_score: row.get("strength_score").ok(),
-            last_changed: row.get("last_changed").ok(),
-            generation_method: row.get("generation_method").ok(),
-            policy_version: row.get("policy_version").ok(),
-            last_rotated: row.get("last_rotated").ok(),
-            rotation_interval_days: row.get("rotation_interval_days").ok(),
-            next_rotation_due: row.get("next_rotation_due").ok(),
-            rotation_policy_id: row.get("rotation_policy_id").ok(),
+            strength_score: row.get("strength_score")?,
+            last_changed: row.get("last_changed")?,
+            generation_method: row.get("generation_method")?,
+            policy_version: row.get("policy_version")?,
+            last_rotated: row.get("last_rotated")?,
+            rotation_interval_days: row.get("rotation_interval_days")?,
+            next_rotation_due: row.get("next_rotation_due")?,
+            rotation_policy_id: row.get("rotation_policy_id")?,
+            key_version: row.get("key_version")?,
         })
     }
 
@@ -880,6 +892,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 rotation_interval_days INTEGER,
                 next_rotation_due DATETIME,
                 rotation_policy_id INTEGER,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (vault_id) REFERENCES vault_entries(id) ON DELETE CASCADE,
                 UNIQUE(vault_id, label)
             );
@@ -954,6 +967,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_accessed DATETIME,
+                key_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (category_id) REFERENCES credential_categories(id) ON DELETE SET NULL,
                 FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
             );
@@ -1275,19 +1289,22 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the secret value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Adding {} secret '{}' to vault {}", 
                request.secret_type.to_string(), request.label, request.vault_id);
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) 
-             VALUES (?1, ?2, ?3, ?4) 
-             RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at"
+            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version"
         )?;
 
         let secret = stmt.query_row(
-            (&request.vault_id, &request.secret_type.to_string(), &request.label, &encrypted_value_base64),
+            (&request.vault_id, &request.secret_type.to_string(), &request.label, &encrypted_value_base64, &key.version()),
             Self::row_to_secret,
         )?;
 
@@ -1311,7 +1328,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at 
+            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE vault_id = ?1 ORDER BY created_at ASC"
         )?;
 
@@ -1327,7 +1346,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at 
+            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+                    strength_score, last_changed, generation_method, policy_version,
+                    last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE id = ?1"
         )?;
 
@@ -1340,12 +1361,13 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
     }
 
-    fn update_secret(&self, secret: &VaultSecret, author_id: i64) -> Result<()> {
+    fn update_secret(&self, secret: &VaultSecret, author_id: i64, key_version: u32) -> Result<()> {
+        crate::keystore::ensure_key_version_is_current(self.conn, key_version)?;
         let rows_affected = self.conn.execute(
-            "UPDATE vault_secrets 
-             SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP 
-             WHERE id = ?3",
-            (&secret.label, &secret.encrypted_value, &secret.id),
+            "UPDATE vault_secrets
+             SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?4",
+            (&secret.label, &secret.encrypted_value, &key_version, &secret.id),
         )?;
 
         if rows_affected == 0 {
@@ -1428,7 +1450,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(versions)
     }
 
-    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64) -> Result<IdentityVault> {
+    fn import_vault(&self, vault_info: &VaultInfo, author_id: i64, key_version: u32) -> Result<IdentityVault> {
+        crate::keystore::ensure_key_version_is_current(self.conn, key_version)?;
         debug!("Importing vault '{}' for asset {}", vault_info.vault.name, vault_info.vault.asset_id);
 
         // Create the vault
@@ -1444,8 +1467,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Import all secrets; callers have already re-encrypted them under this install's data key
         for secret in &vault_info.secrets {
             self.conn.execute(
-                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value) VALUES (?1, ?2, ?3, ?4)",
-                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value),
+                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version) VALUES (?1, ?2, ?3, ?4, ?5)",
+                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value, &key_version),
             )?;
         }
 
@@ -1493,27 +1516,6 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         Ok(history)
     }
 
-    fn check_password_reuse(&self, password_hash: &str, exclude_secret_id: Option<i64>) -> Result<bool> {
-        let query = if let Some(_exclude_id) = exclude_secret_id {
-            "SELECT COUNT(*) FROM password_history ph 
-             JOIN vault_secrets vs ON ph.secret_id = vs.id 
-             WHERE ph.password_hash = ?1 AND vs.id != ?2 AND ph.retired_at IS NULL"
-        } else {
-            "SELECT COUNT(*) FROM password_history ph 
-             JOIN vault_secrets vs ON ph.secret_id = vs.id 
-             WHERE ph.password_hash = ?1 AND ph.retired_at IS NULL"
-        };
-
-        let mut stmt = self.conn.prepare(query)?;
-        let count: i64 = if let Some(exclude_id) = exclude_secret_id {
-            stmt.query_row((password_hash, exclude_id), |row| row.get(0))?
-        } else {
-            stmt.query_row([password_hash], |row| row.get(0))?
-        };
-
-        Ok(count > 0)
-    }
-
     fn update_password(&self, request: UpdateCredentialPasswordRequest, password_hash: &str, strength_score: i32, key: &DataKey) -> Result<()> {
         // First, retire the old password in history if it exists
         self.conn.execute(
@@ -1526,16 +1528,17 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         self.add_password_history(request.secret_id, password_hash)?;
 
         // Encrypt the new password value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         // Update the secret with new password and metadata
         self.conn.execute(
-            "UPDATE vault_secrets 
-             SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP, 
-                 strength_score = ?2, last_changed = CURRENT_TIMESTAMP,
+            "UPDATE vault_secrets
+             SET encrypted_value = ?1, key_version = ?2, updated_at = CURRENT_TIMESTAMP,
+                 strength_score = ?3, last_changed = CURRENT_TIMESTAMP,
                  generation_method = 'manual', policy_version = 1
-             WHERE id = ?3",
-            (&encrypted_value_base64, strength_score, request.secret_id),
+             WHERE id = ?4",
+            (&encrypted_value_base64, key.version(), strength_score, request.secret_id),
         )?;
 
         // Add version history
@@ -1594,7 +1597,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
              WHERE secret_id = ?1 AND id NOT IN (
                  SELECT id FROM password_history 
                  WHERE secret_id = ?1 
-                 ORDER BY created_at DESC 
+                 ORDER BY created_at DESC, id DESC 
                  LIMIT ?2
              )",
             (secret_id, keep_count),
@@ -1613,11 +1616,12 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Handle different update cases based on what fields are provided
         if let (Some(ref label), Some(ref value)) = (&request.label, &request.value) {
             // Both label and value provided
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
-                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
-                (label, encrypted_value_base64, request.secret_id),
+                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP WHERE id = ?4",
+                (label, encrypted_value_base64, key.version(), request.secret_id),
             )?;
         } else if let Some(ref label) = request.label {
             // Only label provided
@@ -1627,11 +1631,12 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
             )?;
         } else if let Some(ref value) = request.value {
             // Only value provided
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
             self.conn.execute(
-                "UPDATE vault_secrets SET encrypted_value = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
-                (encrypted_value_base64, request.secret_id),
+                "UPDATE vault_secrets SET encrypted_value = ?1, key_version = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
+                (encrypted_value_base64, key.version(), request.secret_id),
             )?;
         } else {
             return Err(anyhow::anyhow!("No fields to update"));
@@ -1702,19 +1707,20 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }
 
         // Encrypt the credential value
+        crate::keystore::ensure_key_is_current(self.conn, key)?;
         let encrypted_data_base64 = FileEncryption::new(key).encrypt_to_base64(request.value.as_bytes())?;
 
         debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6) 
+            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              RETURNING id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed"
         )?;
 
         let credential = stmt.query_row(
-            (&request.name, &request.description, &request.credential_type.to_string(), 
-             &request.category_id, &encrypted_data_base64, &request.created_by),
+            (&request.name, &request.description, &request.credential_type.to_string(),
+             &request.category_id, &encrypted_data_base64, &request.created_by, &key.version()),
             Self::row_to_standalone_credential,
         )?;
 
@@ -1779,6 +1785,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()> {
+        // A version number from our own key, not user input, so it is safe inline
+        let encrypted_data_clause = format!("encrypted_data = ?, key_version = {}", key.version());
         let mut updates = Vec::new();
         let mut changes = HashMap::new();
 
@@ -1800,9 +1808,10 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
         let encrypted_data_base64 = if let Some(ref value) = request.value {
             // Encrypt the new value
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
             
-            updates.push("encrypted_data = ?");
+            updates.push(encrypted_data_clause.as_str());
             changes.insert("value_updated".to_string(), "true".to_string());
             Some(encrypted_base64)
         } else {
@@ -2882,6 +2891,50 @@ mod tests {
     }
 
     #[test]
+    fn test_secret_queries_populate_rotation_and_password_fields() {
+        use crate::audit::{AuditRepository, SqliteAuditRepository};
+        use rotation::{PasswordRotationRequest, PasswordRotationService};
+
+        let (_temp_file, conn) = setup_test_db();
+        SqliteAuditRepository::new(&conn).initialize_schema().unwrap();
+        let repo = SqliteVaultRepository::new(&conn);
+        let vault = repo.create_vault(CreateVaultRequest {
+            asset_id: 1, name: "Vault".to_string(), description: "D".to_string(), created_by: 1,
+        }).unwrap();
+        let secret = repo.add_secret(AddSecretRequest {
+            vault_id: vault.id, secret_type: SecretType::Password, label: "pw".to_string(),
+            value: "Old-Password-123".to_string(), author_id: 1,
+        }, test_key()).unwrap();
+        assert!(secret.last_rotated.is_none());
+
+        PasswordRotationService::new(
+            &conn,
+            Box::new(SqliteVaultRepository::new(&conn)),
+            Box::new(SqliteAuditRepository::new(&conn)),
+        ).rotate_password(PasswordRotationRequest {
+            secret_id: secret.id, new_password: "New-Password-456".to_string(),
+            rotation_reason: "Scheduled".to_string(), author_id: 1, batch_id: None,
+        }, test_key()).unwrap();
+        conn.execute(
+            "UPDATE vault_secrets SET strength_score = 77, generation_method = 'manual', policy_version = 2 WHERE id = ?1",
+            [secret.id],
+        ).unwrap();
+
+        let by_id = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+        assert!(by_id.last_rotated.is_some(), "last_rotated must be read back");
+        assert!(by_id.last_changed.is_some());
+        assert!(by_id.next_rotation_due.is_some());
+        assert_eq!(by_id.strength_score, Some(77));
+        assert_eq!(by_id.generation_method.as_deref(), Some("manual"));
+        assert_eq!(by_id.policy_version, Some(2));
+
+        let listed = repo.get_vault_secrets(vault.id).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].last_rotated, by_id.last_rotated);
+        assert_eq!(listed[0].strength_score, Some(77));
+    }
+
+    #[test]
     fn test_rotated_password_is_encrypted_with_data_key() {
         use crate::audit::{AuditRepository, SqliteAuditRepository};
         use rotation::{PasswordRotationRequest, PasswordRotationService};
@@ -2923,3 +2976,101 @@ mod tests {
     }
 }
 
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for AddSecretRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddSecretRequest")
+            .field("vault_id", &self.vault_id)
+            .field("secret_type", &self.secret_type)
+            .field("label", &self.label)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateCredentialPasswordRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateCredentialPasswordRequest")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateVaultSecretRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateVaultSecretRequest")
+            .field("secret_id", &self.secret_id)
+            .field("label", &self.label)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for CreateStandaloneCredentialRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateStandaloneCredentialRequest")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("credential_type", &self.credential_type)
+            .field("category_id", &self.category_id)
+            .field("value", &"[REDACTED]")
+            .field("tags", &self.tags)
+            .field("created_by", &self.created_by)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for UpdateStandaloneCredentialRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateStandaloneCredentialRequest")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("category_id", &self.category_id)
+            .field("value", &"[REDACTED]")
+            .field("author_id", &self.author_id)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn debug_output_redacts_secrets() {
+        let secret = "sup3r-s3cret-v@lue";
+        let add = format!("{:?}", AddSecretRequest {
+            vault_id: 1, secret_type: SecretType::Password, label: "l".into(),
+            value: secret.into(), author_id: 1,
+        });
+        assert!(!add.contains(secret));
+        assert!(add.contains("[REDACTED]"));
+        let upd = format!("{:?}", UpdateCredentialPasswordRequest {
+            secret_id: 1, new_password: secret.into(), author_id: 1,
+        });
+        assert!(!upd.contains(secret));
+        let upd2 = format!("{:?}", UpdateVaultSecretRequest {
+            secret_id: 1, label: None, value: Some(secret.into()), author_id: 1,
+        });
+        assert!(!upd2.contains(secret));
+        let upd3 = format!("{:?}", UpdateStandaloneCredentialRequest {
+            id: 1, name: None, description: None, category_id: None,
+            value: Some(secret.into()), author_id: 1,
+        });
+        assert!(!upd3.contains(secret));
+        let create = format!("{:?}", CreateStandaloneCredentialRequest {
+            name: "n".into(), description: "d".into(), credential_type: SecretType::Password,
+            category_id: None, value: secret.into(), tags: None, created_by: 1,
+        });
+        assert!(!create.contains(secret));
+    }
+}

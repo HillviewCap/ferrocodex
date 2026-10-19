@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import UserManagement from './UserManagement';
 import useAuthStore from '../store/auth';
 import useUserManagementStore from '../store/userManagement';
+import useKeyRotationStore from '../store/keyRotation';
 
 // Mock the stores
 vi.mock('../store/auth');
@@ -36,6 +37,7 @@ describe('UserManagement', () => {
     createEngineerUser: vi.fn().mockResolvedValue(undefined),
     deactivateUser: vi.fn().mockResolvedValue(undefined),
     reactivateUser: vi.fn().mockResolvedValue(undefined),
+    resetUserPassword: vi.fn().mockResolvedValue(undefined),
     clearError: vi.fn(),
     clearCreateUserError: vi.fn(),
     setLoading: vi.fn(),
@@ -165,15 +167,61 @@ describe('UserManagement', () => {
     });
   });
 
-  it('calls reactivateUser when reactivate is clicked', async () => {
+  it('asks for a temporary password and calls reactivateUser', async () => {
     render(<UserManagement />);
-    
-    const reactivateButton = screen.getByText('Reactivate');
-    fireEvent.click(reactivateButton);
-    
+
+    fireEvent.click(screen.getByText('Reactivate'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
     await waitFor(() => {
-      expect(mockUserManagementStore.reactivateUser).toHaveBeenCalledWith('test-token', 3);
-    });
+      expect(mockUserManagementStore.reactivateUser).toHaveBeenCalledWith('test-token', 3, 'Temp-Pass-456');
+    }, VALIDATION_TIMEOUT);
+  });
+
+  it('does not reactivate when the passwords differ', async () => {
+    render(<UserManagement />);
+
+    fireEvent.click(screen.getByText('Reactivate'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Different-789' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+    expect(await within(dialog).findByText('Passwords do not match', undefined, VALIDATION_TIMEOUT)).toBeInTheDocument();
+    expect(mockUserManagementStore.reactivateUser).not.toHaveBeenCalled();
+  });
+
+  it('offers Reset password only for other active users and calls resetUserPassword', async () => {
+    render(<UserManagement />);
+
+    // Active users are admin (self, hidden) and engineer1; engineer2 is inactive
+    expect(screen.getAllByText('Reset password')).toHaveLength(1);
+
+    const engineerRow = screen.getByText('engineer1').closest('tr')!;
+    fireEvent.click(within(engineerRow).getByText('Reset password'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByPlaceholderText('Enter temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.change(within(dialog).getByPlaceholderText('Confirm temporary password'), { target: { value: 'Temp-Pass-456' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Set Password' }));
+
+    await waitFor(() => {
+      expect(mockUserManagementStore.resetUserPassword).toHaveBeenCalledWith('test-token', 2, 'Temp-Pass-456');
+    }, VALIDATION_TIMEOUT);
+  });
+
+  it('warns that deactivation revokes encrypted-data access', async () => {
+    render(<UserManagement />);
+
+    const engineerRow = screen.getByText('engineer1').closest('tr')!;
+    fireEvent.click(within(engineerRow).getByText('Deactivate'));
+
+    expect(await screen.findByText(/access to encrypted data is revoked/)).toBeInTheDocument();
   });
 
   it('calls fetchUsers when refresh button is clicked', async () => {
@@ -235,6 +283,57 @@ describe('UserManagement', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+    });
+  });
+
+  describe('encryption access', () => {
+    const statusWith = (details: Record<string, unknown> | null) => ({
+      in_progress: false,
+      active_version: 1,
+      retiring_version: null,
+      details,
+    });
+
+    beforeEach(() => {
+      useKeyRotationStore.getState().reset();
+    });
+
+    it('marks users without a key and hints at Reset password', () => {
+      useKeyRotationStore.setState({
+        status: statusWith({
+          remaining: { configuration_versions: 0, vault_secrets: 0, standalone_credentials: 0, firmware_versions: 0, total: 0 },
+          failures: [],
+          users_without_keypair: [{ id: 2, username: 'engineer1', role: 'Engineer' }],
+          users_without_access: [],
+          active_analysis_jobs: 0,
+        }),
+      });
+      render(<UserManagement />);
+
+      expect(screen.getByText('Encryption access')).toBeInTheDocument();
+      expect(screen.getAllByText('No access - reset password')).toHaveLength(1);
+      // The active admin has access; the inactive engineer shows neither tag
+      expect(screen.getAllByText('Has access')).toHaveLength(1);
+    });
+
+    it('also marks users listed as without access after a rotation', () => {
+      useKeyRotationStore.setState({
+        status: statusWith({
+          remaining: { configuration_versions: 0, vault_secrets: 0, standalone_credentials: 0, firmware_versions: 0, total: 0 },
+          failures: [],
+          users_without_keypair: [],
+          users_without_access: [{ id: 1, username: 'admin', role: 'Administrator' }],
+          active_analysis_jobs: 0,
+        }),
+      });
+      render(<UserManagement />);
+      expect(screen.getAllByText('No access - reset password')).toHaveLength(1);
+    });
+
+    it('opens the rotation modal from the Rotate Encryption Key button', async () => {
+      render(<UserManagement />);
+      fireEvent.click(screen.getByRole('button', { name: /Rotate Encryption Key/ }));
+      expect(await screen.findByText('Begin rotation', undefined, VALIDATION_TIMEOUT)).toBeInTheDocument();
     });
   });
 });

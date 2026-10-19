@@ -20,12 +20,17 @@ impl<'a> VaultAccessControlService<'a> {
 
     /// Check if a user has access to a vault with a specific permission
     pub fn check_vault_access(&self, user: &User, vault_id: i64, permission_type: PermissionType) -> Result<VaultAccessInfo> {
-        debug!("Checking vault access for user {} on vault {} with permission {:?}", 
-               user.id, vault_id, permission_type);
+        self.check_access(user.id, &user.role, vault_id, permission_type)
+    }
 
-        // Administrators always have full access
-        if user.role == UserRole::Administrator {
-            info!("Administrator {} has full access to vault {}", user.username, vault_id);
+    /// Decide whether a user holds a permission on a vault, without logging.
+    ///
+    /// Administrators hold every permission. The vault's creator holds Read,
+    /// Write and Export on it, so they can manage and back up their own vault's
+    /// secrets. Share, and any access to other users' vaults, need an active,
+    /// unexpired grant.
+    pub fn evaluate_access(&self, user_id: i64, role: &UserRole, vault_id: i64, permission_type: PermissionType) -> Result<VaultAccessInfo> {
+        if *role == UserRole::Administrator {
             return Ok(VaultAccessInfo {
                 has_access: true,
                 permissions: vec![],
@@ -33,18 +38,43 @@ impl<'a> VaultAccessControlService<'a> {
             });
         }
 
-        // For engineers, check specific permissions
-        let conn = self.db_conn;
-        let repo = SqliteVaultRepository::new(&conn);
-        
-        let request = CheckVaultAccessRequest {
-            user_id: user.id,
+        let repo = SqliteVaultRepository::new(self.db_conn);
+        let mut access_info = repo.check_vault_access(CheckVaultAccessRequest {
+            user_id,
             vault_id,
             permission_type,
-        };
+        })?;
 
-        let access_info = repo.check_vault_access(request)?;
-        
+        if !access_info.has_access && Self::creator_holds(permission_type) {
+            if let Some(vault) = repo.get_vault_by_id(vault_id)? {
+                access_info.has_access = vault.created_by == user_id;
+            }
+        }
+
+        Ok(access_info)
+    }
+
+    /// Permissions a vault's creator holds on it without a grant. Share stays
+    /// with administrators, who are the only ones who can grant access.
+    fn creator_holds(permission_type: PermissionType) -> bool {
+        matches!(permission_type, PermissionType::Read | PermissionType::Write | PermissionType::Export)
+    }
+
+    /// Check access like `evaluate_access`, and record the attempt in the vault
+    /// access log for non-administrators.
+    pub fn check_access(&self, user_id: i64, role: &UserRole, vault_id: i64, permission_type: PermissionType) -> Result<VaultAccessInfo> {
+        debug!("Checking vault access for user {} on vault {} with permission {:?}",
+               user_id, vault_id, permission_type);
+
+        let access_info = self.evaluate_access(user_id, role, vault_id, permission_type)?;
+
+        if access_info.is_administrator {
+            info!("Administrator {} has full access to vault {}", user_id, vault_id);
+            return Ok(access_info);
+        }
+
+        let repo = SqliteVaultRepository::new(self.db_conn);
+
         // Log the access attempt
         let result = if access_info.has_access {
             AccessResult::Success
@@ -59,9 +89,9 @@ impl<'a> VaultAccessControlService<'a> {
             PermissionType::Share => AccessType::Share,
         };
         
-        repo.log_vault_access(user.id, vault_id, access_type, result, None)?;
-        
-        debug!("Access check result for user {}: has_access={}", user.id, access_info.has_access);
+        repo.log_vault_access(user_id, vault_id, access_type, result, None)?;
+
+        debug!("Access check result for user {}: has_access={}", user_id, access_info.has_access);
         Ok(access_info)
     }
 
@@ -268,6 +298,44 @@ mod tests {
         assert!(!service.check_permission_inheritance(&engineer_user, PermissionType::Write));
         assert!(!service.check_permission_inheritance(&engineer_user, PermissionType::Export));
         assert!(!service.check_permission_inheritance(&engineer_user, PermissionType::Share));
+    }
+
+    #[test]
+    fn test_creator_holds_read_write_and_export() {
+        let (_temp_file, db_conn) = setup_test_db();
+        let conn_guard = db_conn.lock().unwrap();
+        let conn = &*conn_guard;
+        conn.execute_batch(
+            "INSERT INTO users (id, username, password_hash, role) VALUES (2, 'creator', 'hash', 'Engineer');
+             INSERT INTO users (id, username, password_hash, role) VALUES (3, 'other', 'hash', 'Engineer');
+             INSERT INTO assets (id, name, created_by) VALUES (1, 'PLC-1', 2);"
+        ).unwrap();
+        let vault = SqliteVaultRepository::new(conn).create_vault(crate::vault::CreateVaultRequest {
+            asset_id: 1,
+            name: "Vault".to_string(),
+            description: String::new(),
+            created_by: 2,
+        }).unwrap();
+        let service = VaultAccessControlService::new(conn);
+        let has = |user_id, permission| {
+            service.evaluate_access(user_id, &UserRole::Engineer, vault.id, permission).unwrap().has_access
+        };
+
+        assert!(has(2, PermissionType::Read));
+        assert!(has(2, PermissionType::Write));
+        assert!(has(2, PermissionType::Export));
+        assert!(!has(2, PermissionType::Share));
+        assert!(!has(3, PermissionType::Read));
+        assert!(!has(3, PermissionType::Write));
+        assert!(!has(3, PermissionType::Export));
+
+        // evaluate_access logs nothing; check_access logs every engineer check
+        let repo = SqliteVaultRepository::new(conn);
+        assert!(repo.get_vault_access_log(vault.id, None).unwrap().is_empty());
+        service.check_access(3, &UserRole::Engineer, vault.id, PermissionType::Read).unwrap();
+        let log = repo.get_vault_access_log(vault.id, None).unwrap();
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].result, AccessResult::Denied);
     }
 
     #[test]

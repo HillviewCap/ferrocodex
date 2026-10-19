@@ -214,7 +214,29 @@ impl<'a> SqliteAssetRepository<'a> {
                 FOREIGN KEY (created_by) REFERENCES users(id),
                 FOREIGN KEY (parent_id) REFERENCES assets(id) ON DELETE CASCADE
             );
+            "#,
+        )?;
 
+        // Databases created before v0.5.0 have an assets table without the
+        // hierarchy columns, and CREATE TABLE IF NOT EXISTS won't add them.
+        // They must exist before the indexes below are created.
+        for (column, definition) in [
+            ("asset_type", "TEXT NOT NULL DEFAULT 'device'"),
+            ("parent_id", "INTEGER REFERENCES assets(id) ON DELETE CASCADE"),
+            ("sort_order", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            let exists: bool = self.conn.query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('assets') WHERE name = ?1",
+                [column],
+                |row| row.get(0),
+            )?;
+            if !exists {
+                self.conn.execute(&format!("ALTER TABLE assets ADD COLUMN {} {}", column, definition), [])?;
+            }
+        }
+
+        self.conn.execute_batch(
+            r#"
             CREATE INDEX IF NOT EXISTS idx_assets_name ON assets(name);
             CREATE INDEX IF NOT EXISTS idx_assets_created_by ON assets(created_by);
             CREATE INDEX IF NOT EXISTS idx_assets_created_at ON assets(created_at);
@@ -646,6 +668,47 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
     use rusqlite::Connection;
+
+    #[test]
+    fn test_initialize_schema_upgrades_pre_hierarchy_assets_table() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let conn = Connection::open(temp_file.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL);
+            INSERT INTO users (id, username, password_hash, role) VALUES (1, 'testuser', 'hash', 'Engineer');
+            -- assets as created by v0.4.x
+            CREATE TABLE assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_by INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            );
+            INSERT INTO assets (id, name, description, created_by) VALUES (1, 'PLC-1', 'old', 1);
+            "#,
+        ).unwrap();
+
+        let repo = SqliteAssetRepository::new(&conn);
+        repo.initialize_schema().unwrap();
+        // Running it again must be a no-op
+        repo.initialize_schema().unwrap();
+
+        let asset = repo.get_asset_by_id(1).unwrap().unwrap();
+        assert_eq!(asset.name, "PLC-1");
+        assert_eq!(asset.asset_type, AssetType::Device);
+        assert_eq!(asset.parent_id, None);
+        assert_eq!(asset.sort_order, 0);
+        let index_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('idx_assets_parent_id', 'idx_assets_type', 'idx_assets_sort_order')",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(index_count, 3);
+    }
 
     fn setup_test_db() -> (NamedTempFile, Connection) {
         let temp_file = NamedTempFile::new().unwrap();

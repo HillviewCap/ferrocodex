@@ -2,6 +2,7 @@ use anyhow::Result;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
@@ -21,12 +22,32 @@ pub struct SessionToken {
     /// and never serialized.
     #[serde(skip)]
     pub data_key: Option<Arc<DataKey>>,
+    /// Shared with the [`SessionManager`] and every other session. Set while
+    /// a data-key rotation is in progress, which blocks [`SessionToken::data_key`].
+    #[serde(skip)]
+    rotation_gate: Arc<AtomicBool>,
 }
 
+/// The error every encrypted-data command returns while a rotation runs.
+pub const KEY_ROTATION_IN_PROGRESS_ERROR: &str =
+    "Encryption key rotation in progress; an administrator must finish it";
+
 impl SessionToken {
+    /// The unlocked data key, for reading or writing encrypted data. Errors
+    /// while a data-key rotation is in progress, so nothing is read or written
+    /// under a key that is being replaced.
     pub fn data_key(&self) -> Result<Arc<DataKey>, String> {
+        if self.rotation_gate.load(Ordering::SeqCst) {
+            return Err(KEY_ROTATION_IN_PROGRESS_ERROR.to_string());
+        }
+        self.rotation_key()
+    }
+
+    /// The unlocked data key regardless of the rotation gate. Only the
+    /// rotation commands and Replace Recovery Key may use this.
+    pub fn rotation_key(&self) -> Result<Arc<DataKey>, String> {
         self.data_key.clone().ok_or_else(|| {
-            "Encrypted data is unavailable for this account. An administrator must reset its password with the recovery key.".to_string()
+            "Encrypted data is unavailable for this account. Ask an administrator to reset your password in User Management.".to_string()
         })
     }
 }
@@ -41,6 +62,10 @@ pub struct LoginResponse {
     /// Set only when this login created the data key. Shown to the user once.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovery_code: Option<String>,
+    /// True while a data-key rotation is in progress: encrypted data is
+    /// unavailable until an administrator finishes it.
+    #[serde(default)]
+    pub key_rotation_in_progress: bool,
 }
 
 // Type alias for service compatibility
@@ -51,6 +76,11 @@ pub type AuthState = SessionManager;
 pub struct SessionManager {
     sessions: Mutex<HashMap<String, SessionToken>>,
     session_duration: u64, // in seconds
+    rotation_gate: Arc<AtomicBool>,
+    /// Bumped every time begin or finalize sets or clears the gate. Login
+    /// reads the database without holding the session lock, so it uses this
+    /// to tell whether the state it read is still current.
+    rotation_epoch: AtomicU64,
 }
 
 impl SessionManager {
@@ -58,7 +88,50 @@ impl SessionManager {
         Self {
             sessions: Mutex::new(HashMap::new()),
             session_duration: 24 * 60 * 60, // 24 hours
+            rotation_gate: Arc::new(AtomicBool::new(false)),
+            rotation_epoch: AtomicU64::new(0),
         }
+    }
+
+    /// Opens or closes the rotation gate for every session, current and
+    /// future. For the rotation commands (begin and finalize), right after
+    /// they commit; it also bumps the rotation epoch.
+    pub fn set_rotation_in_progress(&self, in_progress: bool) {
+        self.rotation_epoch.fetch_add(1, Ordering::SeqCst);
+        let was = self.rotation_gate.swap(in_progress, Ordering::SeqCst);
+        if was != in_progress {
+            info!("Data-key rotation gate {}", if in_progress { "set" } else { "cleared" });
+        }
+    }
+
+    /// The current rotation epoch; read before looking up the rotation state
+    /// in the database, and pass it to [`SessionManager::sync_rotation_gate`].
+    pub fn rotation_epoch(&self) -> u64 {
+        self.rotation_epoch.load(Ordering::SeqCst)
+    }
+
+    /// For login: sets the gate to the rotation state read from the database
+    /// after `epoch` was taken (a retiring key exists or not), so a restart
+    /// in the middle of a rotation gates every session again.
+    ///
+    /// Login does not hold the session lock while it reads the database (that
+    /// lock order could deadlock). If begin or finalize changed the gate since
+    /// `epoch`, what login read may be stale (and so may the key it opened):
+    /// nothing is changed and this returns false, and the caller must read the
+    /// database again before creating a session.
+    pub fn sync_rotation_gate(&self, epoch: u64, in_progress: bool) -> bool {
+        if self.rotation_epoch.load(Ordering::SeqCst) != epoch {
+            return false;
+        }
+        let was = self.rotation_gate.swap(in_progress, Ordering::SeqCst);
+        if was != in_progress {
+            info!("Data-key rotation gate {} at login", if in_progress { "set" } else { "cleared" });
+        }
+        true
+    }
+
+    pub fn rotation_in_progress(&self) -> bool {
+        self.rotation_gate.load(Ordering::SeqCst)
     }
 
     pub fn create_session(&self, user: &User) -> Result<SessionToken> {
@@ -79,6 +152,7 @@ impl SessionManager {
             role: user.role.clone(),
             expires_at: now + self.session_duration,
             data_key: data_key.map(Arc::new),
+            rotation_gate: self.rotation_gate.clone(),
         };
 
         {
@@ -118,6 +192,42 @@ impl SessionManager {
             info!("Invalidated session for user: {}", session.username);
         }
         Ok(())
+    }
+
+    /// Ends every session belonging to `user_id`. Returns how many were removed.
+    pub fn invalidate_user_sessions(&self, user_id: i64) -> usize {
+        let mut sessions = self.sessions.lock().unwrap();
+        let before = sessions.len();
+        sessions.retain(|_, session| session.user_id != user_id);
+        let removed = before - sessions.len();
+        if removed > 0 {
+            info!("Invalidated {} session(s) for user ID {}", removed, user_id);
+        }
+        removed
+    }
+
+    /// Ends every session except `keep_token`. Returns how many were removed.
+    pub fn invalidate_all_except(&self, keep_token: &str) -> usize {
+        let mut sessions = self.sessions.lock().unwrap();
+        let before = sessions.len();
+        sessions.retain(|token, _| token == keep_token);
+        let removed = before - sessions.len();
+        if removed > 0 {
+            info!("Invalidated {} other session(s)", removed);
+        }
+        removed
+    }
+
+    /// Swaps the unlocked data key held by one session. Errors if there is no such session.
+    pub fn replace_session_key(&self, token: &str, key: DataKey) -> Result<()> {
+        let mut sessions = self.sessions.lock().unwrap();
+        match sessions.get_mut(token) {
+            Some(session) => {
+                session.data_key = Some(Arc::new(key));
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Session not found")),
+        }
     }
 
     pub fn cleanup_expired_sessions(&self) -> Result<()> {
@@ -428,6 +538,113 @@ pub mod tests {
 
         let validated = session_manager.validate_session(&session.token).unwrap();
         assert!(validated.is_none());
+    }
+
+    fn test_user(id: i64, name: &str) -> User {
+        User {
+            id,
+            username: name.to_string(),
+            password_hash: "hash".to_string(),
+            role: UserRole::Engineer,
+            created_at: "2023-01-01".to_string(),
+            updated_at: "2023-01-01".to_string(),
+            is_active: true,
+        }
+    }
+
+    #[test]
+    fn test_invalidate_user_sessions() {
+        let manager = SessionManager::new();
+        let a1 = manager.create_session(&test_user(1, "a")).unwrap();
+        let a2 = manager.create_session(&test_user(1, "a")).unwrap();
+        let b = manager.create_session(&test_user(2, "b")).unwrap();
+
+        assert_eq!(manager.invalidate_user_sessions(1), 2);
+        assert!(manager.validate_session(&a1.token).unwrap().is_none());
+        assert!(manager.validate_session(&a2.token).unwrap().is_none());
+        assert!(manager.validate_session(&b.token).unwrap().is_some());
+        assert_eq!(manager.invalidate_user_sessions(1), 0);
+    }
+
+    #[test]
+    fn test_invalidate_all_except() {
+        let manager = SessionManager::new();
+        let keep = manager.create_session(&test_user(1, "a")).unwrap();
+        let other1 = manager.create_session(&test_user(2, "b")).unwrap();
+        let other2 = manager.create_session(&test_user(1, "a")).unwrap();
+
+        assert_eq!(manager.invalidate_all_except(&keep.token), 2);
+        assert!(manager.validate_session(&keep.token).unwrap().is_some());
+        assert!(manager.validate_session(&other1.token).unwrap().is_none());
+        assert!(manager.validate_session(&other2.token).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_replace_session_key() {
+        use crate::encryption::FileEncryption;
+        let manager = SessionManager::new();
+        let k1 = DataKey::generate();
+        let session = manager.create_session_with_key(&test_user(1, "a"), Some(k1)).unwrap();
+        let old_key = session.data_key().unwrap();
+        let ciphertext = FileEncryption::new(&old_key).encrypt(b"probe").unwrap();
+
+        manager.replace_session_key(&session.token, DataKey::generate()).unwrap();
+        let new_key = manager.validate_session(&session.token).unwrap().unwrap().data_key().unwrap();
+        assert!(FileEncryption::new(&new_key).decrypt(&ciphertext).is_err());
+        assert!(FileEncryption::new(&old_key).decrypt(&ciphertext).is_ok());
+
+        assert!(manager.replace_session_key("missing", DataKey::generate()).is_err());
+    }
+
+    #[test]
+    fn test_rotation_gate_blocks_data_key_for_every_session() {
+        let manager = SessionManager::new();
+        let before = manager.create_session_with_key(&test_user(1, "a"), Some(DataKey::generate())).unwrap();
+        assert!(before.data_key().is_ok());
+
+        manager.set_rotation_in_progress(true);
+        assert!(manager.rotation_in_progress());
+        // Sessions created before and after the gate was set, and copies
+        // returned by validate_session, all share it
+        let after = manager.create_session_with_key(&test_user(2, "b"), Some(DataKey::generate())).unwrap();
+        let validated = manager.validate_session(&before.token).unwrap().unwrap();
+        for session in [&before, &after, &validated] {
+            assert_eq!(session.data_key().unwrap_err(), KEY_ROTATION_IN_PROGRESS_ERROR);
+            assert!(session.rotation_key().is_ok());
+        }
+
+        manager.set_rotation_in_progress(false);
+        assert!(before.data_key().is_ok());
+        assert!(after.data_key().is_ok());
+    }
+
+    /// Login reads the rotation state without the session lock. A begin or
+    /// finalize in between must win: login may not undo the gate it set.
+    #[test]
+    fn test_login_cannot_overwrite_a_gate_changed_meanwhile() {
+        let manager = SessionManager::new();
+        let epoch = manager.rotation_epoch();
+        // begin commits and sets the gate after login read "no rotation"
+        manager.set_rotation_in_progress(true);
+        assert!(!manager.sync_rotation_gate(epoch, false));
+        assert!(manager.rotation_in_progress());
+
+        // A login that read the current state applies it
+        let epoch = manager.rotation_epoch();
+        assert!(manager.sync_rotation_gate(epoch, true));
+        assert!(manager.rotation_in_progress());
+        // finalize clears it after login read "rotation in progress"
+        manager.set_rotation_in_progress(false);
+        assert!(!manager.sync_rotation_gate(epoch, true));
+        assert!(!manager.rotation_in_progress());
+    }
+
+    #[test]
+    fn test_rotation_key_without_a_key_errors() {
+        let manager = SessionManager::new();
+        let session = manager.create_session(&test_user(1, "a")).unwrap();
+        assert!(session.rotation_key().is_err());
+        assert!(session.data_key().is_err());
     }
 
     #[test]

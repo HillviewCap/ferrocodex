@@ -35,6 +35,7 @@ pub async fn create_bulk_import_session(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -72,6 +73,7 @@ pub async fn get_bulk_import_sessions(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -102,6 +104,7 @@ pub async fn get_bulk_import_session_details(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -134,6 +137,7 @@ pub async fn delete_bulk_import_session(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -177,6 +181,7 @@ pub async fn upload_bulk_import_file(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Validate file exists
     if !Path::new(&file_path).exists() {
@@ -225,6 +230,7 @@ pub async fn validate_bulk_import_data(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -269,6 +275,7 @@ pub async fn start_bulk_import_processing(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -337,6 +344,7 @@ pub async fn get_bulk_import_progress(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -393,6 +401,7 @@ pub async fn pause_bulk_import(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -426,6 +435,7 @@ pub async fn resume_bulk_import(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -459,6 +469,7 @@ pub async fn cancel_bulk_import(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -489,6 +500,7 @@ pub async fn get_bulk_operation_stats(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -521,6 +533,7 @@ pub async fn create_import_template(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -552,6 +565,7 @@ pub async fn get_import_templates(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -584,6 +598,7 @@ pub async fn delete_import_template(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -627,6 +642,7 @@ pub async fn generate_import_template_csv(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Generate CSV headers based on asset type and metadata schema
     let mut headers = vec!["name".to_string(), "asset_type".to_string(), "description".to_string()];
@@ -944,6 +960,7 @@ pub async fn start_bulk_move(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -990,6 +1007,7 @@ pub async fn start_bulk_delete(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1036,6 +1054,7 @@ pub async fn start_bulk_export(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1087,6 +1106,7 @@ pub async fn start_bulk_classify(
     let current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1128,6 +1148,7 @@ pub async fn get_bulk_operation_progress(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1162,6 +1183,7 @@ pub async fn cancel_bulk_operation(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1198,6 +1220,7 @@ pub async fn get_bulk_operation_history(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1232,6 +1255,7 @@ pub async fn validate_bulk_move(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1353,6 +1377,7 @@ pub async fn validate_bulk_delete(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1386,6 +1411,7 @@ pub async fn validate_bulk_export(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1419,6 +1445,7 @@ pub async fn validate_bulk_classify(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();
@@ -1451,6 +1478,7 @@ pub async fn undo_bulk_operation(
     let _current_user = session_manager
         .get_current_user()
         .ok_or("Authentication required")?;
+    drop(session_manager);
 
     // Get database connection
     let db_guard = db_state.lock().unwrap();

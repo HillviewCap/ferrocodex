@@ -100,7 +100,8 @@ Forgotten Password
 **Engineer Password:**
 
 1. Contact your administrator
-2. The administrator can deactivate the account and create a new one for you
+2. The administrator uses **Reset password** on your row in **User Management** to set a temporary password
+3. Log in with the temporary password
 
 **Administrator Password:**
 
@@ -123,6 +124,138 @@ Session Timeout
 1. Sessions expire 24 hours after login
 2. Logging out ends the session immediately
 3. Log in again to continue working
+
+Encryption and Key Rotation
+---------------------------
+
+Rotation in Progress
+^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Encryption key rotation in progress; an administrator must finish it"**
+
+*Cause:*
+
+An administrator started a data-key rotation and it has not finished. While it runs, nobody can read or write encrypted data (configuration content, firmware, vault secrets, standalone credentials). The block also applies after a restart if the rotation was interrupted.
+
+*Solution (engineers):*
+
+1. Wait, or ask an administrator to finish the rotation
+2. Retry after it completes; no new login is needed
+
+*Solution (administrators):*
+
+1. Log in and open **User Management**
+2. Click **Rotate Encryption Key** to resume the rotation
+3. Let it run until it finishes. If it stops with a list of failed items, see :ref:`rotating-the-encryption-key`
+
+See :ref:`rotating-the-encryption-key` in the administrator guide for the full procedure.
+
+Rotation Stops With Failed Items
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N item(s) could not be decrypted with the old key and were recorded as failures..."**
+
+*Cause:*
+
+Some items did not decrypt with the old key, a firmware file is missing, or a firmware path points outside the firmware folder. The rotation re-encrypted everything else and is waiting for a decision.
+
+*Solution:*
+
+1. Read the reason shown for each failed item
+2. If you can fix it (for example, restore a missing firmware file from a backup to the same place), do so and click **Retry failed items**, then let the rotation run again
+3. Only if the items are truly lost, click **Finalize and discard unreadable items**. This destroys the old key, so they stay unreadable permanently
+
+**Issue: "N item(s) recorded as unreadable can be decrypted now. Retry the failed items instead of discarding them."**
+
+*Cause:*
+
+Before discarding, Ferrocodex checks every failed item again. At least one of them now decrypts with the old key (for example, a restored file), or was already re-encrypted. Discarding would destroy data that can still be saved.
+
+*Solution:*
+
+Click **Retry failed items** and let the rotation run until it finishes.
+
+**Issue: "Some failed items could not be checked before discarding (...)"**
+
+*Cause:*
+
+A failed firmware file could not be read during the check (for example, missing permissions or a locked file), so Ferrocodex cannot confirm it is unreadable.
+
+*Solution:*
+
+Fix the access problem named in the message and try again.
+
+Rotation Stops With a Read or Write Error
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Failed to re-encrypt firmware N: ... Fix the problem and continue the rotation."**
+
+*Cause:*
+
+A firmware file could not be read or the re-encrypted copy could not be written (another program has the file open, missing permissions, a full disk). The data is not damaged and nothing was recorded as a failure.
+
+*Solution:*
+
+1. Fix the problem named in the message
+2. Click **Rotate Encryption Key** again to resume
+
+Writes Refused With an Outdated Key
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Your session holds an outdated encryption key; log in again"**
+
+*Cause:*
+
+The data key was rotated after this session (or a running task, such as a firmware upload or analysis) obtained its key. Ferrocodex refuses to store anything under the old key, because it would be unreadable.
+
+*Solution:*
+
+Log in again and repeat the action.
+
+Cannot Open Encrypted Data After a Rotation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "Encrypted data is unavailable for this account. Ask an administrator to reset your password in User Management."**
+
+*Cause:*
+
+The user can log in but has no copy of the active data key. After a rotation this affects active users who had no encryption keypair when it started (for example, accounts that had not logged in since keypairs were introduced).
+
+*Solution:*
+
+1. Wait until the rotation has finished
+2. An administrator opens **User Management** and uses **Reset password** on the user's row, entering a temporary password
+3. The user logs in with the temporary password.
+
+If the affected user is the only administrator, use **Forgot password?** on the login screen with the recovery key shown when the rotation started. The recovery key from before the rotation no longer works.
+
+Rotation Refused: Analysis Jobs Running
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N firmware analysis job(s) are queued or running; wait for them to finish before rotating the encryption key"**
+
+*Cause:*
+
+Each firmware analysis job holds a copy of the current key. Rotating while one runs would leave a job working with a key that is being replaced. (A job queued just after the rotation starts does not use its old key: it fails with "Analysis failed: Encryption key rotation in progress" and can be retried once the rotation has finished.)
+
+*Solution:*
+
+1. Wait for the analysis jobs to finish
+2. If none appear to be running, restart Ferrocodex to clear the job count, then log in and try again
+
+Rotation Refused: Users Without Keypairs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Issue: "N active user(s) have no encryption keypair and will lose access to encrypted data until an administrator resets their password... Acknowledge this to continue."**
+
+*Cause:*
+
+Those users have no keypair to seal the new key to. They get one the next time they log in with their own password, or when an administrator resets their password.
+
+*Solutions:*
+
+1. To avoid any loss of access, ask those users to log in once, then start the rotation again
+2. Or tick the acknowledgement checkbox and rotate now, then use **Reset password** for each listed user afterwards
 
 Performance Issues
 ------------------
@@ -453,13 +586,24 @@ Password Generation Problems
 Vault Access Denied
 ^^^^^^^^^^^^^^^^^^^
 
-**Issue: "Access Denied" when opening vault**
+**Issue: "Access denied" on a vault operation (open, add or edit a secret, view a secret, export, share)**
+
+*Cause:*
+
+Vault permissions are enforced by the backend on every operation. You do not hold the permission the operation needs:
+
+* Administrators hold every permission
+* The creator of a vault holds Read, Write, and Export on it
+* Everyone else needs an explicit, unexpired grant for that permission on that vault
+* Share is administrator-only
+
+A Read grant does not allow editing or exporting, so a user can open a vault and still be denied when they try to change it. The denial is recorded in the vault access log and the audit log.
 
 *Solutions:*
 
 1. Verify you have vault permissions:
 
-   * Ask administrator for access
+   * Ask an administrator to grant the specific permission you need
    * Check permission expiration
    * Review audit log for changes
 

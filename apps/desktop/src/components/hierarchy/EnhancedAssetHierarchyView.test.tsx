@@ -80,7 +80,16 @@ describe('EnhancedAssetHierarchyView', () => {
 
     expect(await screen.findByText('Protected')).toBeInTheDocument();
     expect(screen.getByTestId('vault-access-indicator')).toBeInTheDocument();
-    expect(invoke).toHaveBeenCalledWith('get_vault_by_asset_id', { assetId: device.id });
+    expect(invoke).toHaveBeenCalledWith('get_vault_by_asset_id', { token: 'test-token', assetId: device.id });
+  });
+
+  it('does not request vault info without a session token', async () => {
+    useAuthStore.setState({ token: null });
+    useHierarchyStore.setState({ selectedAsset: device });
+    render(<EnhancedAssetHierarchyView />);
+
+    await waitFor(() => expect(screen.getByText('PLC-001')).toBeInTheDocument());
+    expect(invoke).not.toHaveBeenCalledWith('get_vault_by_asset_id', expect.anything());
   });
 
   it('enables bulk mode and opens the create modal', () => {

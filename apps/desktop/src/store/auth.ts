@@ -15,6 +15,8 @@ export interface LoginResponse {
   user: UserInfo;
   // Set only when this login created the encryption key
   recovery_code?: string;
+  // True while an administrator has a data-key rotation unfinished
+  key_rotation_in_progress?: boolean;
 }
 
 interface AuthState {
@@ -25,6 +27,8 @@ interface AuthState {
   error: string | null;
   // A recovery key to show the user once. Never persisted.
   pendingRecoveryCode: string | null;
+  // From login; kept current by the key rotation store. Never persisted.
+  keyRotationInProgress: boolean;
 }
 
 interface AuthActions {
@@ -36,6 +40,7 @@ interface AuthActions {
   setLoading: (loading: boolean) => void;
   showRecoveryCode: (recoveryCode: string) => void;
   dismissRecoveryCode: () => void;
+  setKeyRotationInProgress: (inProgress: boolean) => void;
 }
 
 const useAuthStore = create<AuthState & AuthActions>()(
@@ -48,6 +53,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
       isLoading: false,
       error: null,
       pendingRecoveryCode: null,
+      keyRotationInProgress: false,
 
       // Actions
       login: async (username: string, password: string) => {
@@ -66,6 +72,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isLoading: false,
             error: null,
             pendingRecoveryCode: response.recovery_code ?? null,
+            keyRotationInProgress: response.key_rotation_in_progress ?? false,
           });
         } catch (error) {
           set({
@@ -95,6 +102,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isLoading: false,
             error: null,
             pendingRecoveryCode: null,
+            keyRotationInProgress: false,
           });
         }
       },
@@ -115,6 +123,7 @@ const useAuthStore = create<AuthState & AuthActions>()(
             isLoading: false,
             error: null,
             pendingRecoveryCode: response.recovery_code ?? null,
+            keyRotationInProgress: response.key_rotation_in_progress ?? false,
           });
         } catch (error) {
           set({
@@ -160,6 +169,8 @@ const useAuthStore = create<AuthState & AuthActions>()(
       showRecoveryCode: (recoveryCode: string) => set({ pendingRecoveryCode: recoveryCode }),
 
       dismissRecoveryCode: () => set({ pendingRecoveryCode: null }),
+
+      setKeyRotationInProgress: (inProgress: boolean) => set({ keyRotationInProgress: inProgress }),
     }),
     {
       name: 'auth-storage',

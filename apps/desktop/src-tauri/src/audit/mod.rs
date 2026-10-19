@@ -23,6 +23,9 @@ pub enum AuditEventType {
     DatabaseOperation,
     SecurityViolation,
     RecoveryKeyReplaced,
+    UserEncryptionKeysUpgraded,
+    DataKeyRotationStarted,
+    DataKeyRotationCompleted,
     FirmwareUpload,
     FirmwareDelete,
     FirmwareAnalysisStarted,
@@ -49,6 +52,8 @@ pub enum AuditEventType {
     VaultPermissionExpired,
     // Password rotation event for Story 4.6
     VaultSecretRotated,
+    // Standalone credential reads
+    VaultSecretAccessed,
     // Metadata schema events for Story 5.2A
     MetadataSchemaCreated,
     MetadataSchemaUpdated,
@@ -76,6 +81,9 @@ impl fmt::Display for AuditEventType {
             AuditEventType::DatabaseOperation => write!(f, "DB_001"),
             AuditEventType::SecurityViolation => write!(f, "SEC_001"),
             AuditEventType::RecoveryKeyReplaced => write!(f, "SEC_002"),
+            AuditEventType::UserEncryptionKeysUpgraded => write!(f, "SEC_003"),
+            AuditEventType::DataKeyRotationStarted => write!(f, "SEC_004"),
+            AuditEventType::DataKeyRotationCompleted => write!(f, "SEC_005"),
             AuditEventType::FirmwareUpload => write!(f, "FW_001"),
             AuditEventType::FirmwareDelete => write!(f, "FW_002"),
             AuditEventType::FirmwareAnalysisStarted => write!(f, "FW_003"),
@@ -101,6 +109,7 @@ impl fmt::Display for AuditEventType {
             AuditEventType::VaultPermissionDenied => write!(f, "VAULT_014"),
             AuditEventType::VaultPermissionExpired => write!(f, "VAULT_015"),
             AuditEventType::VaultSecretRotated => write!(f, "VAULT_016"),
+            AuditEventType::VaultSecretAccessed => write!(f, "VAULT_017"),
             // Metadata schema events
             AuditEventType::MetadataSchemaCreated => write!(f, "META_001"),
             AuditEventType::MetadataSchemaUpdated => write!(f, "META_002"),
@@ -249,6 +258,9 @@ impl<'a> SqliteAuditRepository<'a> {
             "DB_001" => AuditEventType::DatabaseOperation,
             "SEC_001" => AuditEventType::SecurityViolation,
             "SEC_002" => AuditEventType::RecoveryKeyReplaced,
+            "SEC_003" => AuditEventType::UserEncryptionKeysUpgraded,
+            "SEC_004" => AuditEventType::DataKeyRotationStarted,
+            "SEC_005" => AuditEventType::DataKeyRotationCompleted,
             "FW_001" => AuditEventType::FirmwareUpload,
             "FW_002" => AuditEventType::FirmwareDelete,
             "FW_003" => AuditEventType::FirmwareAnalysisStarted,
@@ -273,6 +285,7 @@ impl<'a> SqliteAuditRepository<'a> {
             "VAULT_014" => AuditEventType::VaultPermissionDenied,
             "VAULT_015" => AuditEventType::VaultPermissionExpired,
             "VAULT_016" => AuditEventType::VaultSecretRotated,
+            "VAULT_017" => AuditEventType::VaultSecretAccessed,
             _ => return Err(rusqlite::Error::InvalidColumnType(0, "event_type".to_string(), rusqlite::types::Type::Text)),
         };
 
@@ -484,7 +497,10 @@ pub fn create_user_deactivated_event(
         admin_username: Some(admin_username.to_string()),
         target_user_id: Some(target_user_id),
         target_username: Some(target_username.to_string()),
-        description: format!("Administrator '{}' deactivated user '{}'", admin_username, target_username),
+        description: format!(
+            "Administrator '{}' deactivated user '{}'; encryption key access revoked and active sessions ended",
+            admin_username, target_username
+        ),
         metadata: None,
         ip_address: None,
         user_agent: None,
@@ -505,7 +521,10 @@ pub fn create_user_reactivated_event(
         admin_username: Some(admin_username.to_string()),
         target_user_id: Some(target_user_id),
         target_username: Some(target_username.to_string()),
-        description: format!("Administrator '{}' reactivated user '{}'", admin_username, target_username),
+        description: format!(
+            "Administrator '{}' reactivated user '{}' with a temporary password; encryption key access restored",
+            admin_username, target_username
+        ),
         metadata: None,
         ip_address: None,
         user_agent: None,

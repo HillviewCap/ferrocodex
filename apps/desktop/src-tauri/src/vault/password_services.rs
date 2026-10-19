@@ -1,5 +1,8 @@
 use anyhow::Result;
 use bcrypt::{hash, DEFAULT_COST};
+
+/// bcrypt cost for password-history hashes. Tests use the minimum cost to stay fast.
+pub const HISTORY_BCRYPT_COST: u32 = if cfg!(test) { 4 } else { DEFAULT_COST };
 use rand::seq::{IndexedRandom, SliceRandom};
 
 use super::{GeneratePasswordRequest, PasswordStrength, PasswordPolicy};
@@ -94,7 +97,7 @@ impl PasswordGenerator {
     
     /// Generate a password hash for storage and reuse checking
     pub fn hash_password(password: &str) -> Result<String> {
-        hash(password, DEFAULT_COST).map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))
+        hash(password, HISTORY_BCRYPT_COST).map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))
     }
 }
 
@@ -256,8 +259,11 @@ pub struct PasswordReuseChecker;
 
 impl PasswordReuseChecker {
     /// Check if a password has been used before
-    pub fn is_password_reused(password_hash: &str, existing_hashes: &[String]) -> bool {
-        existing_hashes.contains(&password_hash.to_string())
+    ///
+    /// bcrypt hashes are salted, so hashes cannot be compared for equality: the plaintext
+    /// is verified against each stored hash. Non-bcrypt entries (e.g. "redacted") never match.
+    pub fn is_password_reused(password: &str, existing_hashes: &[String]) -> bool {
+        existing_hashes.iter().any(|h| Self::verify_password(password, h))
     }
     
     /// Verify password against hash (for checking existing passwords)

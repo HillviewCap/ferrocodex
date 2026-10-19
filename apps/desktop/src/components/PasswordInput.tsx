@@ -91,7 +91,8 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
 
   const debouncedCheckReuse = useCallback(
     debounce(async (password: string) => {
-      if (!token || !password || !checkReuse) {
+      // Reuse is only checked against an existing secret's own history
+      if (!token || !password || !checkReuse || !secretId) {
         setReuseWarning(null);
         onReuseCheck?.(false);
         return;
@@ -102,11 +103,11 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
         const isReused = await invoke<boolean>('check_password_reuse', {
           token,
           password,
-          excludeSecretId: secretId || null
+          secretId
         });
         
         if (isReused) {
-          const warning = 'This password has been used for another credential';
+          const warning = 'This password has been used before on this credential';
           setReuseWarning(warning);
           onReuseCheck?.(true);
         } else {

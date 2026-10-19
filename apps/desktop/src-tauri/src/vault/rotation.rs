@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 use std::collections::HashMap;
 use std::str::FromStr;
+use zeroize::Zeroizing;
 use tracing::{info, debug, warn};
 use uuid::Uuid;
 use rusqlite::{Connection, params};
@@ -10,7 +11,7 @@ use crate::audit::{AuditRepository, AuditEventRequest, AuditEventType};
 use super::VaultRepository;
 use crate::encryption::{DataKey, FileEncryption};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PasswordRotationRequest {
     pub secret_id: i64,
     pub new_password: String,
@@ -124,7 +125,7 @@ pub struct CreateRotationBatchRequest {
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BatchRotationItem {
     pub secret_id: i64,
     pub new_password: String,
@@ -137,6 +138,9 @@ pub struct BatchRotationRequest {
     pub items: Vec<BatchRotationItem>,
     pub author_id: i64,
 }
+
+/// Number of previous passwords remembered per secret (matches update_password).
+const PASSWORD_HISTORY_DEPTH: usize = 5;
 
 // Password Rotation Service
 pub struct PasswordRotationService<'a> {
@@ -156,10 +160,18 @@ impl<'a> PasswordRotationService<'a> {
 
     // Task 2.1 & 2.2: Guided workflow for individual password rotation
     pub fn rotate_password(&self, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
-        debug!("Rotating password for secret {}", request.secret_id);
-
-        // Begin transaction
         let tx = self.conn.unchecked_transaction()?;
+        self.rotate_password_in(&tx, request, key)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Performs a rotation on `tx` without starting or committing a transaction, so it
+    /// can run inside a caller-managed transaction or savepoint (SQLite cannot nest BEGIN).
+    /// `tx` must be the same connection the repositories wrap. On error the caller is
+    /// responsible for rolling back any partial writes.
+    pub(crate) fn rotate_password_in(&self, tx: &Connection, request: PasswordRotationRequest, key: &DataKey) -> Result<()> {
+        debug!("Rotating password for secret {}", request.secret_id);
 
         // Get the current secret
         let secret = self.vault_repo.get_secret_by_id(request.secret_id)?
@@ -171,13 +183,14 @@ impl<'a> PasswordRotationService<'a> {
         }
 
         // Hash the new password
-        let new_password_hash = bcrypt::hash(&request.new_password, bcrypt::DEFAULT_COST)
+        let new_password_hash = bcrypt::hash(&request.new_password, super::password_services::HISTORY_BCRYPT_COST)
             .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
 
         // Task 2.3: Archive the current password in rotation history
         let old_encrypted_value = &secret.encrypted_value;
+        // Never fall back to storing the ciphertext itself: history must only hold hashes.
         let old_password_hash = bcrypt::hash(old_encrypted_value, 4)  // Lower cost for history
-            .unwrap_or_else(|_| old_encrypted_value.clone());
+            .map_err(|e| anyhow::anyhow!("Failed to hash previous password for history: {}", e))?;
 
         tx.execute(
             "INSERT INTO password_rotation_history (secret_id, old_password_hash, rotation_reason, rotated_by, batch_id) 
@@ -199,9 +212,10 @@ impl<'a> PasswordRotationService<'a> {
         let encrypted_value = FileEncryption::new(key).encrypt_to_base64(request.new_password.as_bytes())?;
 
         tx.execute(
-            "UPDATE vault_secrets 
-             SET encrypted_value = ?1, 
-                 last_changed = ?2, 
+            "UPDATE vault_secrets
+             SET encrypted_value = ?1,
+                 key_version = ?5,
+                 last_changed = ?2,
                  last_rotated = ?2,
                  next_rotation_due = ?3,
                  updated_at = ?2
@@ -210,12 +224,31 @@ impl<'a> PasswordRotationService<'a> {
                 encrypted_value,
                 now.to_rfc3339(),
                 next_rotation_due.to_rfc3339(),
-                request.secret_id
+                request.secret_id,
+                key.version()
             ],
         )?;
 
-        // Add to password history for reuse prevention
+        // Add to password history for reuse prevention. The outgoing password is recorded
+        // too (secrets created before rotation have no history entry), then history is
+        // trimmed to the depth used by update_password.
+        // Both the decrypted bytes and the string copy are wiped when they go out of scope.
+        let old_plaintext: Option<Zeroizing<String>> = FileEncryption::new(key)
+            .decrypt_from_base64(old_encrypted_value)
+            .ok()
+            .map(Zeroizing::new)
+            .and_then(|bytes| std::str::from_utf8(&bytes).ok().map(|s| Zeroizing::new(s.to_owned())));
+        if let Some(old_plaintext) = old_plaintext {
+            let history = self.vault_repo.get_password_history(request.secret_id)?;
+            let hashes: Vec<String> = history.into_iter().map(|h| h.password_hash).collect();
+            if !super::password_services::PasswordReuseChecker::is_password_reused(old_plaintext.as_str(), &hashes) {
+                let old_hash = bcrypt::hash(old_plaintext.as_str(), super::password_services::HISTORY_BCRYPT_COST)
+                    .map_err(|e| anyhow::anyhow!("Failed to hash previous password for history: {}", e))?;
+                self.vault_repo.add_password_history(request.secret_id, &old_hash)?;
+            }
+        }
         self.vault_repo.add_password_history(request.secret_id, &new_password_hash)?;
+        self.vault_repo.cleanup_password_history(request.secret_id, PASSWORD_HISTORY_DEPTH)?;
 
         // Task 2.6: Audit logging
         let audit_event = AuditEventRequest {
@@ -253,8 +286,6 @@ impl<'a> PasswordRotationService<'a> {
             changes,
         )?;
 
-        tx.commit()?;
-
         info!("Successfully rotated password for secret {} by user {}", request.secret_id, request.author_id);
         Ok(())
     }
@@ -266,11 +297,10 @@ impl<'a> PasswordRotationService<'a> {
             return Err(anyhow::anyhow!("Password must be at least 12 characters long"));
         }
 
-        // Check password reuse
-        let password_hash = bcrypt::hash(new_password, bcrypt::DEFAULT_COST)
-            .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
-
-        if self.vault_repo.check_password_reuse(&password_hash, Some(secret_id))? {
+        // Check password reuse against this secret's history (bcrypt hashes are salted, so verify).
+        let hashes: Vec<String> = self.vault_repo.get_password_history(secret_id)?
+            .into_iter().map(|h| h.password_hash).collect();
+        if super::password_services::PasswordReuseChecker::is_password_reused(new_password, &hashes) {
             return Err(anyhow::anyhow!("Password has been used before. Please choose a different password."));
         }
 
@@ -346,6 +376,189 @@ mod tests {
         assert_eq!(BatchStatus::from_str("completed").unwrap(), BatchStatus::Completed);
         assert_eq!(BatchStatus::from_str("failed").unwrap(), BatchStatus::Failed);
         assert_eq!(BatchStatus::from_str("cancelled").unwrap(), BatchStatus::Cancelled);
+    }
+
+    use crate::vault::{AddSecretRequest, CreateVaultRequest, SecretType};
+
+    /// In-memory DB with users, assets, vault and audit schemas, plus one vault.
+    fn setup_batch_db() -> (Connection, i64) {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL,
+                role TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, is_active BOOLEAN DEFAULT 1
+            );
+            CREATE TABLE assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, description TEXT,
+                created_by INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO users (id, username, password_hash, role) VALUES (1, 'u', 'h', 'Engineer');
+            INSERT INTO assets (id, name, description, created_by) VALUES (1, 'A', 'D', 1);
+            "#,
+        ).unwrap();
+        SqliteVaultRepository::new(&conn).initialize_schema().unwrap();
+        SqliteAuditRepository::new(&conn).initialize_schema().unwrap();
+        let vault = SqliteVaultRepository::new(&conn).create_vault(CreateVaultRequest {
+            asset_id: 1, name: "Test Vault".into(), description: "desc".into(), created_by: 1,
+        }).unwrap();
+        (conn, vault.id)
+    }
+
+    fn add_secret(conn: &Connection, vault_id: i64, ty: SecretType, label: &str) -> i64 {
+        SqliteVaultRepository::new(conn).add_secret(AddSecretRequest {
+            vault_id, secret_type: ty, label: label.into(), value: "OldPassword-1234".into(), author_id: 1,
+        }, crate::encryption::test_key()).unwrap().id
+    }
+
+    fn batch_service(conn: &Connection) -> BatchRotationService<'_> {
+        BatchRotationService::new(
+            conn,
+            Box::new(SqliteVaultRepository::new(conn)),
+            Box::new(SqliteAuditRepository::new(conn)),
+        )
+    }
+
+    fn item(secret_id: i64, pw: &str) -> BatchRotationItem {
+        BatchRotationItem { secret_id, new_password: pw.into(), rotation_reason: "scheduled".into() }
+    }
+
+    fn count(conn: &Connection, sql: &str, id: i64) -> i64 {
+        conn.query_row(sql, [id], |r| r.get(0)).unwrap()
+    }
+
+    fn rotation_service(conn: &Connection) -> PasswordRotationService<'_> {
+        PasswordRotationService::new(
+            conn,
+            Box::new(SqliteVaultRepository::new(conn)),
+            Box::new(SqliteAuditRepository::new(conn)),
+        )
+    }
+
+    fn rotate_to(svc: &PasswordRotationService, secret_id: i64, pw: &str) {
+        svc.rotate_password(PasswordRotationRequest {
+            secret_id, new_password: pw.into(), rotation_reason: "scheduled".into(),
+            author_id: 1, batch_id: None,
+        }, crate::encryption::test_key()).unwrap();
+    }
+
+    #[test]
+    fn test_validate_rotation_rejects_reuse_of_previous_passwords() {
+        let (conn, vault_id) = setup_batch_db();
+        // Initial value is "OldPassword-1234" (A); rotate A -> B.
+        let id = add_secret(&conn, vault_id, SecretType::Password, "pw");
+        let svc = rotation_service(&conn);
+        svc.validate_rotation(id, "NewPassword-bbbb-2").expect("fresh password is accepted");
+        rotate_to(&svc, id, "NewPassword-bbbb-2");
+
+        // B -> A (the original) and B -> B are both reuse.
+        let err = svc.validate_rotation(id, "OldPassword-1234").unwrap_err();
+        assert!(err.to_string().contains("used before"), "{}", err);
+        assert!(svc.validate_rotation(id, "NewPassword-bbbb-2").is_err());
+        // A brand-new password is still accepted.
+        svc.validate_rotation(id, "BrandNew-Password-9").expect("new password accepted");
+    }
+
+    #[test]
+    fn test_validate_rotation_skips_non_bcrypt_history_and_keeps_five() {
+        let (conn, vault_id) = setup_batch_db();
+        let id = add_secret(&conn, vault_id, SecretType::Password, "pw");
+        let svc = rotation_service(&conn);
+        SqliteVaultRepository::new(&conn).add_password_history(id, "redacted").unwrap();
+        svc.validate_rotation(id, "BrandNew-Password-9").expect("redacted entries are skipped");
+
+        for i in 0..7 {
+            rotate_to(&svc, id, &format!("Rotated-Password-{}", i));
+        }
+        let n = count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id);
+        assert_eq!(n, 5);
+        assert!(svc.validate_rotation(id, "Rotated-Password-6").is_err());
+    }
+
+    #[test]
+    fn test_batch_rotation_rotates_all_items() {
+        let (conn, vault_id) = setup_batch_db();
+        let s1 = add_secret(&conn, vault_id, SecretType::Password, "one");
+        let s2 = add_secret(&conn, vault_id, SecretType::Password, "two");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+        let repo = SqliteVaultRepository::new(&conn);
+        let before1 = repo.get_secret_by_id(s1).unwrap().unwrap().encrypted_value;
+
+        svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(s1, "NewPassword-aaaa-1"), item(s2, "NewPassword-bbbb-2")],
+            author_id: 1,
+        }, crate::encryption::test_key()).expect("batch rotation should succeed for all items");
+
+        for id in [s1, s2] {
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", id), 1);
+            // outgoing and new password are both remembered for reuse checks
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", id), 2);
+            assert_eq!(count(&conn, "SELECT COUNT(*) FROM vault_secrets WHERE id = ?1 AND last_rotated IS NOT NULL", id), 1);
+        }
+        for (id, pw) in [(s1, "NewPassword-aaaa-1"), (s2, "NewPassword-bbbb-2")] {
+            let enc = repo.get_secret_by_id(id).unwrap().unwrap().encrypted_value;
+            let plain = crate::encryption::FileEncryption::new(crate::encryption::test_key())
+                .decrypt_from_base64(&enc).unwrap();
+            assert_eq!(String::from_utf8(plain).unwrap(), pw);
+        }
+        assert_ne!(repo.get_secret_by_id(s1).unwrap().unwrap().encrypted_value, before1);
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Completed);
+        assert!(b.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_batch_rotation_partial_failure_keeps_successes_and_records_outcome() {
+        let (conn, vault_id) = setup_batch_db();
+        let good = add_secret(&conn, vault_id, SecretType::Password, "good");
+        let ip = add_secret(&conn, vault_id, SecretType::IpAddress, "ip");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+
+        let err = svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(ip, "NewPassword-cccc-3"), item(good, "NewPassword-dddd-4"), item(9999, "NewPassword-eeee-5")],
+            author_id: 1,
+        }, crate::encryption::test_key()).unwrap_err();
+        assert!(err.to_string().contains("1 succeeded, 2 failed"), "{}", err);
+
+        // Successful item persisted; failed items left no partial writes.
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", good), 1);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_rotation_history WHERE secret_id = ?1", ip), 0);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM password_history WHERE secret_id = ?1", ip), 0);
+        // Batch record reflects the outcome and is persisted.
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Completed);
+        let notes = b.notes.unwrap();
+        assert!(notes.contains("1 successes and 2 failures"), "{}", notes);
+        assert!(conn.is_autocommit(), "no transaction should be left open");
+    }
+
+    #[test]
+    fn test_batch_rotation_all_failures_marks_batch_failed() {
+        let (conn, vault_id) = setup_batch_db();
+        let ip = add_secret(&conn, vault_id, SecretType::IpAddress, "ip");
+        let svc = batch_service(&conn);
+        let batch = svc.create_batch(CreateRotationBatchRequest {
+            batch_name: "b".into(), created_by: 1, notes: None,
+        }).unwrap();
+        assert!(svc.execute_batch_rotation(BatchRotationRequest {
+            batch_id: batch.batch_id,
+            items: vec![item(ip, "NewPassword-ffff-6"), item(9999, "short")],
+            author_id: 1,
+        }, crate::encryption::test_key()).is_err());
+        let b = svc.get_batch(batch.batch_id).unwrap().unwrap();
+        assert_eq!(b.status, BatchStatus::Failed);
+        assert!(b.notes.unwrap().contains("0 successes and 2 failures"));
     }
 }
 
@@ -650,7 +863,11 @@ impl<'a> BatchRotationService<'a> {
     pub fn execute_batch_rotation(&self, request: BatchRotationRequest, key: &DataKey) -> Result<()> {
         info!("Executing batch rotation {} with {} items", request.batch_id, request.items.len());
 
-        // Begin transaction for atomic operation
+        // Semantics: items are independent. The outer transaction holds the whole batch, but
+        // each item runs in its own SAVEPOINT, so a failing item is rolled back completely
+        // while other items still succeed. The transaction is always committed at the end so
+        // successful rotations and the batch outcome (status/notes) are persisted; partial
+        // failure is reported to the caller as an Err after that commit.
         let tx = self.conn.unchecked_transaction()?;
 
         // Update batch status to in_progress
@@ -667,15 +884,21 @@ impl<'a> BatchRotationService<'a> {
             // Task 4.6: Pre-flight validation
             match self.rotation_service.validate_rotation(item.secret_id, &item.new_password) {
                 Ok(_) => {
-                    match self.rotation_service.rotate_password(PasswordRotationRequest {
+                    tx.execute_batch("SAVEPOINT batch_item")?;
+                    let result = self.rotation_service.rotate_password_in(&tx, PasswordRotationRequest {
                         secret_id: item.secret_id,
                         new_password: item.new_password.clone(),
                         rotation_reason: item.rotation_reason.clone(),
                         author_id: request.author_id,
                         batch_id: Some(request.batch_id),
-                    }, key) {
-                        Ok(_) => successful_count += 1,
+                    }, key);
+                    match result {
+                        Ok(_) => {
+                            tx.execute_batch("RELEASE SAVEPOINT batch_item")?;
+                            successful_count += 1
+                        }
                         Err(e) => {
+                            tx.execute_batch("ROLLBACK TO SAVEPOINT batch_item; RELEASE SAVEPOINT batch_item")?;
                             warn!("Failed to rotate password for secret {}: {}", item.secret_id, e);
                             failed_items.push((item.secret_id, e.to_string()));
                         }
@@ -716,12 +939,11 @@ impl<'a> BatchRotationService<'a> {
             params![final_status.to_string(), completed_at, notes, request.batch_id],
         )?;
 
+        // Always commit: keeps successful rotations and the recorded batch outcome.
+        tx.commit()?;
         if failed_items.is_empty() {
-            tx.commit()?;
             info!("Batch rotation {} completed successfully", request.batch_id);
         } else {
-            // Partial failure - still commit successful rotations
-            tx.commit()?;
             return Err(anyhow::anyhow!(
                 "Batch rotation partially failed. {} succeeded, {} failed", 
                 successful_count, failed_items.len()
@@ -820,5 +1042,48 @@ impl<'a> BatchRotationService<'a> {
 
         info!("Cancelled batch rotation {}", batch_id);
         Ok(())
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for PasswordRotationRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasswordRotationRequest")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("rotation_reason", &self.rotation_reason)
+            .field("author_id", &self.author_id)
+            .field("batch_id", &self.batch_id)
+            .finish()
+    }
+}
+
+/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+impl std::fmt::Debug for BatchRotationItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BatchRotationItem")
+            .field("secret_id", &self.secret_id)
+            .field("new_password", &"[REDACTED]")
+            .field("rotation_reason", &self.rotation_reason)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn debug_output_redacts_new_password() {
+        let secret = "rotated-s3cret";
+        let r = format!("{:?}", PasswordRotationRequest {
+            secret_id: 1, new_password: secret.into(), rotation_reason: "r".into(),
+            author_id: 1, batch_id: None,
+        });
+        assert!(!r.contains(secret));
+        let b = format!("{:?}", BatchRotationItem {
+            secret_id: 1, new_password: secret.into(), rotation_reason: "r".into(),
+        });
+        assert!(!b.contains(secret));
     }
 }

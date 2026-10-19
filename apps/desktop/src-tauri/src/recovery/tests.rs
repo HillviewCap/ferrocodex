@@ -147,7 +147,7 @@ use tempfile::TempDir;
     }
 
     impl FirmwareRepository for MockFirmwareRepository {
-        fn create_firmware(&self, _request: crate::firmware::CreateFirmwareRequest, _author_id: i64, _file_path: String, _file_hash: String, _file_size: i64) -> Result<FirmwareVersion> {
+        fn create_firmware(&self, _request: crate::firmware::CreateFirmwareRequest, _author_id: i64, _file_path: String, _file_hash: String, _file_size: i64, _key_version: u32) -> Result<FirmwareVersion> {
             unimplemented!()
         }
 
@@ -226,6 +226,7 @@ use tempfile::TempDir;
                     rotation_interval_days: None,
                     next_rotation_due: None,
                     rotation_policy_id: None,
+                    key_version: 1,
                 },
                 VaultSecret {
                     id: 2,
@@ -243,6 +244,7 @@ use tempfile::TempDir;
                     rotation_interval_days: None,
                     next_rotation_due: None,
                     rotation_policy_id: None,
+                    key_version: 1,
                 },
             ];
             
@@ -293,7 +295,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn update_secret(&self, _secret: &VaultSecret, _author_id: i64) -> Result<()> {
+        fn update_secret(&self, _secret: &VaultSecret, _author_id: i64, _key_version: u32) -> Result<()> {
             unimplemented!()
         }
         
@@ -309,7 +311,7 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn import_vault(&self, _vault_info: &VaultInfo, _author_id: i64) -> Result<IdentityVault> {
+        fn import_vault(&self, _vault_info: &VaultInfo, _author_id: i64, _key_version: u32) -> Result<IdentityVault> {
             Ok(self.vaults.get(&1).unwrap().vault.clone())
         }
         
@@ -326,9 +328,6 @@ use tempfile::TempDir;
             unimplemented!()
         }
         
-        fn check_password_reuse(&self, _password_hash: &str, _exclude_secret_id: Option<i64>) -> Result<bool> {
-            unimplemented!()
-        }
         
         fn update_password(&self, _request: crate::vault::UpdateCredentialPasswordRequest, _password_hash: &str, _strength_score: i32, _key: &DataKey) -> Result<()> {
             unimplemented!()
@@ -671,3 +670,95 @@ use tempfile::TempDir;
         let checksum3 = RecoveryExporter::calculate_checksum(different_data);
         assert_ne!(checksum1, checksum3);
     }
+/// Imports against real repositories and a real firmware directory.
+mod import_storage {
+    use super::super::*;
+    use crate::audit::SqliteAuditRepository;
+    use crate::configurations::SqliteConfigurationRepository;
+    use crate::database::Database;
+    use crate::encryption::KdfParams;
+    use crate::firmware::SqliteFirmwareRepository;
+    use crate::keystore::{KeyStoreRepository, SqliteKeyStoreRepository};
+    use crate::users::{CreateUserRequest, SqliteUserRepository, UserRepository, UserRole};
+    use crate::vault::SqliteVaultRepository;
+    use rusqlite::Connection;
+    use tempfile::TempDir;
+
+    fn write_bundle(root: &Path, name: &str, firmware: &[u8]) -> String {
+        let dir = root.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = format!("config of {}", name);
+        std::fs::write(dir.join("plc.cfg"), &config).unwrap();
+        std::fs::write(dir.join("plc.bin"), firmware).unwrap();
+        let manifest = RecoveryManifest {
+            asset_id: 1,
+            export_date: "2026-10-18T00:00:00Z".into(),
+            exported_by: "admin".into(),
+            configuration: ConfigurationExportInfo {
+                version_id: 1, version_number: "v1".into(), filename: "plc.cfg".into(),
+                checksum: RecoveryExporter::calculate_checksum(config.as_bytes()), file_size: config.len() as i64,
+            },
+            firmware: FirmwareExportInfo {
+                version_id: 1, version: name.into(), filename: "plc.bin".into(),
+                checksum: RecoveryExporter::calculate_checksum(firmware), vendor: "v".into(), model: "m".into(),
+                file_size: firmware.len() as i64,
+            },
+            vault: None,
+            compatibility_verified: false,
+        };
+        std::fs::write(dir.join("plc_recovery_manifest.json"), serde_json::to_string(&manifest).unwrap()).unwrap();
+        dir.to_string_lossy().to_string()
+    }
+
+    /// H1(e): imports used to store every firmware file as `<asset>/0.enc`,
+    /// so a second import overwrote the first one's file, and the name did not
+    /// match the record. Each import must get `<asset>/<id>.enc`.
+    #[test]
+    fn test_imported_firmware_is_stored_under_its_record_id() {
+        let db = Database::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        let conn = db.get_connection();
+        let admin = SqliteUserRepository::new(conn).create_user(CreateUserRequest {
+            username: "admin".into(), password: "password123!".into(), role: UserRole::Administrator,
+        }).unwrap().id;
+        let (key, _) = SqliteKeyStoreRepository::with_params(conn, KdfParams::fast_for_tests())
+            .create_data_key(admin, "admin-password").unwrap();
+        conn.execute("INSERT INTO assets (id, name, created_by) VALUES (1, 'plc', ?1)", [admin]).unwrap();
+
+        let firmware_dir = TempDir::new().unwrap();
+        let bundles = TempDir::new().unwrap();
+        let (configs, firmware, vaults, audit) = (
+            SqliteConfigurationRepository::new(conn),
+            SqliteFirmwareRepository::new(conn),
+            SqliteVaultRepository::new(conn),
+            SqliteAuditRepository::new(conn),
+        );
+        let importer = RecoveryImporter::new(&configs, &firmware, &vaults, &audit);
+        for (name, image) in [("first", b"first image".as_slice()), ("second", b"second image".as_slice())] {
+            let request = RecoveryImportRequest {
+                bundle_path: write_bundle(bundles.path(), name, image), target_asset_id: 1, import_vault: false,
+            };
+            importer.import_recovery_bundle_in(
+                firmware_dir.path(), request, admin, "admin", &UserRole::Administrator, &key, None,
+            ).unwrap();
+        }
+
+        let rows: Vec<(i64, String, String)> = conn
+            .prepare("SELECT id, version, file_path FROM firmware_versions ORDER BY id").unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap()
+            .collect::<rusqlite::Result<_>>().unwrap();
+        assert_eq!(rows.len(), 2);
+        let mut expected_files = Vec::new();
+        for (id, version, path) in &rows {
+            assert_eq!(Path::new(path), Path::new("1").join(format!("{}.enc", id)));
+            let content = FirmwareFileStorage::read_firmware_file_in(firmware_dir.path(), path, &key).unwrap();
+            assert_eq!(content, format!("{} image", version).into_bytes());
+            expected_files.push(format!("{}.enc", id));
+        }
+        let mut files: Vec<String> = std::fs::read_dir(firmware_dir.path().join("1")).unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        files.sort();
+        expected_files.sort();
+        assert_eq!(files, expected_files);
+    }
+}
