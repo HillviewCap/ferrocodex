@@ -20,7 +20,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import * as dialog from '@tauri-apps/plugin-dialog';
-import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize, validateFileSize, validateFileExtension } from '../types/assets';
+import { AssetInfo, validateAssetName, validateConfigurationNotes, formatFileSize, validateFileSize } from '../types/assets';
 import useAuthStore from '../store/auth';
 
 const { Title, Text } = Typography;
@@ -71,8 +71,8 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
       const selected = await dialog.open({
         multiple: false,
         filters: [{
-          name: 'Configuration Files',
-          extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump', 'vio']
+          name: 'All Files',
+          extensions: ['*']
         }]
       });
 
@@ -82,13 +82,6 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
           const metadata = await invoke<{name: string, size: number, content_type: string, hash: string}>('get_file_metadata', {
             filePath: selected
           });
-
-          // Validate file extension
-          const extensionValidation = validateFileExtension(metadata.name);
-          if (!extensionValidation.isValid) {
-            message.error(extensionValidation.message);
-            return;
-          }
 
           // Validate file size
           const sizeValidation = validateFileSize(metadata.size);
@@ -229,8 +222,8 @@ const ImportConfigurationModal: React.FC<ImportConfigurationModalProps> = ({
           </div>
 
           <Alert
-            title="Supported File Types"
-            description="JSON, XML, YAML, TXT, CFG, CONF, INI, CSV, LOG, PROPERTIES, CONFIG, SETTINGS, TOML, BIN, DAT, HEX, RAW, DUMP"
+            title="Any File Type"
+            description="Any configuration file is accepted, including vendor-specific project and binary formats."
             type="info"
             showIcon
           />

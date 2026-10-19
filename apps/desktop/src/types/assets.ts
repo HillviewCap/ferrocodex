@@ -146,12 +146,7 @@ export const ConfigurationValidation = {
   fileSize: {
     maxSize: 100 * 1024 * 1024, // 100MB
     message: 'File size cannot exceed 100MB'
-  },
-  allowedExtensions: [
-    'json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini',
-    'csv', 'log', 'properties', 'config', 'settings', 'toml',
-    'bin', 'dat', 'hex', 'raw', 'dump', 'vio'
-  ]
+  }
 };
 
 // Helper functions
@@ -192,11 +187,6 @@ export const validateFileSize = (size: number): ValidationResult => {
       message: ConfigurationValidation.fileSize.message
     };
   }
-  return { isValid: true };
-};
-
-export const validateFileExtension = (_filename: string): ValidationResult => {
-  // Accept all file types - no extension validation
   return { isValid: true };
 };
 

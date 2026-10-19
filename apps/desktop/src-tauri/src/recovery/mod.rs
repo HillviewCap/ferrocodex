@@ -56,6 +56,9 @@ pub struct FirmwareExportInfo {
     pub vendor: String,
     pub model: String,
     pub file_size: i64,
+    /// Name of the file originally uploaded; absent in bundles from older versions.
+    #[serde(default)]
+    pub original_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,9 +233,10 @@ impl<'a> RecoveryExporter<'a> {
 
         // Export firmware
         let firmware_start = std::time::Instant::now();
-        let firmware_filename = format!("{}_firmware_v{}.bin", 
-            sanitized_asset_name, 
-            firmware.version
+        let firmware_filename = Self::firmware_export_filename(
+            &sanitized_asset_name,
+            &firmware.version,
+            firmware.original_filename.as_deref(),
         );
         let firmware_export_path = export_dir.join(&firmware_filename);
 
@@ -329,6 +333,7 @@ impl<'a> RecoveryExporter<'a> {
                 vendor: firmware.vendor.unwrap_or_else(|| "Unknown".to_string()),
                 model: firmware.model.unwrap_or_else(|| "Unknown".to_string()),
                 file_size: firmware_data.len() as i64,
+                original_filename: firmware.original_filename.clone(),
             },
             vault: vault_export_info,
             compatibility_verified,
@@ -409,6 +414,18 @@ impl<'a> RecoveryExporter<'a> {
             .collect::<String>()
             .trim()
             .to_string()
+    }
+
+    /// `<asset>_firmware_v<version>.<ext>`, where `ext` is the extension of
+    /// the uploaded file when it is short and plain ASCII alphanumeric, else
+    /// `bin` (unknown, missing, or anything that could change the path).
+    pub fn firmware_export_filename(sanitized_asset_name: &str, version: &str, original_filename: Option<&str>) -> String {
+        let extension = original_filename
+            .and_then(|name| Path::new(name).extension())
+            .and_then(|ext| ext.to_str())
+            .filter(|ext| !ext.is_empty() && ext.len() <= 16 && ext.chars().all(|c| c.is_ascii_alphanumeric()))
+            .unwrap_or("bin");
+        format!("{}_firmware_v{}.{}", sanitized_asset_name, version, extension)
     }
 
     fn calculate_checksum(data: &[u8]) -> String {
@@ -667,6 +684,7 @@ impl<'a> RecoveryImporter<'a> {
             model: Some(manifest.firmware.model.clone()),
             notes: Some(format!("Imported from recovery bundle by {} on {}",
                 username, chrono::Utc::now().to_rfc3339())),
+            original_filename: manifest.firmware.original_filename.as_deref().and_then(crate::firmware::sanitize_original_filename),
         };
         let imported_firmware = self.store_imported_firmware(
             firmware_dir, request.target_asset_id, firmware_request, user_id, &firmware_data,

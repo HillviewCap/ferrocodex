@@ -160,6 +160,7 @@ pub async fn preview_recovery_bundle(
                     file_size: firmware.file_size,
                     model: firmware.model.clone().unwrap_or_default(),
                     vendor: firmware.vendor.clone().unwrap_or_default(),
+                    original_filename: firmware.original_filename.clone(),
                 },
                 vault: vault_export_info,
                 compatibility_verified: config.firmware_version_id == Some(firmware_version_id),

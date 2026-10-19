@@ -259,4 +259,23 @@ describe('FirmwareVersionList - Permission-based UI', () => {
       });
     });
   });
+
+  describe('Original file name', () => {
+    beforeEach(() => {
+      useAuthStore.mockReturnValue({
+        user: { id: 1, username: 'engineer', role: 'Engineer', is_active: true }
+      });
+    });
+
+    it('shows the uploaded file name when it is known', () => {
+      render(<FirmwareVersionList versions={[{ ...mockFirmware, originalFilename: 'M580_v3.20.sedp' }]} />);
+      expect(screen.getByText('M580_v3.20.sedp')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'paper-clip' })).toBeInTheDocument();
+    });
+
+    it('omits it for records from before the name was kept', () => {
+      render(<FirmwareVersionList versions={[{ ...mockFirmware, originalFilename: null }]} />);
+      expect(screen.queryByRole('img', { name: 'paper-clip' })).not.toBeInTheDocument();
+    });
+  });
 });

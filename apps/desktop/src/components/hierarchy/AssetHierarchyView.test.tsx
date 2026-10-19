@@ -25,10 +25,20 @@ vi.mock('../IdentityVault', () => ({ default: () => <div data-testid="identity-v
 vi.mock('../metadata/MetadataDisplay', () => ({ default: () => <div data-testid="metadata-display" /> }));
 vi.mock('../VaultAccessIndicator', () => ({ default: () => <span data-testid="vault-access-indicator" /> }));
 vi.mock('./QuickConfigImportModal', () => ({
-  default: ({ visible }: { visible: boolean }) => (visible ? <div data-testid="quick-config-modal" /> : null),
+  default: ({ visible, onSuccess }: { visible: boolean; onSuccess: () => void }) =>
+    visible ? (
+      <div data-testid="quick-config-modal">
+        <button onClick={onSuccess}>Finish config import</button>
+      </div>
+    ) : null,
 }));
 vi.mock('./QuickFirmwareUploadModal', () => ({
-  default: ({ visible }: { visible: boolean }) => (visible ? <div data-testid="quick-firmware-modal" /> : null),
+  default: ({ visible, onSuccess }: { visible: boolean; onSuccess: () => void }) =>
+    visible ? (
+      <div data-testid="quick-firmware-modal">
+        <button onClick={onSuccess}>Finish firmware upload</button>
+      </div>
+    ) : null,
 }));
 
 const base = { description: '', sort_order: 0, created_by: 1, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' };
@@ -78,9 +88,9 @@ describe('AssetHierarchyView', () => {
           return args?.assetId === device.id ? [assetInfo(folder), assetInfo(device)] : [assetInfo(folder)];
         case 'get_vault_by_asset_id':
           return null;
-        case 'list_configurations_for_asset':
+        case 'get_configuration_versions':
           return [{ id: 1 }, { id: 2 }];
-        case 'list_firmware_for_asset':
+        case 'get_firmware_list':
           return [{ id: 1 }];
         default:
           throw new Error(`Unexpected command: ${cmd}`);
@@ -138,6 +148,49 @@ describe('AssetHierarchyView', () => {
     fireEvent.click(screen.getByRole('button', { name: /Identity Vault/ }));
     expect(await screen.findByText('Identity Vault - PLC-001')).toBeInTheDocument();
     expect(screen.getByTestId('identity-vault')).toBeInTheDocument();
+  });
+
+  it('refreshes the file counts after a quick upload succeeds', async () => {
+    const configs = [{ id: 1 }, { id: 2 }];
+    const firmware = [{ id: 1 }];
+    const defaultImpl = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'get_configuration_versions') return [...configs];
+      if (cmd === 'get_firmware_list') return [...firmware];
+      return defaultImpl(cmd, args);
+    });
+    useHierarchyStore.setState({ selectedAsset: device });
+    render(<AssetHierarchyView />);
+    expect(await screen.findByText('2 Configs')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith('get_configuration_versions', { token: 'test-token', assetId: device.id });
+    expect(invoke).toHaveBeenCalledWith('get_firmware_list', { token: 'test-token', assetId: device.id });
+
+    firmware.push({ id: 2 });
+    fireEvent.click(screen.getByRole('button', { name: /Upload Firmware/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finish firmware upload' }));
+    expect(await screen.findByText('2 Firmware')).toBeInTheDocument();
+    expect(screen.queryByTestId('quick-firmware-modal')).not.toBeInTheDocument();
+
+    configs.push({ id: 3 });
+    fireEvent.click(screen.getByRole('button', { name: /Add Configuration/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finish config import' }));
+    expect(await screen.findByText('3 Configs')).toBeInTheDocument();
+  });
+
+  it('shows an unknown count instead of 0 when a file count fails to load', async () => {
+    const consoleError = vi.spyOn(console, 'error');
+    const defaultImpl = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'get_firmware_list') throw new Error('database locked');
+      return defaultImpl(cmd, args);
+    });
+    useHierarchyStore.setState({ selectedAsset: device });
+    render(<AssetHierarchyView />);
+
+    expect(await screen.findByText('2 Configs')).toBeInTheDocument();
+    expect(screen.getByText('– Firmware')).toBeInTheDocument();
+    expect(screen.queryByText('0 Firmware')).not.toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('Failed to load firmware count:', expect.any(Error));
   });
 
   it('shows folder contents without a Metadata tab', async () => {

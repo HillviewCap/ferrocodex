@@ -32,6 +32,7 @@ export interface FirmwareExportInfo {
   vendor: string;
   model: string;
   file_size: number;
+  originalFilename?: string | null;
 }
 
 export interface VaultExportInfo {

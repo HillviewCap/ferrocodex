@@ -58,7 +58,7 @@ describe('FirmwareUploadModal', () => {
     
     expect(screen.getByText('Upload Firmware')).toBeInTheDocument();
     expect(screen.getByText('Click to select firmware file')).toBeInTheDocument();
-    expect(screen.getByText('Support for binary firmware files (max 2GB)')).toBeInTheDocument();
+    expect(screen.getByText('Any file type is accepted (max 2GB)')).toBeInTheDocument();
   });
 
   it('shows security information', () => {
@@ -102,12 +102,20 @@ describe('FirmwareUploadModal', () => {
     await waitFor(() => {
       expect(dialog.open).toHaveBeenCalledWith({
         multiple: false,
-        filters: [{
-          name: 'Firmware Files',
-          extensions: expect.arrayContaining(['bin', 'hex', 'img', 'rom', 'fw', 'elf', 'dfu', 'upd', 'dat'])
-        }]
+        filters: [{ name: 'All Files', extensions: ['*'] }]
       });
     });
+  });
+
+  it.each(['M580_v3.20.sedp', 'FIRMWARE'])('accepts a %s file and moves on to the details step', async (name) => {
+    (dialog.open as any).mockResolvedValue(`/path/to/${name}`);
+    (invoke as any).mockResolvedValue({ ...validMetadata, name });
+
+    render(<FirmwareUploadModal {...mockProps} />);
+    fireEvent.click(screen.getByText('Click to select firmware file').parentElement!);
+
+    expect(await screen.findByLabelText('Version')).toBeInTheDocument();
+    expect(screen.getByText(name)).toBeInTheDocument();
   });
 
   it('validates file size limit', async () => {

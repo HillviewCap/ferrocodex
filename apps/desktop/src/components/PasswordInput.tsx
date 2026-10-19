@@ -147,38 +147,47 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
     onChange?.(newValue);
   };
 
+  // PasswordGenerator leaves closing to its parent
   const handleGeneratedPassword = (generatedPassword: string) => {
     onChange?.(generatedPassword);
+    setGeneratorVisible(false);
     message.success('Generated password applied');
   };
 
   const isWeakPassword = strength && strength.score < minScore;
   const hasIssues = isWeakPassword || reuseWarning;
 
+  const passwordField = (
+    <Input.Password
+      value={value}
+      onChange={handlePasswordChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      visibilityToggle={{
+        visible: showPassword,
+        onVisibleChange: setShowPassword,
+      }}
+      status={hasIssues ? 'error' : undefined}
+    />
+  );
+
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
-      <Input.Password
-        value={value}
-        onChange={handlePasswordChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        visibilityToggle={{
-          visible: showPassword,
-          onVisibleChange: setShowPassword,
-        }}
-        suffix={
-          showGenerator && (
-            <Button
-              type="text"
-              icon={<KeyOutlined />}
-              onClick={() => setGeneratorVisible(true)}
-              disabled={disabled}
-              size="small"
-            />
-          )
-        }
-        status={hasIssues ? 'error' : undefined}
-      />
+      {showGenerator ? (
+        <Space.Compact block>
+          {passwordField}
+          <Button
+            type="primary"
+            icon={<KeyOutlined />}
+            onClick={() => setGeneratorVisible(true)}
+            disabled={disabled}
+          >
+            Generate Password
+          </Button>
+        </Space.Compact>
+      ) : (
+        passwordField
+      )}
 
       {/* Password Strength Indicator */}
       {showStrength && value && strength && (

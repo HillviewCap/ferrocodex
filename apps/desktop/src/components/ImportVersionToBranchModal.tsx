@@ -78,10 +78,6 @@ const ImportVersionToBranchModal: React.FC<ImportVersionToBranchModalProps> = ({
         multiple: false,
         filters: [
           {
-            name: 'Configuration Files',
-            extensions: ['json', 'xml', 'yaml', 'yml', 'txt', 'cfg', 'conf', 'ini', 'csv', 'log', 'properties', 'config', 'settings', 'toml', 'bin', 'dat', 'hex', 'raw', 'dump', 'vio']
-          },
-          {
             name: 'All Files',
             extensions: ['*']
           }

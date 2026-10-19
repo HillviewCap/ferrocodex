@@ -57,7 +57,6 @@ import {
   secretTypeDisplayNames
 } from '../types/vault';
 import useAuthStore from '../store/auth';
-import PasswordGenerator from './PasswordGenerator';
 import PasswordInput from './PasswordInput';
 
 const { Title, Text } = Typography;
@@ -80,7 +79,6 @@ const StandaloneCredentials: React.FC = () => {
   const [createCredentialVisible, setCreateCredentialVisible] = useState(false);
   const [editCredentialVisible, setEditCredentialVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
-  const [passwordGeneratorVisible, setPasswordGeneratorVisible] = useState(false);
   const [credentialHistoryVisible, setCredentialHistoryVisible] = useState(false);
   
   // Form instances
@@ -248,15 +246,6 @@ const StandaloneCredentials: React.FC = () => {
         message.error('Failed to decrypt credential');
       }
     }
-  };
-
-  const handlePasswordGenerated = (password: string) => {
-    if (createCredentialVisible) {
-      createCredentialForm.setFieldsValue({ value: password });
-    } else if (editCredentialVisible) {
-      editCredentialForm.setFieldsValue({ value: password });
-    }
-    setPasswordGeneratorVisible(false);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -644,18 +633,7 @@ const StandaloneCredentials: React.FC = () => {
 
           <Form.Item
             name="value"
-            label={
-              <Space>
-                <span>Value</span>
-                <Button 
-                  size="small" 
-                  icon={<KeyOutlined />}
-                  onClick={() => setPasswordGeneratorVisible(true)}
-                >
-                  Generate
-                </Button>
-              </Space>
-            }
+            label="Value"
             rules={[{ required: true, message: 'Please enter a value' }]}
           >
             <PasswordInput />
@@ -744,30 +722,12 @@ const StandaloneCredentials: React.FC = () => {
 
           <Form.Item
             name="value"
-            label={
-              <Space>
-                <span>New Value (leave empty to keep current)</span>
-                <Button 
-                  size="small" 
-                  icon={<KeyOutlined />}
-                  onClick={() => setPasswordGeneratorVisible(true)}
-                >
-                  Generate
-                </Button>
-              </Space>
-            }
+            label="New Value (leave empty to keep current)"
           >
             <PasswordInput />
           </Form.Item>
         </Form>
       </Modal>
-
-      {/* Password Generator Modal */}
-      <PasswordGenerator
-        visible={passwordGeneratorVisible}
-        onCancel={() => setPasswordGeneratorVisible(false)}
-        onGenerated={handlePasswordGenerated}
-      />
 
       {/* Category Management Modal */}
       <Modal

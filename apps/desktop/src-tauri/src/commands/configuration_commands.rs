@@ -47,6 +47,12 @@ pub async fn import_configuration(
     };
     drop(session_manager_guard);
 
+    // Only Engineers and Administrators can import configurations
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to import a configuration: {}", session.username);
+        return Err("Only Engineers and Administrators can import configurations".to_string());
+    }
+
     let data_key = session.data_key()?;
 
     // Validate inputs
@@ -185,6 +191,12 @@ pub async fn import_configuration_for_asset(
         }
     };
     drop(session_manager_guard);
+
+    // Only Engineers and Administrators can import configurations
+    if session.role != UserRole::Engineer && session.role != UserRole::Administrator {
+        warn!("User without sufficient permissions attempted to import a configuration: {}", session.username);
+        return Err("Only Engineers and Administrators can import configurations".to_string());
+    }
 
     let data_key = session.data_key()?;
 

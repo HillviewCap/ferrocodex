@@ -1,15 +1,12 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import * as dialog from '@tauri-apps/plugin-dialog';
 import ImportConfigurationModal from './ImportConfigurationModal';
 import useAuthStore from '../store/auth';
 import { useConsoleGuard } from '../test-utils/consoleGuard';
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-
-// NOTE: only the first step is exercised. Advancing to the "Asset Details" step (which
-// holds the Descriptions `items` conversion) is blocked by a pre-existing bug in
-// handleFileSelect: validateFileExtension/validateFileSize return `{ isValid }` objects,
-// which the component treats as error strings, so every file selection is rejected.
 
 describe('ImportConfigurationModal', () => {
   useConsoleGuard({
@@ -36,8 +33,20 @@ describe('ImportConfigurationModal', () => {
     }
     expect(screen.getByText('Select Configuration File')).toBeInTheDocument();
     expect(screen.getByText('Click to select configuration file')).toBeInTheDocument();
-    expect(screen.getByText('Supported File Types')).toBeInTheDocument();
-    expect(screen.getByText(/JSON, XML, YAML, TXT/)).toBeInTheDocument();
+    expect(screen.getByText('Any File Type')).toBeInTheDocument();
+    expect(screen.getByText(/Any configuration file is accepted/)).toBeInTheDocument();
+  });
+
+  it('accepts a file of any type and moves on to the asset details', async () => {
+    vi.mocked(dialog.open).mockResolvedValue('/projects/line1.apx');
+    vi.mocked(invoke).mockResolvedValue({ name: 'line1.apx', size: 2048, content_type: 'application/octet-stream', hash: 'h' });
+    render(<ImportConfigurationModal visible onCancel={vi.fn()} onSuccess={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Click to select configuration file'));
+
+    expect(await screen.findByText('Asset Information')).toBeInTheDocument();
+    expect(screen.getByText('line1.apx')).toBeInTheDocument();
+    expect(dialog.open).toHaveBeenCalledWith({ multiple: false, filters: [{ name: 'All Files', extensions: ['*'] }] });
   });
 
   it('closes through onCancel and is not mounted when hidden', () => {
