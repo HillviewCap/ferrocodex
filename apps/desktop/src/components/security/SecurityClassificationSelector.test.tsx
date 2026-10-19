@@ -227,4 +227,39 @@ describe('SecurityClassificationSelector', () => {
     expect(screen.getByText('Security clearance')).toBeInTheDocument();
     expect(screen.getByText('Need-to-know basis')).toBeInTheDocument();
   });
+
+  test('keeps an inherited RESTRICTED level selectable for an Engineer without elevation', async () => {
+    const user = userEvent.setup();
+    render(
+      <SecurityClassificationSelector
+        onChange={mockOnChange}
+        value={SecurityClassificationLevel.RESTRICTED}
+        currentUserRole="Engineer"
+        allowElevation={false}
+        inheritedClassification={SecurityClassificationLevel.RESTRICTED}
+      />
+    );
+
+    // Inheriting the level is not an elevation request
+    expect(screen.queryByText('Administrator Approval Required')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox'));
+    const option = (label: string) =>
+      Array.from(document.querySelectorAll('.ant-select-item-option')).find(o => o.textContent?.includes(label));
+    expect(option('Confidential')).toHaveClass('ant-select-item-option-disabled');
+    expect(option('Restricted')).not.toHaveClass('ant-select-item-option-disabled');
+    // SECRET is still above the inherited level, so the role cap applies
+    expect(option('Secret')).toHaveClass('ant-select-item-option-disabled');
+  });
+
+  test('follows a changed value prop', () => {
+    const { rerender } = render(
+      <SecurityClassificationSelector onChange={mockOnChange} value={SecurityClassificationLevel.INTERNAL} />
+    );
+    expect(screen.getByText('Internal')).toBeInTheDocument();
+
+    rerender(<SecurityClassificationSelector onChange={mockOnChange} value={SecurityClassificationLevel.SECRET} />);
+    expect(screen.getByText('Secret')).toBeInTheDocument();
+    expect(screen.queryByText('Internal')).not.toBeInTheDocument();
+  });
 });

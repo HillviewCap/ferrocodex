@@ -45,6 +45,7 @@ impl AssetHandler {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by,
+            security_classification: None,
         };
 
         match asset_repo.create_asset(request) {

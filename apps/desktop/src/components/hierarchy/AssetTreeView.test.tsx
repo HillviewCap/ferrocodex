@@ -1,8 +1,10 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
 import { AssetTreeView } from './AssetTreeView';
 import { AssetHierarchy } from '../../types/assets';
+import { SecurityClassificationLevel } from '../../types/security';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -37,6 +39,7 @@ describe('AssetTreeView', () => {
           created_by: 1,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
+          security_classification: SecurityClassificationLevel.INTERNAL,
         },
         {
           id: 3,
@@ -57,16 +60,19 @@ describe('AssetTreeView', () => {
               created_by: 1,
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
+              security_classification: SecurityClassificationLevel.SECRET,
             },
           ],
           created_by: 1,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
+          security_classification: SecurityClassificationLevel.SECRET,
         },
       ],
       created_by: 1,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
+      security_classification: SecurityClassificationLevel.INTERNAL,
     },
   ];
 
@@ -201,5 +207,45 @@ describe('AssetTreeView', () => {
     expandFolder('Production Line 1');
     const plc = screen.getByText('PLC-001');
     expect(plc.closest('.ant-tree-node-content-wrapper')).toBeInTheDocument();
+  });
+
+  it('shows each node\'s security classification', () => {
+    render(<AssetTreeView {...defaultProps} />);
+
+    const root = screen.getByText('Production Line 1').closest('.ant-tree-treenode') as HTMLElement;
+    expect(root).toHaveTextContent('Internal');
+
+    expandFolder('Production Line 1');
+    const controlRoom = screen.getByText('Control Room').closest('.ant-tree-treenode') as HTMLElement;
+    expect(controlRoom).toHaveTextContent('Secret');
+  });
+
+  it('shows the backend message when a move is blocked by classification', async () => {
+    const blocked = "Cannot move 'PLC-001' (INTERNAL) into folder 'Control Room' (SECRET): an asset cannot be classified below its folder. Raise it to SECRET or higher first.";
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === 'validate_asset_move') throw blocked;
+      return null;
+    });
+    const onAssetMove = vi.fn();
+    render(<AssetTreeView {...defaultProps} onAssetMove={onAssetMove} />);
+
+    expandFolder('Production Line 1');
+    fireEvent.contextMenu(screen.getByText('PLC-001'));
+    fireEvent.click(await screen.findByText('Move to...'));
+    expect(await screen.findByText('Move "PLC-001" to...')).toBeInTheDocument();
+
+    fireEvent.mouseDown(within(screen.getByRole('dialog')).getByRole('combobox'));
+    const destination = await waitFor(() => {
+      const node = Array.from(document.querySelectorAll('.ant-select-tree-title')).find(n => n.textContent === 'Control Room');
+      expect(node).toBeDefined();
+      return node as HTMLElement;
+    });
+    fireEvent.click(destination);
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+
+    expect(await screen.findByText(blocked)).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith('validate_asset_move', { token: 'mock-token', assetId: 2, newParentId: 3 });
+    expect(invoke).not.toHaveBeenCalledWith('move_asset', expect.anything());
+    expect(onAssetMove).not.toHaveBeenCalled();
   });
 });

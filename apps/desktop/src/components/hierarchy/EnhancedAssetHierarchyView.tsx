@@ -30,7 +30,7 @@ import {
   UnorderedListOutlined
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
-import { CreateAssetModal } from './CreateAssetModal';
+import { SimpleAssetCreation } from '../security/SimpleAssetCreation';
 import { AssetHierarchy, AssetInfo } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyError, useSelectedAsset } from '../../store/hierarchy';
@@ -153,6 +153,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
         version_count: 0,
         latest_version: null,
         latest_version_notes: null,
+        security_classification: selectedAsset.security_classification,
       };
       onNavigateToHistory(assetInfo);
     }
@@ -437,7 +438,7 @@ export const EnhancedAssetHierarchyView: React.FC<EnhancedAssetHierarchyViewProp
       </Layout>
 
       {/* Modals */}
-      <CreateAssetModal
+      <SimpleAssetCreation
         open={showCreateModal}
         onCancel={() => setShowCreateModal(false)}
         onSuccess={handleAssetCreated}

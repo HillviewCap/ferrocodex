@@ -109,6 +109,7 @@ pub async fn import_configuration(
                 asset_type: AssetType::Device,
                 parent_id: None,
                 created_by: session.user_id,
+                security_classification: None,
             };
 
             let asset = match asset_repo.create_asset(asset_request) {

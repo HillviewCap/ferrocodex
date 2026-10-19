@@ -16,8 +16,8 @@ vi.mock('./AssetTreeView', () => ({
     </div>
   ),
 }));
-vi.mock('./CreateAssetModal', () => ({
-  CreateAssetModal: ({ open }: { open: boolean }) => (open ? <div data-testid="create-asset-modal" /> : null),
+vi.mock('../security/SimpleAssetCreation', () => ({
+  SimpleAssetCreation: ({ open }: { open: boolean }) => (open ? <div data-testid="create-asset-modal" /> : null),
 }));
 vi.mock('../VaultAccessIndicator', () => ({ default: () => <span data-testid="vault-access-indicator" /> }));
 vi.mock('../bulk', () => ({

@@ -300,6 +300,7 @@ impl<'a> MetadataQueryApi<'a> {
                 created_at: row.get("created_at")?,
                 updated_at: row.get("updated_at")?,
                 created_by: row.get("created_by")?,
+                security_classification: row.get("security_classification")?,
             })
         })
         .map_err(|e| format!("Failed to execute query: {}", e))?;
@@ -594,7 +595,7 @@ impl<'a> MetadataQueryApi<'a> {
         
         let sql = format!(
             "SELECT a.id, a.name, a.asset_type, a.parent_id, a.description, a.status, 
-                    a.created_at, a.updated_at, a.created_by, a.path, a.is_folder
+                    a.created_at, a.updated_at, a.created_by, a.path, a.is_folder, a.security_classification
              FROM assets a 
              JOIN asset_metadata am ON a.id = am.asset_id 
              {}",

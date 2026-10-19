@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { AssetHierarchyView } from './AssetHierarchyView';
 import { AssetHierarchy } from '../../types/assets';
+import { SecurityClassificationLevel } from '../../types/security';
 import useAuthStore from '../../store/auth';
 import { useHierarchyStore } from '../../store/hierarchy';
 import { useConsoleGuard } from '../../test-utils/consoleGuard';
@@ -21,6 +22,10 @@ vi.mock('./AssetTreeView', () => ({
 vi.mock('../security/SimpleAssetCreation', () => ({
   SimpleAssetCreation: ({ open }: { open: boolean }) => (open ? <div data-testid="simple-asset-creation" /> : null),
 }));
+vi.mock('./CreateFolderModal', () => ({
+  CreateFolderModal: ({ open, initialParentId }: { open: boolean; initialParentId: number | null }) =>
+    open ? <div data-testid="create-folder-modal">parent:{String(initialParentId)}</div> : null,
+}));
 vi.mock('../IdentityVault', () => ({ default: () => <div data-testid="identity-vault" /> }));
 vi.mock('../metadata/MetadataDisplay', () => ({ default: () => <div data-testid="metadata-display" /> }));
 vi.mock('../VaultAccessIndicator', () => ({ default: () => <span data-testid="vault-access-indicator" /> }));
@@ -32,7 +37,10 @@ vi.mock('./QuickFirmwareUploadModal', () => ({
 }));
 
 const base = { description: '', sort_order: 0, created_by: 1, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' };
-const device: AssetHierarchy = { ...base, id: 2, name: 'PLC-001', description: 'Primary PLC', asset_type: 'Device', parent_id: 1, children: [] };
+const device: AssetHierarchy = {
+  ...base, id: 2, name: 'PLC-001', description: 'Primary PLC', asset_type: 'Device', parent_id: 1, children: [],
+  security_classification: SecurityClassificationLevel.CONFIDENTIAL,
+};
 const folder: AssetHierarchy = {
   ...base,
   id: 1,
@@ -40,6 +48,7 @@ const folder: AssetHierarchy = {
   asset_type: 'Folder',
   parent_id: null,
   children: [device],
+  security_classification: SecurityClassificationLevel.INTERNAL,
 };
 const hierarchy = [folder];
 
@@ -56,6 +65,7 @@ const assetInfo = (asset: AssetHierarchy) => ({
   version_count: 0,
   latest_version: null,
   latest_version_notes: null,
+  security_classification: asset.security_classification,
 });
 
 describe('AssetHierarchyView', () => {
@@ -113,6 +123,8 @@ describe('AssetHierarchyView', () => {
 
     expect(screen.getByText('Device')).toBeInTheDocument();
     expect(screen.getByText('Primary PLC')).toBeInTheDocument();
+    expect(screen.getByText('Classification:')).toBeInTheDocument();
+    expect(screen.getByText('Confidential')).toBeInTheDocument();
     expect(await screen.findByText('2 Configs')).toBeInTheDocument();
     expect(screen.getByText('1 Firmware')).toBeInTheDocument();
     expect(screen.getByTestId('vault-access-indicator')).toBeInTheDocument();
@@ -163,6 +175,50 @@ describe('AssetHierarchyView', () => {
     expect(screen.getByText('database unavailable')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Create Folder/ }));
+    expect(screen.getByTestId('create-folder-modal')).toHaveTextContent('parent:null');
+    expect(screen.queryByTestId('simple-asset-creation')).not.toBeInTheDocument();
+  });
+
+  it('opens the device wizard from Create Device', () => {
+    render(<AssetHierarchyView />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Device/ }));
     expect(screen.getByTestId('simple-asset-creation')).toBeInTheDocument();
+    expect(screen.queryByTestId('create-folder-modal')).not.toBeInTheDocument();
+  });
+
+  it('refreshes and re-selects the asset after its classification changes', async () => {
+    const raisedDevice = { ...device, security_classification: SecurityClassificationLevel.SECRET };
+    const raisedFolder = { ...folder, security_classification: SecurityClassificationLevel.SECRET, children: [raisedDevice] };
+    let current = hierarchy;
+    const baseImpl = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'get_asset_hierarchy') return current;
+      if (cmd === 'update_asset_classification') {
+        current = [raisedFolder];
+        return assetInfo(raisedFolder);
+      }
+      return baseImpl(cmd, args);
+    });
+    useHierarchyStore.setState({ selectedAsset: folder });
+    render(<AssetHierarchyView />);
+    await screen.findByText('Root');
+
+    fireEvent.click(screen.getByRole('button', { name: /Change/ }));
+    fireEvent.mouseDown(await screen.findByRole('combobox'));
+    const secret = await waitFor(() => {
+      const option = Array.from(document.querySelectorAll('.ant-select-item-option')).find(o => o.textContent?.includes('Secret'));
+      expect(option).toBeDefined();
+      return option as HTMLElement;
+    });
+    fireEvent.click(secret);
+    fireEvent.click(await screen.findByRole('button', { name: 'Raise 1 item and Save' }));
+
+    await waitFor(() => expect(useHierarchyStore.getState().selectedAsset?.security_classification).toBe(SecurityClassificationLevel.SECRET));
+    expect(invoke).toHaveBeenCalledWith('update_asset_classification', {
+      token: 'test-token',
+      assetId: folder.id,
+      securityClassification: SecurityClassificationLevel.SECRET,
+    });
   });
 });

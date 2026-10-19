@@ -32,6 +32,8 @@ import {
 } from '@ant-design/icons';
 import { AssetTreeView } from './AssetTreeView';
 import { SimpleAssetCreation } from '../security/SimpleAssetCreation';
+import { CreateFolderModal } from './CreateFolderModal';
+import { AssetClassificationEditor } from './AssetClassificationEditor';
 import { AssetHierarchy, AssetType, AssetInfo } from '../../types/assets';
 import useAuthStore from '../../store/auth';
 import { useHierarchyStore, useHierarchyData, useHierarchyLoading, useHierarchyError, useSelectedAsset } from '../../store/hierarchy';
@@ -70,8 +72,8 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
   } = useHierarchyStore();
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createFolderVisible, setCreateFolderVisible] = useState(false);
   const [createModalParentId, setCreateModalParentId] = useState<number | null>(null);
-  const [createModalAssetType, setCreateModalAssetType] = useState<AssetType | undefined>();
   const [assetPath, setAssetPath] = useState<AssetInfo[]>([]);
   const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);
   const [vaultLoading, setVaultLoading] = useState(false);
@@ -149,14 +151,29 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
 
   const handleAssetCreate = (parentId: number | null, assetType: AssetType) => {
     setCreateModalParentId(parentId);
-    setCreateModalAssetType(assetType);
-    setCreateModalVisible(true);
+    if (assetType === 'Folder') {
+      setCreateFolderVisible(true);
+    } else {
+      setCreateModalVisible(true);
+    }
   };
 
   const handleCreateSuccess = () => {
     setCreateModalVisible(false);
+    setCreateFolderVisible(false);
     if (token) {
       refreshHierarchy(token);
+    }
+  };
+
+  // A raise can change descendants too, so reload the tree and re-select the
+  // fresh copy of the asset so the details panel shows the new level
+  const handleClassificationUpdated = async () => {
+    if (!token || !selectedAsset) return;
+    await refreshHierarchy(token);
+    const refreshed = useHierarchyStore.getState().findAssetById(selectedAsset.id);
+    if (refreshed) {
+      selectAsset(refreshed);
     }
   };
 
@@ -196,6 +213,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         version_count: 0, // This would need to be fetched
         latest_version: null,
         latest_version_notes: null,
+        security_classification: selectedAsset.security_classification,
       };
       onNavigateToHistory(assetInfo);
     }
@@ -384,6 +402,16 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
                     </>
                   )}
                 </Space>
+              </div>
+
+              {/* Security Classification */}
+              <div>
+                <Text strong>Classification: </Text>
+                <AssetClassificationEditor
+                  asset={selectedAsset}
+                  hierarchyData={hierarchyData}
+                  onUpdated={handleClassificationUpdated}
+                />
               </div>
 
               {/* Description */}
@@ -616,7 +644,14 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
         onSuccess={handleCreateSuccess}
         hierarchyData={hierarchyData}
         initialParentId={createModalParentId}
-        initialAssetType={createModalAssetType}
+      />
+
+      <CreateFolderModal
+        open={createFolderVisible}
+        onCancel={() => setCreateFolderVisible(false)}
+        onSuccess={handleCreateSuccess}
+        hierarchyData={hierarchyData}
+        initialParentId={createModalParentId}
       />
 
       {/* Quick Config Import Modal */}
@@ -670,6 +705,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
               version_count: 0, // This would need to be fetched
               latest_version: null,
               latest_version_notes: null,
+              security_classification: selectedAsset.security_classification,
             }}
           />
         </Modal>

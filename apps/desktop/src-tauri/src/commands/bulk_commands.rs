@@ -936,6 +936,7 @@ fn process_import_item(
         asset_type,
         parent_id: None, // TODO: Resolve parent by name
         created_by,
+        security_classification: None,
     };
 
     let asset = asset_repo.create_asset(request)?;

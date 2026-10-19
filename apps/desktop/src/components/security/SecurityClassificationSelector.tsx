@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Select, Badge, Tooltip, Card, Space, Typography, Alert } from 'antd';
 import {
   GlobalOutlined,
@@ -44,6 +44,18 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<SecurityClassificationLevel | undefined>(value);
 
+  // Follow the controlled value, e.g. when a new parent folder changes the inherited level
+  useEffect(() => {
+    setSelectedLevel(value);
+  }, [value]);
+
+  // An Engineer can't pick RESTRICTED/SECRET on their own, but the inherited level
+  // always stays selectable: inheritance wins over the role cap
+  const isElevatedForRole = (level: SecurityClassificationLevel): boolean =>
+    currentUserRole === 'Engineer' &&
+    (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET) &&
+    level !== inheritedClassification;
+
   const getIcon = (iconName: string) => {
     const iconMap = {
       'GlobalOutlined': <GlobalOutlined />,
@@ -58,8 +70,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
     if (disabled) return true;
     
     // Engineers cannot select RESTRICTED or SECRET without admin approval
-    if (currentUserRole === 'Engineer' && 
-        (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET)) {
+    if (isElevatedForRole(level)) {
       return !allowElevation;
     }
     
@@ -91,8 +102,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
 
 
   const getDisabledReason = (level: SecurityClassificationLevel): string => {
-    if (currentUserRole === 'Engineer' && 
-        (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET)) {
+    if (isElevatedForRole(level)) {
       return 'Administrator approval required for this classification level';
     }
     
@@ -164,8 +174,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
       )}
 
       {/* Elevation Warning */}
-      {selectedLevel && currentUserRole === 'Engineer' && 
-       (selectedLevel === SecurityClassificationLevel.RESTRICTED || selectedLevel === SecurityClassificationLevel.SECRET) && (
+      {selectedLevel && isElevatedForRole(selectedLevel) && (
         <Alert
           title="Administrator Approval Required"
           description="This classification level requires administrator approval. Your request will be submitted for review."
