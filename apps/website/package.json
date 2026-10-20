@@ -1,6 +1,6 @@
 {
   "name": "@ferrocodex/website",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Marketing site for ferrocodex.com, served as static assets from a Cloudflare Worker",
   "scripts": {
