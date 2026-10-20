@@ -188,14 +188,7 @@ fn authenticate_and_unlock(
     drop(tracker);
     if locked {
         warn!("Login attempt for locked account: {}", username);
-        let user_id = user_repo.find_by_username(username).ok().flatten().map(|user| user.id);
-        log_login_event(
-            db,
-            AuditEventType::UserLoginFailed,
-            user_id,
-            &audit_username(username),
-            format!("Login attempt for '{}' rejected: account is temporarily locked", audit_username(username)),
-        );
+        log_locked_attempt(db, username, "Login");
         return Err("Account is temporarily locked due to too many failed attempts".to_string());
     }
 
@@ -269,6 +262,21 @@ fn record_login_failure(
         log_account_locked(db, user_id, username);
     }
     Ok(())
+}
+
+/// Audits an attempt refused because the account is locked, as AUTH_002. It
+/// isn't counted against the username again. `attempt` is capitalized, e.g. "Login".
+fn log_locked_attempt(db: &Database, username: &str, attempt: &str) {
+    let user_id = SqliteUserRepository::new(db.get_connection())
+        .find_by_username(username).ok().flatten().map(|user| user.id);
+    let shown = audit_username(username);
+    log_login_event(
+        db,
+        AuditEventType::UserLoginFailed,
+        user_id,
+        &shown,
+        format!("{} attempt for '{}' rejected: account is temporarily locked", attempt, shown),
+    );
 }
 
 fn log_account_locked(db: &Database, user_id: Option<i64>, username: &str) {
@@ -382,15 +390,18 @@ pub async fn reset_password_with_recovery_key(
 
     let tracker = attempt_tracker.lock()
         .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-    if tracker.is_locked(&username).map_err(|e| e.to_string())? {
-        warn!("Recovery attempt for locked account: {}", username);
-        return Err("Account is temporarily locked due to too many failed attempts".to_string());
-    }
+    let locked = tracker.is_locked(&username).map_err(|e| e.to_string())?;
     drop(tracker);
 
     let db_guard = db_state.lock()
         .map_err(|_| "Failed to acquire database lock".to_string())?;
     let db = db_guard.as_ref().ok_or_else(|| "Database not initialized".to_string())?;
+
+    if locked {
+        warn!("Recovery attempt for locked account: {}", username);
+        log_locked_attempt(db, &username, "Recovery key reset");
+        return Err("Account is temporarily locked due to too many failed attempts".to_string());
+    }
 
     let user_repo = SqliteUserRepository::new(db.get_connection());
     let key_store = SqliteKeyStoreRepository::new(db.get_connection());
@@ -989,6 +1000,14 @@ mod tests {
             assert!(reset(&app, "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000", NEW_PASSWORD).await.is_err());
         }
         assert_eq!(audit_rows(&app, "AUTH_002").len(), 5);
+        assert_eq!(audit_rows(&app, "USER_006").len(), 1);
+
+        // Attempts while locked are refused and audited, without locking again
+        assert!(reset(&app, "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000", NEW_PASSWORD).await.is_err());
+        let failures = audit_rows(&app, "AUTH_002");
+        assert_eq!(failures.len(), 6);
+        assert!(failures[5].2.contains("Recovery key reset attempt") && failures[5].2.contains("locked"), "{}", failures[5].2);
+        assert!(failures[5].0.is_some());
         assert_eq!(audit_rows(&app, "USER_006").len(), 1);
     }
 
