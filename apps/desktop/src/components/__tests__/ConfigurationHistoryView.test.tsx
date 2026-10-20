@@ -127,7 +127,7 @@ describe('ConfigurationHistoryView', () => {
     
     const configAssetsElements = screen.getAllByText('Configuration Assets');
     expect(configAssetsElements.length).toBeGreaterThan(0);
-    const versionHistoryElements = screen.getAllByText('Version History');
+    const versionHistoryElements = screen.getAllByText('Configuration Manager');
     expect(versionHistoryElements.length).toBeGreaterThan(0);
   });
 
@@ -145,14 +145,14 @@ describe('ConfigurationHistoryView', () => {
 
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    const loadingVersionsElements = screen.getAllByText('Loading version history...');
+    const loadingVersionsElements = screen.getAllByText('Loading configurations...');
     expect(loadingVersionsElements.length).toBeGreaterThan(0);
   });
 
   it('shows empty state when no versions exist', () => {
     render(<ConfigurationHistoryView asset={mockAsset} onBack={mockOnBack} />);
     
-    const noVersionHistoryElements = screen.getAllByText('No Version History');
+    const noVersionHistoryElements = screen.getAllByText('No Configuration Versions');
     expect(noVersionHistoryElements.length).toBeGreaterThan(0);
     const noVersionsYetElements = screen.getAllByText('This asset has no configuration versions yet');
     expect(noVersionsYetElements.length).toBeGreaterThan(0);

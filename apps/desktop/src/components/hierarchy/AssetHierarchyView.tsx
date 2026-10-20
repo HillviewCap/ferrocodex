@@ -42,6 +42,7 @@ import IdentityVault from '../IdentityVault';
 import QuickConfigImportModal from './QuickConfigImportModal';
 import QuickFirmwareUploadModal from './QuickFirmwareUploadModal';
 import MetadataDisplay from '../metadata/MetadataDisplay';
+import { formatAssetLocation } from '../../utils/assetLocation';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -310,7 +311,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
                     Add Firmware
                   </Button>
                 </Tooltip>
-                <Tooltip title="View Configuration History">
+                <Tooltip title="Open Configuration Manager">
                   <Button 
                     icon={<HistoryOutlined />} 
                     onClick={handleViewHistory}
@@ -457,7 +458,7 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
                       onClick={handleViewHistory}
                       type="default"
                     >
-                      View History
+                      Configuration Manager
                     </Button>
                   </Space>
                 </div>
@@ -517,12 +518,12 @@ export const AssetHierarchyView: React.FC<AssetHierarchyViewProps> = ({
               ? [
                   {
                     key: 'metadata',
-                    label: 'Metadata',
+                    label: 'Additional Information',
                     children: (
                       <div style={{ height: '100%', overflow: 'auto' }}>
                         <MetadataDisplay
                           assetId={selectedAsset.id}
-                          schemaId={1} // TODO: Get schema ID from asset type
+                          location={formatAssetLocation(assetPath, selectedAsset.id)}
                           onRefresh={() => {
                             // Optionally refresh other data
                             console.log('Metadata refreshed');

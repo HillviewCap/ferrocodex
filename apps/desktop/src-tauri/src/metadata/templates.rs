@@ -416,7 +416,7 @@ fn create_serial_number_template() -> MetadataFieldTemplate {
         json!({
             "type": "string",
             "maxLength": 100,
-            "pattern": "^[A-Za-z0-9\\-_]+$",
+            "pattern": "^[A-Za-z0-9 ._/:#\\-]+$",
             "title": "Serial Number",
             "description": "Unique device serial number"
         }).to_string(),

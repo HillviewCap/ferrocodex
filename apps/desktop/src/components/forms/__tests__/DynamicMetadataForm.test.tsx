@@ -184,7 +184,7 @@ describe('DynamicMetadataForm', () => {
     });
 
     // Submit form
-    const saveButton = screen.getByText('Save Metadata');
+    const saveButton = screen.getByText('Save');
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -219,7 +219,7 @@ describe('DynamicMetadataForm', () => {
     });
 
     // Submit form without filling required fields
-    const saveButton = screen.getByText('Save Metadata');
+    const saveButton = screen.getByText('Save');
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -279,7 +279,7 @@ describe('DynamicMetadataForm', () => {
     });
 
     // Save button should not be present in readonly mode
-    expect(screen.queryByText('Save Metadata')).not.toBeInTheDocument();
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
 
     // Fields should be disabled
     const nameInput = screen.getByLabelText(/Asset Name/);

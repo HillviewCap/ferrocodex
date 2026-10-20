@@ -114,7 +114,7 @@ describe('AssetHierarchyView', () => {
     render(<AssetHierarchyView />);
 
     expect(screen.getByRole('tab', { name: 'Details' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Metadata' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Additional Information' })).toBeInTheDocument();
 
     // Breadcrumb: Root + the parent folder (the selected asset itself is omitted)
     expect(await screen.findByText('Root')).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe('AssetHierarchyView', () => {
     expect(screen.getByRole('button', { name: /Upload Firmware/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Identity Vault/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Metadata' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Additional Information' }));
     expect(await screen.findByTestId('metadata-display')).toBeInTheDocument();
   });
 
@@ -198,7 +198,7 @@ describe('AssetHierarchyView', () => {
     render(<AssetHierarchyView />);
 
     expect(screen.getByRole('tab', { name: 'Details' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Metadata' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Additional Information' })).not.toBeInTheDocument();
     expect(screen.getByText('Contents:')).toBeInTheDocument();
     expect(screen.getByText('1 items')).toBeInTheDocument();
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('get_asset_path', { token: 'test-token', assetId: folder.id }));

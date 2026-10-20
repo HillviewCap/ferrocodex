@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde_json::Value;
 use tracing::{info, warn};
 
@@ -239,124 +239,33 @@ impl<'a> SqliteMetadataRepository<'a> {
         Ok(())
     }
 
-    /// Create default metadata schema for equipment import
+    /// Create the default metadata schema, or bring an older copy up to date
     pub fn create_default_schema(&self) -> Result<()> {
         info!("Creating default metadata schema for equipment import");
-        
-        // Check if default schema already exists
-        let count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM asset_metadata_schemas WHERE name = 'Default Equipment Schema'",
-            [],
-            |row| row.get(0),
-        )?;
 
-        if count > 0 {
-            info!("Default schema already exists, skipping creation");
+        let definition = Self::default_schema_definition();
+
+        let existing: Option<(i64, String, bool, i64)> = self.conn.query_row(
+            "SELECT id, schema_json, is_system_template, version FROM asset_metadata_schemas WHERE name = 'Default Equipment Schema'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        ).optional()?;
+
+        if let Some((id, stored_json, is_system, version)) = existing {
+            // A user-created schema that reuses the name is never modified
+            if is_system {
+                if let Some(merged) = Self::merge_default_schema(&stored_json, &definition) {
+                    self.conn.execute(
+                        "UPDATE asset_metadata_schemas SET schema_json = ?1, version = ?2 WHERE id = ?3",
+                        params![merged.to_string(), version + 1, id],
+                    )?;
+                    info!("Default schema upgraded with missing fields and categories");
+                }
+            }
             return Ok(());
         }
 
-        // Create comprehensive default schema with common industrial equipment fields
-        let default_schema_json = serde_json::json!({
-            "type": "object",
-            "title": "Default Equipment Schema",
-            "description": "Standard schema for industrial equipment with common fields",
-            "properties": {
-                // Device Information
-                "manufacturer": {
-                    "type": "string",
-                    "title": "Manufacturer",
-                    "description": "Equipment manufacturer name"
-                },
-                "model_number": {
-                    "type": "string",
-                    "title": "Model Number",
-                    "description": "Equipment model or part number"
-                },
-                "serial_number": {
-                    "type": "string",
-                    "title": "Serial Number",
-                    "description": "Unique serial number"
-                },
-                "firmware_version": {
-                    "type": "string",
-                    "title": "Firmware Version",
-                    "description": "Current firmware or software version"
-                },
-                
-                // Network Configuration
-                "ip_address": {
-                    "type": "string",
-                    "title": "IP Address",
-                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
-                    "description": "IPv4 address (e.g., 192.168.1.100)"
-                },
-                "subnet_mask": {
-                    "type": "string",
-                    "title": "Subnet Mask",
-                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
-                    "description": "Network subnet mask (e.g., 255.255.255.0)"
-                },
-                "mac_address": {
-                    "type": "string",
-                    "title": "MAC Address",
-                    "pattern": "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
-                    "description": "Hardware MAC address (e.g., 00:1B:44:11:3A:B7)"
-                },
-                
-                // Physical Location
-                "facility": {
-                    "type": "string",
-                    "title": "Facility",
-                    "description": "Facility or site name"
-                },
-                "building": {
-                    "type": "string",
-                    "title": "Building",
-                    "description": "Building identifier"
-                },
-                "floor": {
-                    "type": "string",
-                    "title": "Floor",
-                    "description": "Floor number or identifier"
-                },
-                "room": {
-                    "type": "string",
-                    "title": "Room",
-                    "description": "Room number or area"
-                },
-                "rack": {
-                    "type": "string",
-                    "title": "Rack/Cabinet",
-                    "description": "Rack or cabinet identifier"
-                },
-                
-                // Operational Information
-                "install_date": {
-                    "type": "string",
-                    "format": "date",
-                    "title": "Installation Date",
-                    "description": "Date equipment was installed"
-                },
-                "commissioning_date": {
-                    "type": "string",
-                    "format": "date",
-                    "title": "Commissioning Date",
-                    "description": "Date equipment was commissioned"
-                },
-                "operational_status": {
-                    "type": "string",
-                    "title": "Operational Status",
-                    "enum": ["Active", "Inactive", "Maintenance", "Standby", "Decommissioned"],
-                    "description": "Current operational status"
-                },
-                "notes": {
-                    "type": "string",
-                    "title": "Notes",
-                    "description": "Additional notes or comments"
-                }
-            },
-            "required": []
-        }).to_string();
+        let default_schema_json = definition.to_string();
 
         // Insert default schema as a system template that cannot be deleted
         self.conn.execute(
@@ -377,6 +286,173 @@ impl<'a> SqliteMetadataRepository<'a> {
 
         info!("Default metadata schema created successfully");
         Ok(())
+    }
+
+
+    fn default_schema_definition() -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "title": "Default Equipment Schema",
+            "description": "Standard schema for industrial equipment with common fields",
+            "properties": {
+                // Device Information
+                "manufacturer": {
+                    "type": "string",
+                    "category": "Device",
+                    "title": "Manufacturer",
+                    "description": "Equipment manufacturer name"
+                },
+                "model_number": {
+                    "type": "string",
+                    "category": "Device",
+                    "title": "Model Number",
+                    "description": "Equipment model or part number"
+                },
+                "serial_number": {
+                    "type": "string",
+                    "category": "Device",
+                    "title": "Serial Number",
+                    "description": "Unique serial number"
+                },
+                "firmware_version": {
+                    "type": "string",
+                    "category": "Device",
+                    "title": "Firmware Version",
+                    "description": "Current firmware or software version"
+                },
+                
+                // Network Configuration
+                "ip_address": {
+                    "type": "string",
+                    "category": "Network",
+                    "title": "IP Address",
+                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+                    "description": "IPv4 address (e.g., 192.168.1.100)"
+                },
+                "subnet_mask": {
+                    "type": "string",
+                    "category": "Network",
+                    "title": "Subnet Mask",
+                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+                    "description": "Network subnet mask (e.g., 255.255.255.0)"
+                },
+                "mac_address": {
+                    "type": "string",
+                    "category": "Network",
+                    "title": "MAC Address",
+                    "pattern": "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
+                    "description": "Hardware MAC address (e.g., 00:1B:44:11:3A:B7)"
+                },
+                
+                // Physical Location
+                "facility": {
+                    "type": "string",
+                    "category": "Location",
+                    "title": "Facility",
+                    "description": "Facility or site name"
+                },
+                "building": {
+                    "type": "string",
+                    "category": "Location",
+                    "title": "Building",
+                    "description": "Building identifier"
+                },
+                "floor": {
+                    "type": "string",
+                    "category": "Location",
+                    "title": "Floor",
+                    "description": "Floor number or identifier"
+                },
+                "room": {
+                    "type": "string",
+                    "category": "Location",
+                    "title": "Room",
+                    "description": "Room number or area"
+                },
+                "rack": {
+                    "type": "string",
+                    "category": "Location",
+                    "title": "Rack/Cabinet",
+                    "description": "Rack or cabinet identifier"
+                },
+                
+                // Operational Information
+                "install_date": {
+                    "type": "string",
+                    "category": "Operational",
+                    "format": "date",
+                    "title": "Installation Date",
+                    "description": "Date equipment was installed"
+                },
+                "commissioning_date": {
+                    "type": "string",
+                    "category": "Operational",
+                    "format": "date",
+                    "title": "Commissioning Date",
+                    "description": "Date equipment was commissioned"
+                },
+                "operational_status": {
+                    "type": "string",
+                    "category": "Operational",
+                    "title": "Operational Status",
+                    "enum": ["Active", "Inactive", "Maintenance", "Standby", "Decommissioned"],
+                    "description": "Current operational status"
+                },
+                "notes": {
+                    "type": "string",
+                    "category": "Operational",
+                    "title": "Notes",
+                    "description": "Additional notes or comments"
+                }
+            },
+            "fieldOrder": ["manufacturer", "model_number", "serial_number", "firmware_version", "ip_address", "subnet_mask", "mac_address", "facility", "building", "floor", "room", "rack", "install_date", "commissioning_date", "operational_status", "notes"],
+            "required": []
+        })
+    }
+
+    /// Add fields, categories, and field order from `definition` that a stored
+    /// system schema lacks. Returns None when nothing needs to change.
+    fn merge_default_schema(stored_json: &str, definition: &serde_json::Value) -> Option<serde_json::Value> {
+        let mut stored: serde_json::Value = serde_json::from_str(stored_json).ok()?;
+        let stored_obj = stored.as_object_mut()?;
+        let mut changed = false;
+
+        let properties = stored_obj
+            .entry("properties")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()?;
+        for (name, wanted) in definition["properties"].as_object()? {
+            match properties.get_mut(name) {
+                None => {
+                    properties.insert(name.clone(), wanted.clone());
+                    changed = true;
+                }
+                Some(existing) => {
+                    if existing.get("category").is_none() {
+                        if let (Some(obj), Some(category)) = (existing.as_object_mut(), wanted.get("category")) {
+                            obj.insert("category".to_string(), category.clone());
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Current order first, then any extra properties the stored schema had
+        let mut order: Vec<serde_json::Value> = definition["fieldOrder"].as_array()?.clone();
+        for name in properties.keys() {
+            let name = serde_json::Value::String(name.clone());
+            if !order.contains(&name) {
+                order.push(name);
+            }
+        }
+        let order = serde_json::Value::Array(order);
+        if stored_obj.get("fieldOrder") != Some(&order) {
+            stored_obj.insert("fieldOrder".to_string(), order);
+            changed = true;
+        }
+
+        if changed { Some(stored) } else { None }
     }
 
     fn row_to_metadata_schema(row: &Row) -> rusqlite::Result<AssetMetadataSchema> {
@@ -1200,5 +1276,79 @@ mod tests {
         
         let result = AssetMetadataRepository::update_asset_metadata(&repo, updated_metadata).unwrap();
         assert!(result.metadata_values_json.contains("192.168.1.101"));
+    }
+
+    fn default_schema_row(conn: &Connection) -> (String, i64) {
+        conn.query_row(
+            "SELECT schema_json, version FROM asset_metadata_schemas WHERE name = 'Default Equipment Schema'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap()
+    }
+
+    #[test]
+    fn test_default_schema_has_serial_number_and_categories() {
+        let (_temp, conn) = setup_test_db();
+        let repo = SqliteMetadataRepository::new(&conn);
+        repo.create_default_schema().unwrap();
+
+        let (json_str, version) = default_schema_row(&conn);
+        let schema: Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(version, 1);
+        assert_eq!(schema["properties"]["serial_number"]["category"], "Device");
+        assert_eq!(schema["fieldOrder"][0], "manufacturer");
+    }
+
+    #[test]
+    fn test_default_schema_self_heals_old_install() {
+        let (_temp, conn) = setup_test_db();
+        let repo = SqliteMetadataRepository::new(&conn);
+        let old = json!({
+            "type": "object",
+            "properties": {
+                "manufacturer": {"type": "string", "title": "Maker"},
+                "legacy_field": {"type": "string", "title": "Legacy"}
+            },
+            "required": []
+        }).to_string();
+        conn.execute(
+            "INSERT INTO asset_metadata_schemas (name, description, schema_json, created_by, is_system_template, version)
+             VALUES ('Default Equipment Schema', 'old', ?1, NULL, 1, 1)",
+            params![old],
+        ).unwrap();
+
+        repo.create_default_schema().unwrap();
+        let (json_str, version) = default_schema_row(&conn);
+        let schema: Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(schema["properties"]["serial_number"]["title"], "Serial Number");
+        assert_eq!(schema["properties"]["manufacturer"]["category"], "Device");
+        // Existing customisations and extra fields are kept
+        assert_eq!(schema["properties"]["manufacturer"]["title"], "Maker");
+        assert!(schema["properties"]["legacy_field"].is_object());
+        assert_eq!(schema["fieldOrder"][2], "serial_number");
+
+        // Idempotent: a second run changes nothing
+        repo.create_default_schema().unwrap();
+        let (again, version_again) = default_schema_row(&conn);
+        assert_eq!(again, json_str);
+        assert_eq!(version_again, 2);
+    }
+
+    #[test]
+    fn test_default_schema_leaves_user_schema_untouched() {
+        let (_temp, conn) = setup_test_db();
+        let repo = SqliteMetadataRepository::new(&conn);
+        let custom = json!({"type": "object", "properties": {"x": {"type": "string"}}}).to_string();
+        conn.execute(
+            "INSERT INTO asset_metadata_schemas (name, description, schema_json, created_by, is_system_template, version)
+             VALUES ('Default Equipment Schema', 'mine', ?1, 1, 0, 1)",
+            params![custom],
+        ).unwrap();
+
+        repo.create_default_schema().unwrap();
+        let (json_str, version) = default_schema_row(&conn);
+        assert_eq!(json_str, custom);
+        assert_eq!(version, 1);
     }
 }

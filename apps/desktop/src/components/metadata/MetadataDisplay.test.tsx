@@ -54,6 +54,7 @@ const fullMetadata = {
 const mockCommands = (overrides: Record<string, unknown> = {}) => {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     const responses: Record<string, unknown> = {
+      get_metadata_schemas: [{ ...schema, name: 'Default Equipment Schema', is_system_template: true }],
       get_metadata_schema_by_id: schema,
       get_asset_metadata_full: fullMetadata,
       ...overrides,
@@ -109,8 +110,8 @@ describe('MetadataDisplay', () => {
     expect(screen.getByText('critical')).toBeInTheDocument();
     expect(screen.getByText('line-1')).toBeInTheDocument();
 
-    // Metadata Information card
-    expect(screen.getByText('Metadata Information')).toBeInTheDocument();
+    // Additional Information card
+    expect(screen.getByText('Additional Information')).toBeInTheDocument();
     expect(screen.getByText('Schema Version')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Schema ID')).toBeInTheDocument();
@@ -121,22 +122,67 @@ describe('MetadataDisplay', () => {
 
   it('shows the empty state when the asset has no metadata and opens the edit form', async () => {
     mockCommands({ get_asset_metadata_full: { ...fullMetadata, current: null } });
-    render(<MetadataDisplay assetId={42} />);
+    render(<MetadataDisplay assetId={42} location="Plant 1 › Line 3" />);
 
-    expect(await screen.findByText('No metadata configured for this asset')).toBeInTheDocument();
+    expect(await screen.findByText('No additional information recorded for this asset')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add Metadata/ }));
+    expect(screen.getByText('Plant 1 › Line 3')).toBeInTheDocument();
+    // No schema was passed, so the system default schema is resolved
+    expect(invoke).toHaveBeenCalledWith('get_metadata_schemas', { token: 'test-token', assetTypeFilter: null });
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Information/ }));
     expect(screen.getByTestId('dynamic-metadata-form')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('cancel edit'));
-    expect(screen.getByText('No metadata configured for this asset')).toBeInTheDocument();
+    expect(screen.getByText('No additional information recorded for this asset')).toBeInTheDocument();
+  });
+
+  it('shows Serial Number in the Device group, ahead of the other groups', async () => {
+    const deviceSchema = {
+      ...schema,
+      name: 'Default Equipment Schema',
+      is_system_template: true,
+      schema_json: JSON.stringify({
+        properties: {
+          ip_address: { type: 'string', title: 'IP Address', category: 'Network' },
+          serial_number: { type: 'string', title: 'Serial Number', category: 'Device' },
+          notes: { type: 'string', title: 'Notes', category: 'Operational' },
+        },
+        fieldOrder: ['ip_address', 'serial_number', 'notes'],
+      }),
+    };
+    mockCommands({
+      get_asset_metadata_full: {
+        ...fullMetadata,
+        current: { ...fullMetadata.current, metadata_values_json: JSON.stringify({ serial_number: 'SN-1/A' }) },
+      },
+      get_metadata_schema_by_id: deviceSchema,
+    });
+    render(<MetadataDisplay assetId={42} location="Root" />);
+
+    expect(await screen.findByText('Serial Number')).toBeInTheDocument();
+    expect(screen.getByText('SN-1/A')).toBeInTheDocument();
+    const titles = screen.getAllByText(/^(Device|Network|Operational)$/).map(el => el.textContent);
+    expect(titles).toEqual(['Device', 'Network', 'Operational']);
+    expect(screen.getByTestId('asset-location')).toHaveTextContent('Location:Root');
+  });
+
+  it('uses the schema referenced by the asset values over the default', async () => {
+    mockCommands({
+      get_asset_metadata_full: { ...fullMetadata, current: { ...fullMetadata.current, schema_id: 7 } },
+    });
+    render(<MetadataDisplay assetId={42} />);
+
+    await screen.findByText('PLC Schema');
+    expect(invoke).toHaveBeenCalledWith('get_metadata_schema_by_id', { token: 'test-token', schemaId: 7 });
+    expect(invoke).not.toHaveBeenCalledWith('get_metadata_schemas', expect.anything());
   });
 
   it('shows an error alert when the schema cannot be loaded', async () => {
     vi.mocked(invoke).mockRejectedValue(new Error('schema missing'));
     render(<MetadataDisplay assetId={42} />);
 
-    expect(await screen.findByText('Error Loading Metadata')).toBeInTheDocument();
+    expect(await screen.findByText('Error Loading Additional Information')).toBeInTheDocument();
     expect(screen.getByText('schema missing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Retry/ })).toBeInTheDocument();
   });
