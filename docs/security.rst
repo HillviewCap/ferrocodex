@@ -287,8 +287,40 @@ Installation Security
 Operational Security
 --------------------
 
+Security Monitoring Dashboard
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Administrators can open **Security Dashboard** from the main menu. Everything on it is read from the audit log and the database at the moment it loads; nothing is estimated or simulated. Choose the reporting period (last 24 hours, 7 days, or 30 days) at the top. The dashboard refreshes every 30 seconds, and **Refresh** reloads it immediately.
+
+**What It Shows:**
+
+* **Status banner**: OK, Warning, or Critical, set by the most serious finding, with a count of findings at each severity
+* **Failed logins**: failed logins and account lockouts in the period, successful logins, and any accounts locked right now
+* **Vault access denied**: denied vault requests in the period, vault exports and secret reads, and pending access requests
+* **Users**: active users, active administrators, inactive users, and role changes in the period
+* **Encryption key**: the active data-key version, its age, whether a rotation is in progress, and when the last rotation finished
+* **Findings**: issues the dashboard detected, each with a severity and an explanation
+* **Security classification distribution**: how many assets have each classification, from Public to Secret
+* **Recent security events**: up to 15 of the newest security-relevant audit events in the period. Routine successful logins and logouts are left out. **Open audit log** goes to the full audit log.
+
+**Findings:**
+
+* **Critical: key rotation in progress**: a data-key rotation was started and not finished. Encrypted data is unavailable to every user until an administrator finishes it.
+* **Warning: accounts locked**: one or more accounts are locked out right now (they are named in the finding).
+* **Warning: failed logins**: five or more failed logins in the period, or any account lockout.
+* **Warning: single administrator**: only one active administrator exists. If that account is lost, nobody can administer the system.
+* **Warning: legacy key wraps**: some users still have an older form of encryption-key access. It is upgraded automatically the next time each of them logs in.
+* **Warning: vault access denied**: at least one vault request was denied in the period.
+* **Info: data key age**: the active data key is a year old or more. Consider rotating it.
+* **Info: pending permission requests**: vault access requests are waiting for review.
+* **Info: grants expiring**: vault permission grants expire within the next seven days.
+
+**Export Report** saves the dashboard data, together with every security-relevant audit event in the period (up to 5,000), as a JSON file you choose. The export itself is recorded in the audit log.
+
 Audit Log Management
 ^^^^^^^^^^^^^^^^^^^^
+
+Successful logins, failed logins, and account lockouts are recorded in the audit log, along with user, vault, and encryption-key changes.
 
 **Regular Review:**
 

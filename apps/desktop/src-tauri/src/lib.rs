@@ -290,11 +290,9 @@ pub fn run() {
             commands::calculate_file_hash,
             commands::sanitize_filename,
             commands::verify_file_integrity,
-            commands::get_validation_statistics,
-            commands::perform_security_health_check,
             commands::get_audit_events,
             commands::export_audit_log,
-            commands::get_security_metrics,
+            commands::get_security_overview,
             commands::export_security_report,
             
             // Epic 5 - Workflow management commands (temporarily disabled)

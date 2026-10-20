@@ -383,7 +383,9 @@ impl LoginAttemptTracker {
         }
     }
 
-    pub fn record_failed_attempt(&self, username: &str) -> Result<()> {
+    /// Records a failed attempt. Returns true when this attempt is the one
+    /// that locks the account, so the lockout can be audited exactly once.
+    pub fn record_failed_attempt(&self, username: &str) -> Result<bool> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -392,19 +394,20 @@ impl LoginAttemptTracker {
         let mut attempts = self.attempts.lock().unwrap();
         let entry = attempts.entry(username.to_string()).or_insert((0, now));
         
-        // Reset count if lockout period has passed
-        if now - entry.1 > self.lockout_duration {
+        // Reset count if lockout period has passed (the same boundary is_locked uses)
+        if now - entry.1 >= self.lockout_duration {
             entry.0 = 1;
         } else {
             entry.0 += 1;
         }
         entry.1 = now;
 
-        if entry.0 >= self.max_attempts {
+        let now_locked = entry.0 == self.max_attempts;
+        if now_locked {
             warn!("Account locked due to too many failed attempts: {}", username);
         }
 
-        Ok(())
+        Ok(now_locked)
     }
 
     pub fn record_successful_attempt(&self, username: &str) -> Result<()> {
@@ -426,6 +429,25 @@ impl LoginAttemptTracker {
             }
         }
         Ok(false)
+    }
+
+    /// Usernames (as typed at login) that are locked right now, sorted.
+    pub fn locked_usernames(&self) -> Vec<String> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let attempts = self.attempts.lock().unwrap();
+        let mut locked: Vec<String> = attempts
+            .iter()
+            .filter(|(_, (count, last_attempt))| {
+                *count >= self.max_attempts && now - last_attempt < self.lockout_duration
+            })
+            .map(|(username, _)| username.clone())
+            .collect();
+        locked.sort();
+        locked
     }
 
     pub fn cleanup_old_attempts(&self) -> Result<()> {
@@ -657,16 +679,34 @@ pub mod tests {
 
         // Record failed attempts
         for _ in 0..4 {
-            tracker.record_failed_attempt(username).unwrap();
+            assert!(!tracker.record_failed_attempt(username).unwrap());
             assert!(!tracker.is_locked(username).unwrap());
         }
+        assert!(tracker.locked_usernames().is_empty());
 
-        // 5th attempt should lock the account
-        tracker.record_failed_attempt(username).unwrap();
+        // 5th attempt should lock the account, and report that it did
+        assert!(tracker.record_failed_attempt(username).unwrap());
         assert!(tracker.is_locked(username).unwrap());
+        assert_eq!(tracker.locked_usernames(), vec![username.to_string()]);
+
+        // Further failures don't report the lockout again
+        assert!(!tracker.record_failed_attempt(username).unwrap());
 
         // Successful attempt should unlock
         tracker.record_successful_attempt(username).unwrap();
         assert!(!tracker.is_locked(username).unwrap());
+        assert!(tracker.locked_usernames().is_empty());
+    }
+
+    #[test]
+    fn test_locked_usernames_are_sorted() {
+        let tracker = LoginAttemptTracker::new();
+        for username in ["zed", "alice", "mallory"] {
+            for _ in 0..5 {
+                tracker.record_failed_attempt(username).unwrap();
+            }
+        }
+        tracker.record_failed_attempt("bob").unwrap();
+        assert_eq!(tracker.locked_usernames(), vec!["alice", "mallory", "zed"]);
     }
 }

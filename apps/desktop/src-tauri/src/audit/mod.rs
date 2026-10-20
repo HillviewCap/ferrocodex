@@ -26,6 +26,7 @@ pub enum AuditEventType {
     UserEncryptionKeysUpgraded,
     DataKeyRotationStarted,
     DataKeyRotationCompleted,
+    SecurityReportExported,
     FirmwareUpload,
     FirmwareDelete,
     FirmwareAnalysisStarted,
@@ -84,6 +85,7 @@ impl fmt::Display for AuditEventType {
             AuditEventType::UserEncryptionKeysUpgraded => write!(f, "SEC_003"),
             AuditEventType::DataKeyRotationStarted => write!(f, "SEC_004"),
             AuditEventType::DataKeyRotationCompleted => write!(f, "SEC_005"),
+            AuditEventType::SecurityReportExported => write!(f, "SEC_006"),
             AuditEventType::FirmwareUpload => write!(f, "FW_001"),
             AuditEventType::FirmwareDelete => write!(f, "FW_002"),
             AuditEventType::FirmwareAnalysisStarted => write!(f, "FW_003"),
@@ -261,6 +263,7 @@ impl<'a> SqliteAuditRepository<'a> {
             "SEC_003" => AuditEventType::UserEncryptionKeysUpgraded,
             "SEC_004" => AuditEventType::DataKeyRotationStarted,
             "SEC_005" => AuditEventType::DataKeyRotationCompleted,
+            "SEC_006" => AuditEventType::SecurityReportExported,
             "FW_001" => AuditEventType::FirmwareUpload,
             "FW_002" => AuditEventType::FirmwareDelete,
             "FW_003" => AuditEventType::FirmwareAnalysisStarted,
@@ -286,6 +289,10 @@ impl<'a> SqliteAuditRepository<'a> {
             "VAULT_015" => AuditEventType::VaultPermissionExpired,
             "VAULT_016" => AuditEventType::VaultSecretRotated,
             "VAULT_017" => AuditEventType::VaultSecretAccessed,
+            "META_001" => AuditEventType::MetadataSchemaCreated,
+            "META_002" => AuditEventType::MetadataSchemaUpdated,
+            "META_003" => AuditEventType::MetadataSchemaDeleted,
+            "META_004" => AuditEventType::FieldTemplateImported,
             _ => return Err(rusqlite::Error::InvalidColumnType(0, "event_type".to_string(), rusqlite::types::Type::Text)),
         };
 
@@ -459,6 +466,13 @@ impl<'a> AuditRepository for SqliteAuditRepository<'a> {
 
         Ok(rows_deleted as u64)
     }
+}
+
+/// A username as typed at login, which may be anything (even a password typed
+/// into the wrong field), made safe to keep in the audit log or show on the
+/// dashboard: control characters stripped and at most 64 characters.
+pub fn audit_username(username: &str) -> String {
+    username.chars().filter(|c| !c.is_control()).take(64).collect()
 }
 
 // Helper function to create audit events
@@ -876,6 +890,81 @@ mod tests {
         assert_eq!(AuditEventType::UserCreated.to_string(), "USER_001");
         assert_eq!(AuditEventType::UserDeactivated.to_string(), "USER_002");
         assert_eq!(AuditEventType::UserReactivated.to_string(), "USER_003");
+    }
+
+    /// Every variant. The exhaustive match below stops compiling when a variant
+    /// is added, as a reminder to list it here too.
+    fn all_event_types() -> Vec<AuditEventType> {
+        use AuditEventType::*;
+        let all = vec![
+            UserCreated, UserDeactivated, UserReactivated, UserLoginSuccessful, UserLoginFailed,
+            UserLogout, UserPasswordChanged, UserRoleChanged, UserAccountLocked, UserAccountUnlocked,
+            UserSessionExpired, UserSessionInvalidated, SystemStartup, SystemShutdown,
+            DatabaseOperation, SecurityViolation, RecoveryKeyReplaced, UserEncryptionKeysUpgraded,
+            DataKeyRotationStarted, DataKeyRotationCompleted, SecurityReportExported, FirmwareUpload,
+            FirmwareDelete,
+            FirmwareAnalysisStarted, FirmwareAnalysisCompleted, FirmwareAnalysisFailed,
+            FirmwareStatusChange, FirmwareGoldenPromotion, FirmwareNotesUpdate, VaultAccessGranted,
+            VaultAccessRevoked, VaultAccessDenied, VaultCreated, VaultUpdated, VaultDeleted,
+            VaultSecretAdded, VaultSecretUpdated, VaultSecretDeleted, VaultExported, VaultImported,
+            VaultPermissionRequested, VaultPermissionApproved, VaultPermissionDenied,
+            VaultPermissionExpired, VaultSecretRotated, VaultSecretAccessed, MetadataSchemaCreated,
+            MetadataSchemaUpdated, MetadataSchemaDeleted, FieldTemplateImported,
+        ];
+        for event_type in &all {
+            match event_type {
+                UserCreated | UserDeactivated | UserReactivated | UserLoginSuccessful
+                | UserLoginFailed | UserLogout | UserPasswordChanged | UserRoleChanged
+                | UserAccountLocked | UserAccountUnlocked | UserSessionExpired
+                | UserSessionInvalidated | SystemStartup | SystemShutdown | DatabaseOperation
+                | SecurityViolation | RecoveryKeyReplaced | UserEncryptionKeysUpgraded
+                | DataKeyRotationStarted | DataKeyRotationCompleted | SecurityReportExported
+                | FirmwareUpload
+                | FirmwareDelete | FirmwareAnalysisStarted | FirmwareAnalysisCompleted
+                | FirmwareAnalysisFailed | FirmwareStatusChange | FirmwareGoldenPromotion
+                | FirmwareNotesUpdate | VaultAccessGranted | VaultAccessRevoked
+                | VaultAccessDenied | VaultCreated | VaultUpdated | VaultDeleted
+                | VaultSecretAdded | VaultSecretUpdated | VaultSecretDeleted | VaultExported
+                | VaultImported | VaultPermissionRequested | VaultPermissionApproved
+                | VaultPermissionDenied | VaultPermissionExpired | VaultSecretRotated
+                | VaultSecretAccessed | MetadataSchemaCreated | MetadataSchemaUpdated
+                | MetadataSchemaDeleted | FieldTemplateImported => {}
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn test_every_event_type_round_trips_through_a_row() {
+        let (_temp_file, conn) = setup_test_audit_db();
+        let audit_repo = SqliteAuditRepository::new(&conn);
+        let all = all_event_types();
+
+        let codes: std::collections::HashSet<String> = all.iter().map(|t| t.to_string()).collect();
+        assert_eq!(codes.len(), all.len(), "event codes must be unique");
+
+        for event_type in &all {
+            let logged = audit_repo
+                .log_event(&AuditEventRequest {
+                    event_type: event_type.clone(),
+                    user_id: None,
+                    username: None,
+                    admin_user_id: None,
+                    admin_username: None,
+                    target_user_id: None,
+                    target_username: None,
+                    description: "round trip".to_string(),
+                    metadata: None,
+                    ip_address: None,
+                    user_agent: None,
+                })
+                .unwrap_or_else(|e| panic!("logging {} failed: {}", event_type, e));
+            assert_eq!(logged.event_type.to_string(), event_type.to_string());
+            assert_eq!(logged.event_code, event_type.to_string());
+        }
+
+        let events = audit_repo.get_events(Some(all.len() + 1), None).unwrap();
+        assert_eq!(events.len(), all.len());
     }
 
     #[test]

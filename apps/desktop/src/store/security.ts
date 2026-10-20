@@ -2,11 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
   SecurityValidationResult,
-  SecurityMetrics,
   SecurityAlert,
   AuditEvent,
-  SecurityHealthReport,
-  ValidationStats,
   SecurityClassificationLevel
 } from '../types/security';
 
@@ -14,11 +11,6 @@ interface SecurityState {
   // Validation state
   validationCache: Record<string, SecurityValidationResult>;
   lastValidation?: SecurityValidationResult;
-  
-  // Security metrics
-  metrics: SecurityMetrics | null;
-  healthReport: SecurityHealthReport | null;
-  validationStats: ValidationStats | null;
   
   // Alerts and notifications
   alerts: SecurityAlert[];
@@ -41,9 +33,6 @@ interface SecurityState {
   // Actions
   setValidationResult: (name: string, result: SecurityValidationResult) => void;
   clearValidationCache: () => void;
-  setMetrics: (metrics: SecurityMetrics) => void;
-  setHealthReport: (report: SecurityHealthReport) => void;
-  setValidationStats: (stats: ValidationStats) => void;
   addAlert: (alert: Omit<SecurityAlert, 'id'>) => void;
   acknowledgeAlert: (alertId: string) => void;
   clearAlerts: () => void;
@@ -59,9 +48,6 @@ const useSecurityStore = create<SecurityState>()(
     (set, get) => ({
       // Initial state
       validationCache: {},
-      metrics: null,
-      healthReport: null,
-      validationStats: null,
       alerts: [],
       unreadAlertCount: 0,
       auditEvents: [],
@@ -81,18 +67,6 @@ const useSecurityStore = create<SecurityState>()(
 
       clearValidationCache: () => {
         set({ validationCache: {}, lastValidation: undefined });
-      },
-
-      setMetrics: (metrics: SecurityMetrics) => {
-        set({ metrics });
-      },
-
-      setHealthReport: (healthReport: SecurityHealthReport) => {
-        set({ healthReport });
-      },
-
-      setValidationStats: (validationStats: ValidationStats) => {
-        set({ validationStats });
       },
 
       addAlert: (alertData) => {
@@ -160,11 +134,6 @@ const useSecurityStore = create<SecurityState>()(
 );
 
 // Selectors for computed values
-export const useSecurityMetrics = () => {
-  const metrics = useSecurityStore(state => state.metrics);
-  return metrics;
-};
-
 export const useSecurityAlerts = () => {
   const alerts = useSecurityStore(state => state.alerts);
   const unreadCount = useSecurityStore(state => state.unreadAlertCount);
@@ -206,30 +175,6 @@ export const useValidationCache = () => {
     lastValidation,
     getCachedResult: (name: string) => cache[name],
     hasCachedResult: (name: string) => name in cache
-  };
-};
-
-export const useSecurityHealth = () => {
-  const healthReport = useSecurityStore(state => state.healthReport);
-  const metrics = useSecurityStore(state => state.metrics);
-  
-  const getOverallHealthStatus = () => {
-    if (!healthReport || !metrics) return 'unknown';
-    
-    const criticalAlerts = useSecurityStore.getState().alerts
-      .filter(a => a.severity === 'critical' && !a.acknowledged).length;
-    
-    if (criticalAlerts > 0) return 'critical';
-    if (healthReport.systemSecurityLevel === 'Low') return 'warning';
-    if (healthReport.validationSuccessRate < 85) return 'warning';
-    
-    return healthReport.systemSecurityLevel === 'High' ? 'excellent' : 'good';
-  };
-  
-  return {
-    healthReport,
-    metrics,
-    overallStatus: getOverallHealthStatus()
   };
 };
 

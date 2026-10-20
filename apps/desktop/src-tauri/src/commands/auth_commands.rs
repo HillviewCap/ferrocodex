@@ -2,7 +2,7 @@ use crate::auth::{SessionManager, LoginAttemptTracker, LoginResponse, hash_passw
 use crate::encryption::DataKey;
 use crate::keystore::{KeyStoreRepository, SqliteKeyStoreRepository};
 use crate::users::{CreateUserRequest, User, UserRepository, SqliteUserRepository, UserRole, UserInfo};
-use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, create_user_created_event};
+use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType, audit_username, create_user_created_event};
 use crate::validation::{UsernameValidator, PasswordValidator, InputSanitizer, RateLimiter};
 use crate::database::Database;
 use std::sync::Mutex;
@@ -79,6 +79,19 @@ pub async fn login(
     session_manager: State<'_, SessionManagerState>,
     attempt_tracker: State<'_, LoginAttemptTrackerState>,
 ) -> Result<LoginResponse, String> {
+    login_with_hook(&username, &password, &db_state, &session_manager, &attempt_tracker, &|| {})
+}
+
+/// [`login`], with `after_unlock` called after each database pass and before
+/// the session lock is taken, so tests can change the rotation epoch there.
+fn login_with_hook(
+    username: &str,
+    password: &str,
+    db_state: &DatabaseState,
+    session_manager: &SessionManagerState,
+    attempt_tracker: &LoginAttemptTrackerState,
+    after_unlock: &dyn Fn(),
+) -> Result<LoginResponse, String> {
     // Never hold the DB lock while taking the session lock: other commands
     // take them in the opposite order, and holding both here could deadlock
     // (ABBA). So the database work happens first, under the DB lock alone,
@@ -98,19 +111,25 @@ pub async fn login(
             let db_guard = db_state.lock()
                 .map_err(|_| "Failed to acquire database lock".to_string())?;
             let db = db_guard.as_ref().ok_or_else(|| "Database not initialized".to_string())?;
-            authenticate_and_unlock(db, &username, &password, &attempt_tracker)?
+            authenticate_and_unlock(db, username, password, attempt_tracker)?
         };
+        after_unlock();
 
-        let session_manager = session_manager.lock()
+        let session_manager_guard = session_manager.lock()
             .map_err(|_| "Failed to acquire session manager lock".to_string())?;
         // A retiring key means a rotation is unfinished, possibly from before
         // a restart: gate encrypted data until an administrator finishes it
-        if !session_manager.sync_rotation_gate(epoch, unlocked.key_rotation_in_progress) {
+        if !session_manager_guard.sync_rotation_gate(epoch, unlocked.key_rotation_in_progress) {
             info!("Encryption key state changed during login of {}; retrying", username);
             continue;
         }
-        let session = session_manager.create_session_with_key(&unlocked.user, unlocked.data_key)
+        let session = session_manager_guard.create_session_with_key(&unlocked.user, unlocked.data_key)
             .map_err(|e| format!("Failed to create session: {}", e))?;
+        drop(session_manager_guard);
+
+        // Audited here rather than in the database pass, so a retried login
+        // is recorded once, and only when it produced a session
+        log_login_success(db_state, &unlocked.user);
 
         info!("Successful login for user: {}", username);
         return Ok(LoginResponse {
@@ -123,6 +142,25 @@ pub async fn login(
     Err("The encryption key changed while you were logging in; please try again".to_string())
 }
 
+/// Writes AUTH_001 under the DB lock alone. A failure is logged and doesn't
+/// affect the login.
+fn log_login_success(db_state: &DatabaseState, user: &User) {
+    match db_state.lock() {
+        Ok(db_guard) => {
+            if let Some(db) = db_guard.as_ref() {
+                log_login_event(
+                    db,
+                    AuditEventType::UserLoginSuccessful,
+                    Some(user.id),
+                    &user.username,
+                    format!("User '{}' logged in", user.username),
+                );
+            }
+        }
+        Err(_) => error!("Failed to acquire database lock to audit login of {}", user.username),
+    }
+}
+
 /// What the database part of a login produced.
 struct LoginUnlock {
     user: User,
@@ -133,22 +171,34 @@ struct LoginUnlock {
 
 /// Checks the lockout and the password, records the attempt, and opens the
 /// user's copy of the data key. Call under the DB lock (and not the session lock).
+/// Failures are audited here and success by the caller once the session
+/// exists; a failed audit write is logged and never changes the result.
 fn authenticate_and_unlock(
     db: &Database,
     username: &str,
     password: &str,
     attempt_tracker: &LoginAttemptTrackerState,
 ) -> Result<LoginUnlock, String> {
+    let user_repo = SqliteUserRepository::new(db.get_connection());
+
     // Check if account is locked
     let tracker = attempt_tracker.lock()
         .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-    if tracker.is_locked(username).map_err(|e| e.to_string())? {
+    let locked = tracker.is_locked(username).map_err(|e| e.to_string())?;
+    drop(tracker);
+    if locked {
         warn!("Login attempt for locked account: {}", username);
+        let user_id = user_repo.find_by_username(username).ok().flatten().map(|user| user.id);
+        log_login_event(
+            db,
+            AuditEventType::UserLoginFailed,
+            user_id,
+            &audit_username(username),
+            format!("Login attempt for '{}' rejected: account is temporarily locked", audit_username(username)),
+        );
         return Err("Account is temporarily locked due to too many failed attempts".to_string());
     }
-    drop(tracker);
 
-    let user_repo = SqliteUserRepository::new(db.get_connection());
     match user_repo.find_by_username(username) {
         Ok(Some(user)) => match verify_password(password, &user.password_hash) {
             Ok(true) => {
@@ -168,11 +218,8 @@ fn authenticate_and_unlock(
             }
             Ok(false) => {
                 // Wrong password
-                let tracker = attempt_tracker.lock()
-                    .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-                tracker.record_failed_attempt(username)
-                    .map_err(|e| e.to_string())?;
                 warn!("Invalid password for user: {}", username);
+                record_login_failure(db, attempt_tracker, username, Some(user.id), "login", "wrong password")?;
                 Err("Invalid credentials".to_string())
             }
             Err(e) => {
@@ -181,18 +228,83 @@ fn authenticate_and_unlock(
             }
         },
         Ok(None) => {
-            // User not found
-            let tracker = attempt_tracker.lock()
-                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-            tracker.record_failed_attempt(username)
-                .map_err(|e| e.to_string())?;
+            // User not found (or deactivated)
             warn!("Login attempt for non-existent user: {}", username);
+            record_login_failure(db, attempt_tracker, username, None, "login", "unknown or inactive username")?;
             Err("Invalid credentials".to_string())
         }
         Err(e) => {
             error!("Database error during login: {}", e);
             Err("Authentication error".to_string())
         }
+    }
+}
+
+/// Counts a failed login or recovery attempt against the username and audits
+/// it as AUTH_002, along with the lockout if this attempt caused one.
+/// `attempt` names what was tried, e.g. "login".
+fn record_login_failure(
+    db: &Database,
+    attempt_tracker: &LoginAttemptTrackerState,
+    username: &str,
+    user_id: Option<i64>,
+    attempt: &str,
+    reason: &str,
+) -> Result<(), String> {
+    let tracker = attempt_tracker.lock()
+        .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
+    let now_locked = tracker.record_failed_attempt(username)
+        .map_err(|e| e.to_string())?;
+    drop(tracker);
+
+    let shown = audit_username(username);
+    log_login_event(
+        db,
+        AuditEventType::UserLoginFailed,
+        user_id,
+        &shown,
+        format!("Failed {} for '{}': {}", attempt, shown, reason),
+    );
+    if now_locked {
+        log_account_locked(db, user_id, username);
+    }
+    Ok(())
+}
+
+fn log_account_locked(db: &Database, user_id: Option<i64>, username: &str) {
+    let shown = audit_username(username);
+    log_login_event(
+        db,
+        AuditEventType::UserAccountLocked,
+        user_id,
+        &shown,
+        format!("Account '{}' temporarily locked after too many failed attempts", shown),
+    );
+}
+
+/// Writes a login-related audit event. Never pass the password here.
+fn log_login_event(
+    db: &Database,
+    event_type: AuditEventType,
+    user_id: Option<i64>,
+    username: &str,
+    description: String,
+) {
+    let audit_event = AuditEventRequest {
+        event_type,
+        user_id,
+        username: Some(username.to_string()),
+        admin_user_id: None,
+        admin_username: None,
+        target_user_id: None,
+        target_username: None,
+        description,
+        metadata: None,
+        ip_address: None,
+        user_agent: None,
+    };
+    if let Err(e) = SqliteAuditRepository::new(db.get_connection()).log_event(&audit_event) {
+        error!("Failed to log audit event: {}", e);
     }
 }
 
@@ -290,11 +402,13 @@ pub async fn reset_password_with_recovery_key(
 
     let (mut user, data_key) = match (user, data_key) {
         (Some(user), Some(Ok(data_key))) => (user, data_key),
-        _ => {
-            let tracker = attempt_tracker.lock()
-                .map_err(|_| "Failed to acquire attempt tracker lock".to_string())?;
-            tracker.record_failed_attempt(&username).map_err(|e| e.to_string())?;
+        (user, _) => {
             warn!("Failed password recovery attempt for user: {}", username);
+            let (user_id, reason) = match user {
+                Some(user) => (Some(user.id), "wrong recovery key"),
+                None => (None, "unknown or inactive username"),
+            };
+            record_login_failure(db, attempt_tracker.inner(), &username, user_id, "recovery key reset", reason)?;
             return Err("Invalid username or recovery key".to_string());
         }
     };
@@ -407,13 +521,35 @@ pub async fn replace_recovery_key(
 #[tauri::command]
 pub async fn logout(
     token: String,
+    db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<(), String> {
-    let session_manager = session_manager.lock()
+    let session_manager_guard = session_manager.lock()
         .map_err(|_| "Failed to acquire session manager lock".to_string())?;
-    session_manager.invalidate_session(&token)
+    let session = session_manager_guard.validate_session(&token).ok().flatten();
+    session_manager_guard.invalidate_session(&token)
         .map_err(|e| format!("Failed to logout: {}", e))?;
-    
+    // Never hold the session lock while taking the DB lock (lock order)
+    drop(session_manager_guard);
+
+    // The session is already gone, so a failure to audit doesn't fail the logout
+    if let Some(session) = session {
+        match db_state.lock() {
+            Ok(db_guard) => {
+                if let Some(db) = db_guard.as_ref() {
+                    log_login_event(
+                        db,
+                        AuditEventType::UserLogout,
+                        Some(session.user_id),
+                        &session.username,
+                        format!("User '{}' logged out", session.username),
+                    );
+                }
+            }
+            Err(_) => error!("Failed to acquire database lock to audit logout"),
+        }
+    }
+
     info!("User logged out");
     Ok(())
 }
@@ -710,6 +846,165 @@ mod tests {
         let result = replace_recovery_key(engineer.token, app.state(), app.state()).await;
 
         assert_eq!(result, Err("Only administrators can replace the recovery key".to_string()));
+    }
+
+    fn audit_rows(app: &tauri::App<MockRuntime>, event_code: &str) -> Vec<(Option<i64>, Option<String>, String)> {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        let conn = db_guard.as_ref().unwrap().get_connection();
+        let mut stmt = conn.prepare(
+            "SELECT user_id, username, description FROM audit_events WHERE event_code = ?1 ORDER BY id",
+        ).unwrap();
+        let rows = stmt.query_map([event_code], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        rows
+    }
+
+    fn audit_rows_containing(app: &tauri::App<MockRuntime>, needle: &str) -> i64 {
+        let db_state = app.state::<DatabaseState>();
+        let db_guard = db_state.lock().unwrap();
+        db_guard.as_ref().unwrap().get_connection().query_row(
+            "SELECT COUNT(*) FROM audit_events
+             WHERE instr(description, ?1) > 0 OR instr(COALESCE(username, ''), ?1) > 0
+                OR instr(COALESCE(metadata, ''), ?1) > 0",
+            [needle],
+            |row| row.get(0),
+        ).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_login_success_and_failures_are_audited() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+
+        login_as(&app, "admin", ADMIN_PASSWORD).await.unwrap();
+        let successes = audit_rows(&app, "AUTH_001");
+        assert_eq!(successes.len(), 1);
+        assert_eq!(successes[0].0, Some(setup.user.id));
+        assert_eq!(successes[0].1.as_deref(), Some("admin"));
+
+        let wrong_password = "Wrong-Pass-999";
+        assert!(login_as(&app, "admin", wrong_password).await.is_err());
+        let typed = format!("ghost\n\u{7}{}", "x".repeat(100));
+        assert!(login_as(&app, &typed, ADMIN_PASSWORD).await.is_err());
+
+        let failures = audit_rows(&app, "AUTH_002");
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].0, Some(setup.user.id));
+        assert!(failures[0].2.contains("wrong password"), "{}", failures[0].2);
+        assert_eq!(failures[1].0, None);
+        assert!(failures[1].2.contains("unknown or inactive username"), "{}", failures[1].2);
+        let stored = failures[1].1.clone().unwrap();
+        assert_eq!(stored.chars().count(), 64);
+        assert!(stored.starts_with("ghostx"));
+        assert!(!stored.chars().any(|c| c.is_control()));
+
+        assert_eq!(audit_rows_containing(&app, wrong_password), 0);
+        assert_eq!(audit_rows_containing(&app, ADMIN_PASSWORD), 0);
+    }
+
+    #[tokio::test]
+    async fn test_lockout_is_audited_once_and_locked_attempts_are_audited() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+
+        for _ in 0..5 {
+            assert_eq!(login_as(&app, "admin", "Wrong-Pass-999").await.err().as_deref(), Some("Invalid credentials"));
+        }
+        let lockouts = audit_rows(&app, "USER_006");
+        assert_eq!(lockouts.len(), 1);
+        assert_eq!(lockouts[0].0, Some(setup.user.id));
+        assert_eq!(
+            app.state::<LoginAttemptTrackerState>().lock().unwrap().locked_usernames(),
+            vec!["admin".to_string()]
+        );
+
+        // Even the right password is refused, and audited, while locked
+        assert!(login_as(&app, "admin", ADMIN_PASSWORD).await.is_err());
+        assert!(login_as(&app, "admin", ADMIN_PASSWORD).await.is_err());
+        let failures = audit_rows(&app, "AUTH_002");
+        assert_eq!(failures.len(), 7);
+        assert!(failures[6].2.contains("locked"), "{}", failures[6].2);
+        assert_eq!(failures[6].0, Some(setup.user.id));
+        assert_eq!(audit_rows(&app, "USER_006").len(), 1);
+        assert!(audit_rows(&app, "AUTH_001").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retried_login_audits_success_once() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+        let session_manager = app.state::<SessionManagerState>();
+        let passes = std::cell::Cell::new(0);
+        let bump_epoch_once = || {
+            passes.set(passes.get() + 1);
+            if passes.get() == 1 {
+                // As if a rotation began or finished while the database was read
+                session_manager.lock().unwrap().set_rotation_in_progress(false);
+            }
+        };
+
+        let response = login_with_hook(
+            "admin", ADMIN_PASSWORD, &app.state::<DatabaseState>(), &session_manager,
+            &app.state::<LoginAttemptTrackerState>(), &bump_epoch_once,
+        ).unwrap();
+
+        assert_eq!(passes.get(), 2, "the login should have been retried once");
+        assert!(session_manager.lock().unwrap().validate_session(&response.token).unwrap().is_some());
+        let successes = audit_rows(&app, "AUTH_001");
+        assert_eq!(successes.len(), 1);
+        assert_eq!(successes[0].0, Some(setup.user.id));
+    }
+
+    #[tokio::test]
+    async fn test_failed_recovery_attempts_are_audited() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+        let wrong_code = "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000";
+
+        assert!(reset(&app, wrong_code, NEW_PASSWORD).await.is_err());
+        assert!(reset_password_with_recovery_key(
+            "ghost".to_string(), wrong_code.to_string(), NEW_PASSWORD.to_string(), app.state(), app.state(),
+        ).await.is_err());
+
+        let failures = audit_rows(&app, "AUTH_002");
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].0, Some(setup.user.id));
+        assert!(failures[0].2.contains("recovery key"), "{}", failures[0].2);
+        assert_eq!(failures[1].0, None);
+        assert_eq!(failures[1].1.as_deref(), Some("ghost"));
+        assert!(failures[1].2.contains("recovery key"), "{}", failures[1].2);
+        assert_eq!(audit_rows_containing(&app, wrong_code), 0);
+        assert_eq!(audit_rows_containing(&app, setup.recovery_code.as_deref().unwrap()), 0);
+        assert_eq!(audit_rows_containing(&app, NEW_PASSWORD), 0);
+    }
+
+    #[tokio::test]
+    async fn test_failed_recovery_attempts_lock_the_account_once() {
+        let app = setup_test_app();
+        setup_admin(&app).await;
+        for _ in 0..5 {
+            assert!(reset(&app, "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000", NEW_PASSWORD).await.is_err());
+        }
+        assert_eq!(audit_rows(&app, "AUTH_002").len(), 5);
+        assert_eq!(audit_rows(&app, "USER_006").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_logout_is_audited() {
+        let app = setup_test_app();
+        let setup = setup_admin(&app).await;
+
+        logout(setup.token.clone(), app.state(), app.state()).await.unwrap();
+        // A second logout with the same (now invalid) token writes nothing
+        logout(setup.token.clone(), app.state(), app.state()).await.unwrap();
+
+        let logouts = audit_rows(&app, "AUTH_003");
+        assert_eq!(logouts.len(), 1);
+        assert_eq!(logouts[0].0, Some(setup.user.id));
+        assert_eq!(logouts[0].1.as_deref(), Some("admin"));
     }
 
     #[tokio::test]

@@ -354,7 +354,7 @@ const Dashboard: React.FC = () => {
             ) : (selectedMenuItem === 'schema-designer' || selectedMenuItem === 'field-templates') ? (
               <MetadataManagement />
             ) : selectedMenuItem === 'security-dashboard' && canAccessUserManagement(user) ? (
-              <SecurityMonitoringDashboard />
+              <SecurityMonitoringDashboard onOpenAuditLog={() => setSelectedMenuItem('audit-log')} />
             ) : selectedMenuItem === 'audit-log' && canAccessUserManagement(user) ? (
               <SecurityAuditLog />
             ) : selectedMenuItem === 'bulk-operations' ? (
