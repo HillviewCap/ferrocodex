@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Select, Badge, Tooltip, Card, Space, Typography, Alert } from 'antd';
 import {
   GlobalOutlined,
@@ -26,6 +26,10 @@ interface SecurityClassificationSelectorProps {
   allowElevation?: boolean;
   currentUserRole?: 'Administrator' | 'Engineer';
   inheritedClassification?: SecurityClassificationLevel;
+  // Levels below this are disabled with `minimumClassificationReason`, e.g. when
+  // only an Administrator may lower an existing classification
+  minimumClassification?: SecurityClassificationLevel;
+  minimumClassificationReason?: string;
   placeholder?: string;
   size?: 'small' | 'middle' | 'large';
 }
@@ -39,10 +43,25 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
   allowElevation = true,
   currentUserRole = 'Engineer',
   inheritedClassification,
+  minimumClassification,
+  minimumClassificationReason = 'Not available',
   placeholder = 'Select security classification',
   size = 'middle'
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<SecurityClassificationLevel | undefined>(value);
+
+  // Follow the controlled value, e.g. when a new parent folder changes the inherited level
+  useEffect(() => {
+    setSelectedLevel(value);
+  }, [value]);
+
+  // An Engineer can't pick RESTRICTED/SECRET on their own, but the inherited level
+  // always stays selectable: inheritance wins over the role cap
+  const isElevatedForRole = (level: SecurityClassificationLevel): boolean =>
+    currentUserRole === 'Engineer' &&
+    (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET) &&
+    level !== inheritedClassification &&
+    level !== minimumClassification;
 
   const getIcon = (iconName: string) => {
     const iconMap = {
@@ -58,13 +77,16 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
     if (disabled) return true;
     
     // Engineers cannot select RESTRICTED or SECRET without admin approval
-    if (currentUserRole === 'Engineer' && 
-        (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET)) {
+    if (isElevatedForRole(level)) {
       return !allowElevation;
     }
     
     // Cannot select lower than inherited classification
     if (inheritedClassification && isHigherClassification(inheritedClassification, level)) {
+      return true;
+    }
+
+    if (minimumClassification && isHigherClassification(minimumClassification, level)) {
       return true;
     }
     
@@ -91,13 +113,16 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
 
 
   const getDisabledReason = (level: SecurityClassificationLevel): string => {
-    if (currentUserRole === 'Engineer' && 
-        (level === SecurityClassificationLevel.RESTRICTED || level === SecurityClassificationLevel.SECRET)) {
+    if (isElevatedForRole(level)) {
       return 'Administrator approval required for this classification level';
     }
     
     if (inheritedClassification && isHigherClassification(inheritedClassification, level)) {
       return `Cannot select lower than inherited classification (${SECURITY_CLASSIFICATIONS[inheritedClassification].displayName})`;
+    }
+
+    if (minimumClassification && isHigherClassification(minimumClassification, level)) {
+      return minimumClassificationReason;
     }
     
     return 'Not available';
@@ -164,8 +189,7 @@ const SecurityClassificationSelector: React.FC<SecurityClassificationSelectorPro
       )}
 
       {/* Elevation Warning */}
-      {selectedLevel && currentUserRole === 'Engineer' && 
-       (selectedLevel === SecurityClassificationLevel.RESTRICTED || selectedLevel === SecurityClassificationLevel.SECRET) && (
+      {selectedLevel && isElevatedForRole(selectedLevel) && (
         <Alert
           title="Administrator Approval Required"
           description="This classification level requires administrator approval. Your request will be submitted for review."

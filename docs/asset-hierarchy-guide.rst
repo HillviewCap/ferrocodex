@@ -40,16 +40,15 @@ Folder assets act as organizational containers for grouping related equipment:
 **Creating Folder Assets:**
 
 1. Navigate to **Assets** from the sidebar
-2. Click **"Add Asset"** button
-3. Select **"Folder"** as asset type
-4. Enter folder details:
+2. Click **"Create Folder"**, or right-click a folder in the tree and choose **"Create Folder"**
+3. Enter folder details:
 
-   * **Name**: Following security naming pattern
+   * **Folder Name**: Required
    * **Description**: Purpose of the folder
-   * **Parent Folder**: Location in hierarchy
-   * **Metadata**: Custom fields as needed
+   * **Parent Folder**: Defaults to the folder you right-clicked, or the root level. Hidden until at least one folder exists.
+   * **Security Classification**: Pre-filled from the parent folder; it can only be raised (see `Security Classification`_)
 
-5. Click **"Create"** to save
+4. Click **"Create Folder"** to save
 
 Device Assets
 ^^^^^^^^^^^^^
@@ -68,17 +67,15 @@ Device assets represent actual industrial equipment:
 
 **Creating Device Assets:**
 
-1. Navigate to target folder location
-2. Click **"Add Device"** button
+1. Click **"Create Device"**, or right-click a folder and choose **"Create Device"**
+2. Choose the parent folder, or leave it empty for the root level (skipped when no folders exist)
 3. Complete device information:
 
-   * **Name**: Unique identifier
-   * **Type**: Equipment category
-   * **Manufacturer**: Device vendor
-   * **Model**: Specific model number
-   * **Custom Metadata**: Additional fields
+   * **Device Name**: Unique identifier
+   * **Description**: Additional details
+   * **Security Classification**: Pre-filled from the parent folder; it can only be raised
 
-4. Click **"Create"** to save
+4. Review and click **"Create Device"** to save
 
 Hierarchical Navigation
 -----------------------
@@ -376,20 +373,20 @@ When uploading files to assets:
 Security Classification
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Assets can be tagged with security classifications:
+Every folder and device has one of five security classifications, from lowest to highest:
 
-* **Public**: No restrictions
-* **Internal**: Company use only
-* **Confidential**: Restricted access
-* **Secret**: Highly restricted
-* **Top Secret**: Maximum security
+* **Public**: Can be shared freely
+* **Internal**: Internal use only (the default)
+* **Confidential**: Controlled access
+* **Restricted**: Highly sensitive, limited access
+* **Secret**: Highest level
 
-Classifications affect:
+The classification appears as a tag in the asset tree and the details panel. Folders pass it down:
 
-* Search result visibility
-* Export permissions
-* Audit logging detail
-* Access control rules
+* **Inheritance**: A new asset starts at its parent folder's classification, or **Internal** at the root. It can be set higher, never lower.
+* **Moves**: Moving an asset into a folder classified above it, or above anything inside it, is rejected with a message naming the levels. Nothing is raised automatically.
+* **Changes**: Click **"Change"** next to the tag in the details panel. An asset can't go below its parent folder. Raising a folder raises everything inside it that is classified lower, in one step that is recorded in the audit log; the dialog shows how many items will be raised first. Only Administrators can lower a classification, and lowering a folder leaves its contents unchanged.
+* **Existing assets**: Assets created before classifications were introduced start at **Internal** and are left as they are.
 
 Bulk Operations
 ---------------

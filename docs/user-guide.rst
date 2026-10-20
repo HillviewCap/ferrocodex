@@ -88,34 +88,41 @@ Assets are organized in a tree structure:
 Creating Assets
 ^^^^^^^^^^^^^^^
 
-**Creating a Folder Asset:**
+**Creating a Folder:**
 
 1. Navigate to **Assets** from the sidebar
-2. Click **"Add Asset"** → **"Folder"**
-3. Complete the folder form:
+2. Click **"Create Folder"**, or right-click a folder in the tree and choose **"Create Folder"** to create one inside it
+3. Complete the form:
 
-   * **Name**: Must follow pattern ``^[A-Z0-9][A-Z0-9_-]{2,49}$``
-   * **Parent Folder**: Select location in hierarchy
-   * **Description**: Purpose of the folder
-   * **Custom Metadata**: Add relevant fields
+   * **Folder Name**: Required
+   * **Description**: Purpose of the folder (optional)
+   * **Parent Folder**: Where the folder goes. It defaults to the folder you right-clicked, or the root level. The field is hidden until at least one folder exists.
+   * **Security Classification**: Pre-filled from the parent folder (see below)
 
-4. Click **"Create"** to save
+4. Click **"Create Folder"** to save
 
-**Creating a Device Asset:**
+**Creating a Device:**
 
-1. Navigate to target folder (or root)
-2. Click **"Add Asset"** → **"Device"**
-3. Complete the device form:
+1. Click **"Create Device"**, or right-click a folder and choose **"Create Device"**
+2. **Location**: Choose the parent folder, or leave it empty for the root level. This step is skipped when no folders exist.
+3. **Details**: Enter the device name, an optional description, and the security classification
+4. **Confirm**: Review and click **"Create Device"**
 
-   * **Name**: Unique identifier (e.g., "PLC-WEST-01")
-   * **Type**: Equipment category
-   * **Manufacturer**: Device manufacturer
-   * **Model**: Specific model number
-   * **Location**: Physical or logical location
-   * **Custom Metadata**: Equipment-specific fields
-   * **Description**: Additional details
+Security Classification
+^^^^^^^^^^^^^^^^^^^^^^^
 
-4. Click **"Create"** to save
+Every folder and device has a security classification. From lowest to highest: **Public**, **Internal**, **Confidential**, **Restricted**, **Secret**. The classification is shown as a tag in the asset tree and in the asset details panel.
+
+Folders pass their classification down:
+
+* A new folder or device starts at its parent folder's classification. At the root level it starts at **Internal**.
+* You can raise it above the folder's level, but not set it lower.
+* An asset can't be moved into a folder classified above it, or above anything inside it. The move is rejected with a message naming the levels. Raise the asset's classification first.
+* To change a classification, select the asset and click **"Change"** next to its classification tag. It can't go below its parent folder's level.
+* Raising a folder also raises everything inside it that is classified lower. The dialog shows how many items will be raised before you save, and the change is recorded in the audit log.
+* Lowering a classification is limited to Administrators. Lowering a folder leaves the items inside it unchanged.
+
+Assets created before classifications were introduced start at **Internal**.
 
 Asset Naming Requirements
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -218,7 +225,7 @@ Editing Assets
 
    * Basic properties
    * Custom metadata
-   * Security classification
+   * Security classification (see `Security Classification`_)
    * Parent folder location
 
 4. Save changes

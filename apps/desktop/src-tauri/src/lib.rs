@@ -105,6 +105,7 @@ pub fn run() {
             commands::move_asset,
             commands::validate_asset_move,
             commands::get_asset_path,
+            commands::update_asset_classification,
             
             // Enhanced tree navigation commands (TODO: Re-enable after fixing imports)
             // commands::batch_load_tree_nodes,

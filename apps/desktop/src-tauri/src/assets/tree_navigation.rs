@@ -375,7 +375,7 @@ pub async fn get_node_metadata(
 fn load_node_hierarchy(conn: &Connection, node_id: i64, max_depth: i32) -> Result<Option<AssetHierarchy>, String> {
     // Load the node itself
     let mut stmt = conn
-        .prepare("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at FROM assets WHERE id = ?")
+        .prepare("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification FROM assets WHERE id = ?")
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
     let asset_result = stmt.query_row(params![node_id], |row| {
@@ -390,6 +390,7 @@ fn load_node_hierarchy(conn: &Connection, node_id: i64, max_depth: i32) -> Resul
             created_by: row.get(6)?,
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
+            security_classification: row.get(9)?,
         })
     });
 
@@ -408,7 +409,7 @@ fn load_node_hierarchy(conn: &Connection, node_id: i64, max_depth: i32) -> Resul
 
 fn load_children_hierarchy(conn: &Connection, parent_id: i64, max_depth: i32) -> Result<Vec<AssetHierarchy>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at FROM assets WHERE parent_id = ? ORDER BY sort_order, name")
+        .prepare("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification FROM assets WHERE parent_id = ? ORDER BY sort_order, name")
         .map_err(|e| format!("Failed to prepare children statement: {}", e))?;
 
     let children_iter = stmt.query_map(params![parent_id], |row| {
@@ -423,6 +424,7 @@ fn load_children_hierarchy(conn: &Connection, parent_id: i64, max_depth: i32) ->
             created_by: row.get(6)?,
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
+            security_classification: row.get(9)?,
         })
     }).map_err(|e| format!("Failed to query children: {}", e))?;
 
@@ -577,7 +579,7 @@ fn search_assets(
     parent_filter: Option<i64>,
     limit: i32,
 ) -> Result<Vec<AssetHierarchy>, String> {
-    let mut sql = String::from("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at FROM assets WHERE ");
+    let mut sql = String::from("SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification FROM assets WHERE ");
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     // Build search condition
@@ -638,6 +640,7 @@ fn search_assets(
             created_by: row.get(6)?,
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
+            security_classification: row.get(9)?,
         })
     }).map_err(|e| format!("Failed to execute search: {}", e))?;
 

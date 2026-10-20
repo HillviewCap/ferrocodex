@@ -1,8 +1,10 @@
 // Asset management commands
 
 use crate::auth::SessionManager;
-use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, DashboardStats, AssetType, AssetHierarchy, MoveAssetRequest};
+use crate::assets::{AssetRepository, SqliteAssetRepository, CreateAssetRequest, AssetInfo, DashboardStats, AssetType, AssetHierarchy, MoveAssetRequest, SecurityClassification};
+use crate::audit::{AuditRepository, SqliteAuditRepository, AuditEventRequest, AuditEventType};
 use crate::database::Database;
+use crate::users::UserRole;
 use crate::validation::InputSanitizer;
 use std::sync::Mutex;
 use tauri::State;
@@ -18,6 +20,7 @@ pub async fn create_asset(
     description: String,
     asset_type: String,
     parent_id: Option<i64>,
+    security_classification: Option<String>,
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<AssetInfo, String> {
@@ -42,6 +45,12 @@ pub async fn create_asset(
     let asset_type = match AssetType::from_str(&asset_type) {
         Ok(t) => t,
         Err(_) => return Err("Invalid asset type. Must be 'folder' or 'device'".to_string()),
+    };
+
+    // Omitted means inherit from the parent folder (see SqliteAssetRepository::create_asset)
+    let security_classification = match security_classification {
+        Some(level) => Some(SecurityClassification::from_str(&level).map_err(|e| e.to_string())?),
+        None => None,
     };
 
     if name.trim().is_empty() {
@@ -69,6 +78,7 @@ pub async fn create_asset(
                 asset_type,
                 parent_id,
                 created_by: session.user_id,
+                security_classification,
             };
 
             match asset_repo.create_asset(request) {
@@ -233,7 +243,7 @@ pub async fn create_folder_asset(
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<AssetInfo, String> {
-    create_asset(token, name, description, "folder".to_string(), parent_id, db_state, session_manager).await
+    create_asset(token, name, description, "folder".to_string(), parent_id, None, db_state, session_manager).await
 }
 
 #[tauri::command]
@@ -245,7 +255,7 @@ pub async fn create_device_asset(
     db_state: State<'_, DatabaseState>,
     session_manager: State<'_, SessionManagerState>,
 ) -> Result<AssetInfo, String> {
-    create_asset(token, name, description, "device".to_string(), parent_id, db_state, session_manager).await
+    create_asset(token, name, description, "device".to_string(), parent_id, None, db_state, session_manager).await
 }
 
 #[tauri::command]
@@ -408,9 +418,11 @@ pub async fn validate_asset_move(
             
             match asset_repo.validate_asset_move(asset_id, new_parent_id) {
                 Ok(is_valid) => Ok(is_valid),
+                // Classification conflicts come back as errors; pass the message
+                // through unchanged so the UI can show it as-is
                 Err(e) => {
                     error!("Failed to validate asset move: {}", e);
-                    Err(format!("Failed to validate asset move: {}", e))
+                    Err(e.to_string())
                 }
             }
         }
@@ -453,6 +465,88 @@ pub async fn get_asset_path(
                 Err(e) => {
                     error!("Failed to get asset path: {}", e);
                     Err(format!("Failed to get asset path: {}", e))
+                }
+            }
+        }
+        None => Err("Database not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn update_asset_classification(
+    token: String,
+    asset_id: i64,
+    security_classification: String,
+    db_state: State<'_, DatabaseState>,
+    session_manager: State<'_, SessionManagerState>,
+) -> Result<AssetInfo, String> {
+    // Validate session
+    let session_manager_guard = session_manager.lock()
+        .map_err(|_| "Failed to acquire session manager lock".to_string())?;
+    let session = match session_manager_guard.validate_session(&token) {
+        Ok(Some(session)) => session,
+        Ok(None) => return Err("Invalid or expired session".to_string()),
+        Err(e) => {
+            error!("Session validation error: {}", e);
+            return Err("Session validation error".to_string());
+        }
+    };
+    drop(session_manager_guard);
+
+    let classification = SecurityClassification::from_str(&security_classification)
+        .map_err(|e| e.to_string())?;
+
+    let db_guard = db_state.lock()
+        .map_err(|_| "Failed to acquire database lock".to_string())?;
+    match db_guard.as_ref() {
+        Some(db) => {
+            let asset_repo = SqliteAssetRepository::new(db.get_connection());
+
+            // Anyone may raise a classification; only Administrators may lower one
+            let allow_lowering = session.role == UserRole::Administrator;
+            match asset_repo.update_asset_classification(asset_id, classification, allow_lowering) {
+                Ok(change) => {
+                    let raised: Vec<serde_json::Value> = change.raised.iter()
+                        .map(|a| serde_json::json!({
+                            "asset_id": a.id,
+                            "name": a.name,
+                            "previous": a.security_classification.as_str(),
+                        }))
+                        .collect();
+                    let audit_event = AuditEventRequest {
+                        event_type: AuditEventType::DatabaseOperation,
+                        user_id: Some(session.user_id),
+                        username: Some(session.username.clone()),
+                        admin_user_id: None,
+                        admin_username: None,
+                        target_user_id: None,
+                        target_username: None,
+                        description: format!(
+                            "Security classification of asset '{}' changed from {} to {}; {} contained item(s) raised",
+                            change.asset.name, change.previous, classification, change.raised.len()
+                        ),
+                        metadata: Some(serde_json::json!({
+                            "asset_id": asset_id,
+                            "previous": change.previous.as_str(),
+                            "new": classification.as_str(),
+                            "raised": raised,
+                        }).to_string()),
+                        ip_address: None,
+                        user_agent: None,
+                    };
+                    if let Err(e) = SqliteAuditRepository::new(db.get_connection()).log_event(&audit_event) {
+                        error!("Failed to log audit event: {}", e);
+                    }
+
+                    info!(
+                        "Asset classification changed by {}: asset_id = {}, {} -> {}, {} descendant(s) raised",
+                        session.username, asset_id, change.previous, classification, change.raised.len()
+                    );
+                    Ok(change.asset.into())
+                }
+                Err(e) => {
+                    error!("Failed to update asset classification: {}", e);
+                    Err(e.to_string())
                 }
             }
         }

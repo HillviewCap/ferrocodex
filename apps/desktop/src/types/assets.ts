@@ -1,3 +1,5 @@
+import { SecurityClassificationLevel, isHigherClassification } from './security';
+
 export interface Asset {
   id: number;
   name: string;
@@ -8,6 +10,7 @@ export interface Asset {
   created_by: number;
   created_at: string;
   updated_at: string;
+  security_classification: SecurityClassificationLevel;
 }
 
 export type AssetType = 'Folder' | 'Device';
@@ -25,6 +28,7 @@ export interface AssetInfo {
   version_count: number;
   latest_version: string | null;
   latest_version_notes: string | null;
+  security_classification: SecurityClassificationLevel;
 }
 
 export interface ConfigurationVersion {
@@ -82,6 +86,8 @@ export interface CreateAssetRequest {
   description: string;
   asset_type: AssetType;
   parent_id?: number | null;
+  // Omitted means inherit from the parent folder (INTERNAL at the root)
+  security_classification?: SecurityClassificationLevel;
 }
 
 export interface AssetHierarchy {
@@ -95,7 +101,40 @@ export interface AssetHierarchy {
   created_by: number;
   created_at: string;
   updated_at: string;
+  security_classification: SecurityClassificationLevel;
 }
+
+// The backend's default for root-level assets and for rows that predate classification
+export const DEFAULT_ASSET_CLASSIFICATION = SecurityClassificationLevel.INTERNAL;
+
+export const findAssetInHierarchy = (assets: AssetHierarchy[], id: number): AssetHierarchy | null => {
+  for (const asset of assets) {
+    if (asset.id === id) return asset;
+    const found = findAssetInHierarchy(asset.children, id);
+    if (found) return found;
+  }
+  return null;
+};
+
+export const hierarchyHasFolders = (assets: AssetHierarchy[]): boolean =>
+  assets.some(asset => asset.asset_type === 'Folder' || hierarchyHasFolders(asset.children));
+
+// Level a new or moved child of `parentId` starts from: the folder's own level, or the default at the root
+export const getInheritedClassification = (
+  assets: AssetHierarchy[],
+  parentId: number | null | undefined
+): SecurityClassificationLevel => {
+  if (parentId == null) return DEFAULT_ASSET_CLASSIFICATION;
+  return findAssetInHierarchy(assets, parentId)?.security_classification ?? DEFAULT_ASSET_CLASSIFICATION;
+};
+
+// Descendants the backend will raise when `asset` is set to `level`
+export const countDescendantsBelow = (asset: AssetHierarchy, level: SecurityClassificationLevel): number =>
+  asset.children.reduce(
+    (count, child) =>
+      count + (isHigherClassification(level, child.security_classification) ? 1 : 0) + countDescendantsBelow(child, level),
+    0
+  );
 
 export interface MoveAssetRequest {
   asset_id: number;

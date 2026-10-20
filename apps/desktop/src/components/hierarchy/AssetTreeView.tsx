@@ -15,6 +15,7 @@ import { AssetHierarchy, AssetType } from '../../types/assets';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../../store/auth';
 import { TreeSearchFilter } from './TreeSearchFilter';
+import ClassificationTag from '../security/ClassificationTag';
 
 const { Text } = Typography;
 
@@ -134,6 +135,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
                 ({processedChildren.length})
               </Text>
             )}
+            <ClassificationTag level={asset.security_classification} compact />
           </div>
         ),
         children: processedChildren.length > 0 ? processedChildren : undefined,
@@ -411,7 +413,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
       setSelectedDestination(null);
     } catch (error) {
       console.error('Failed to move asset:', error);
-      message.error(`Failed to move asset: ${error}`);
+      // Backend errors (e.g. a classification conflict) are already user-facing
+      message.error(typeof error === 'string' ? error : `Failed to move asset: ${error}`);
     }
   };
 
@@ -507,7 +510,8 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
       console.log('Move successful');
     } catch (error) {
       console.error('Failed to move asset:', error);
-      message.error(`Failed to move asset: ${error}`);
+      // Backend errors (e.g. a classification conflict) are already user-facing
+      message.error(typeof error === 'string' ? error : `Failed to move asset: ${error}`);
     }
   };
 

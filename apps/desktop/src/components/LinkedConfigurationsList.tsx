@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Space, Tag, Tooltip, message } from 'antd';
 import { LinkOutlined, FileOutlined } from '@ant-design/icons';
-import { AssetInfo, ConfigurationVersionInfo } from '../types/assets';
+import { AssetInfo, ConfigurationVersionInfo, DEFAULT_ASSET_CLASSIFICATION } from '../types/assets';
 import { invoke } from '@tauri-apps/api/core';
 import useAuthStore from '../store/auth';
 import useAssetStore from '../store/assets';
@@ -57,7 +57,8 @@ const LinkedConfigurationsList: React.FC<LinkedConfigurationsListProps> = ({
       created_at: '',
       version_count: 0,
       latest_version: null,
-      latest_version_notes: null
+      latest_version_notes: null,
+      security_classification: DEFAULT_ASSET_CLASSIFICATION
     };
     navigateToHistory(asset);
   };

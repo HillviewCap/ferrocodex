@@ -24,6 +24,7 @@ pub struct Asset {
     pub created_by: i64,
     pub created_at: String,
     pub updated_at: String,
+    pub security_classification: SecurityClassification,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -67,6 +68,70 @@ impl std::fmt::Display for AssetType {
     }
 }
 
+/// Security classification of an asset, serialized with the same names as
+/// `SecurityClassificationLevel` in security_commands and the frontend enum.
+/// Variants are declared lowest to highest, and the derived ordering is what
+/// the inheritance rules compare, so don't reorder them.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum SecurityClassification {
+    #[serde(rename = "PUBLIC")]
+    Public,
+    #[serde(rename = "INTERNAL")]
+    #[default]
+    Internal,
+    #[serde(rename = "CONFIDENTIAL")]
+    Confidential,
+    #[serde(rename = "RESTRICTED")]
+    Restricted,
+    #[serde(rename = "SECRET")]
+    Secret,
+}
+
+impl SecurityClassification {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecurityClassification::Public => "PUBLIC",
+            SecurityClassification::Internal => "INTERNAL",
+            SecurityClassification::Confidential => "CONFIDENTIAL",
+            SecurityClassification::Restricted => "RESTRICTED",
+            SecurityClassification::Secret => "SECRET",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "PUBLIC" => Ok(SecurityClassification::Public),
+            "INTERNAL" => Ok(SecurityClassification::Internal),
+            "CONFIDENTIAL" => Ok(SecurityClassification::Confidential),
+            "RESTRICTED" => Ok(SecurityClassification::Restricted),
+            "SECRET" => Ok(SecurityClassification::Secret),
+            _ => Err(anyhow::anyhow!(
+                "Invalid security classification: {}. Must be one of PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED, SECRET",
+                s
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for SecurityClassification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl rusqlite::types::FromSql for SecurityClassification {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        SecurityClassification::from_str(value.as_str()?)
+            .map_err(|e| rusqlite::types::FromSqlError::Other(e.into()))
+    }
+}
+
+impl rusqlite::types::ToSql for SecurityClassification {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::from(self.as_str()))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetInfo {
     pub id: i64,
@@ -81,6 +146,7 @@ pub struct AssetInfo {
     pub version_count: i64,
     pub latest_version: Option<String>,
     pub latest_version_notes: Option<String>,
+    pub security_classification: SecurityClassification,
 }
 
 impl From<Asset> for AssetInfo {
@@ -98,6 +164,7 @@ impl From<Asset> for AssetInfo {
             version_count: 0,
             latest_version: None,
             latest_version_notes: None,
+            security_classification: asset.security_classification,
         }
     }
 }
@@ -116,6 +183,8 @@ pub struct CreateAssetRequest {
     pub asset_type: AssetType,
     pub parent_id: Option<i64>,
     pub created_by: i64,
+    /// `None` inherits the parent folder's classification (INTERNAL at the root).
+    pub security_classification: Option<SecurityClassification>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +199,16 @@ pub struct AssetHierarchy {
     pub created_by: i64,
     pub created_at: String,
     pub updated_at: String,
+    pub security_classification: SecurityClassification,
+}
+
+/// Outcome of `update_asset_classification`: the updated asset, its previous
+/// level, and the descendants that were raised, as they were before the raise.
+#[derive(Debug, Clone)]
+pub struct ClassificationChange {
+    pub asset: Asset,
+    pub previous: SecurityClassification,
+    pub raised: Vec<Asset>,
 }
 
 #[derive(Debug, Clone)]
@@ -211,6 +290,7 @@ impl<'a> SqliteAssetRepository<'a> {
                 created_by INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                security_classification TEXT NOT NULL DEFAULT 'INTERNAL',
                 FOREIGN KEY (created_by) REFERENCES users(id),
                 FOREIGN KEY (parent_id) REFERENCES assets(id) ON DELETE CASCADE
             );
@@ -219,11 +299,14 @@ impl<'a> SqliteAssetRepository<'a> {
 
         // Databases created before v0.5.0 have an assets table without the
         // hierarchy columns, and CREATE TABLE IF NOT EXISTS won't add them.
-        // They must exist before the indexes below are created.
+        // They must exist before the indexes below are created. Classification
+        // arrived after v0.6.0: existing rows get INTERNAL and are left alone,
+        // even where that leaves a child below its folder's level.
         for (column, definition) in [
             ("asset_type", "TEXT NOT NULL DEFAULT 'device'"),
             ("parent_id", "INTEGER REFERENCES assets(id) ON DELETE CASCADE"),
             ("sort_order", "INTEGER NOT NULL DEFAULT 0"),
+            ("security_classification", "TEXT NOT NULL DEFAULT 'INTERNAL'"),
         ] {
             let exists: bool = self.conn.query_row(
                 "SELECT COUNT(*) > 0 FROM pragma_table_info('assets') WHERE name = ?1",
@@ -263,6 +346,7 @@ impl<'a> SqliteAssetRepository<'a> {
             created_by: row.get("created_by")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            security_classification: row.get("security_classification")?,
         })
     }
 
@@ -284,6 +368,7 @@ impl<'a> SqliteAssetRepository<'a> {
             version_count: row.get("version_count")?,
             latest_version: row.get("latest_version")?,
             latest_version_notes: row.get("latest_version_notes")?,
+            security_classification: row.get("security_classification")?,
         })
     }
 }
@@ -307,28 +392,43 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
         }
 
         // Validate parent exists if provided
-        if let Some(parent_id) = request.parent_id {
-            match self.get_asset_by_id(parent_id)? {
+        let parent = match request.parent_id {
+            Some(parent_id) => match self.get_asset_by_id(parent_id)? {
                 Some(parent) if parent.asset_type != AssetType::Folder => {
                     return Err(anyhow::anyhow!("Parent asset must be a folder"));
                 }
                 None => {
                     return Err(anyhow::anyhow!("Parent asset not found"));
                 }
-                _ => {}
+                Some(parent) => Some(parent),
+            },
+            None => None,
+        };
+
+        // Inherit the folder's classification unless a level is given, and
+        // never allow one below it
+        let security_classification = match (request.security_classification, &parent) {
+            (Some(requested), Some(parent)) if requested < parent.security_classification => {
+                return Err(anyhow::anyhow!(
+                    "Security classification {} is below folder '{}' ({}). An asset must be classified at or above its folder.",
+                    requested, parent.name, parent.security_classification
+                ));
             }
-        }
+            (Some(requested), _) => requested,
+            (None, Some(parent)) => parent.security_classification,
+            (None, None) => SecurityClassification::default(),
+        };
 
         // Get next sort order for this parent
         let sort_order = self.get_next_sort_order(request.parent_id)?;
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO assets (name, description, asset_type, parent_id, sort_order, created_by) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING *"
+            "INSERT INTO assets (name, description, asset_type, parent_id, sort_order, created_by, security_classification)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *"
         )?;
 
         let asset = stmt.query_row(
-            (&request.name, &request.description, request.asset_type.as_str(), &request.parent_id, &sort_order, &request.created_by),
+            (&request.name, &request.description, request.asset_type.as_str(), &request.parent_id, &sort_order, &request.created_by, security_classification),
             Self::row_to_asset,
         )?;
 
@@ -337,7 +437,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
 
     fn get_asset_by_id(&self, asset_id: i64) -> Result<Option<Asset>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at 
+            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification 
              FROM assets WHERE id = ?1"
         )?;
 
@@ -352,7 +452,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
 
     fn get_assets_by_user(&self, user_id: i64) -> Result<Vec<Asset>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at 
+            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification 
              FROM assets WHERE created_by = ?1 ORDER BY parent_id, sort_order, created_at DESC"
         )?;
 
@@ -368,7 +468,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
 
     fn get_all_assets(&self) -> Result<Vec<Asset>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at 
+            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification 
              FROM assets ORDER BY parent_id, sort_order, created_at DESC"
         )?;
 
@@ -385,6 +485,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
     fn get_assets_with_info(&self) -> Result<Vec<AssetInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT a.id, a.name, a.description, a.asset_type, a.parent_id, a.sort_order, a.created_by, a.created_at,
+                    a.security_classification,
                     u.username as created_by_username,
                     COUNT(cv.id) as version_count,
                     MAX(cv.version_number) as latest_version,
@@ -394,7 +495,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
              LEFT JOIN configuration_versions cv ON a.id = cv.asset_id
              LEFT JOIN configuration_versions latest_cv ON a.id = latest_cv.asset_id 
                 AND latest_cv.version_number = (SELECT MAX(version_number) FROM configuration_versions WHERE asset_id = a.id)
-             GROUP BY a.id, a.name, a.description, a.asset_type, a.parent_id, a.sort_order, a.created_by, a.created_at, u.username, latest_cv.notes
+             GROUP BY a.id, a.name, a.description, a.asset_type, a.parent_id, a.sort_order, a.created_by, a.created_at, a.security_classification, u.username, latest_cv.notes
              ORDER BY a.parent_id, a.sort_order, a.created_at DESC"
         )?;
 
@@ -409,6 +510,8 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
     }
 
     fn update_asset(&self, asset: &Asset) -> Result<()> {
+        // security_classification is deliberately not written here; it changes
+        // only through update_asset_classification, which enforces the folder rules
         let rows_affected = self.conn.execute(
             "UPDATE assets SET name = ?1, description = ?2, asset_type = ?3, parent_id = ?4, sort_order = ?5, updated_at = CURRENT_TIMESTAMP WHERE id = ?6",
             (&asset.name, &asset.description, asset.asset_type.as_str(), &asset.parent_id, &asset.sort_order, &asset.id),
@@ -446,7 +549,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
     fn get_asset_hierarchy(&self) -> Result<Vec<AssetHierarchy>> {
         // Optimized query that orders by parent_id and sort_order for efficient tree building
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at 
+            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification 
              FROM assets 
              ORDER BY parent_id NULLS FIRST, sort_order, created_at"
         )?;
@@ -474,6 +577,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
                 created_by: asset.created_by,
                 created_at: asset.created_at,
                 updated_at: asset.updated_at,
+                security_classification: asset.security_classification,
             };
             
             hierarchy_map.entry(asset.parent_id).or_insert_with(Vec::new).push(hierarchy_asset);
@@ -502,7 +606,7 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
 
     fn get_children_assets(&self, parent_id: Option<i64>) -> Result<Vec<Asset>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at 
+            "SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification 
              FROM assets WHERE parent_id IS ?1 ORDER BY sort_order, created_at"
         )?;
 
@@ -559,11 +663,11 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
         }
         
         // Check if new parent exists and is a folder
-        match self.get_asset_by_id(new_parent_id)? {
-            Some(parent) if parent.asset_type == AssetType::Folder => {},
+        let new_parent = match self.get_asset_by_id(new_parent_id)? {
+            Some(parent) if parent.asset_type == AssetType::Folder => parent,
             Some(_) => return Ok(false), // Parent is not a folder
             None => return Ok(false), // Parent doesn't exist
-        }
+        };
         
         // Check for circular reference by walking up the parent chain
         let mut current_parent_id = Some(new_parent_id);
@@ -586,7 +690,30 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
                 None => break,
             }
         }
-        
+
+        // Nothing in the moved subtree may end up below the destination
+        // folder's classification. This is an error rather than `false` so the
+        // caller can show which level blocks the move; it is never auto-raised.
+        let target = new_parent.security_classification;
+        let subtree = self.get_subtree(asset_id)?;
+        if let Some(moved) = subtree.iter().find(|a| a.id == asset_id) {
+            if moved.security_classification < target {
+                return Err(anyhow::anyhow!(
+                    "Cannot move '{}' ({}) into folder '{}' ({}): an asset cannot be classified below its folder. Raise it to {} or higher first.",
+                    moved.name, moved.security_classification, new_parent.name, target, target
+                ));
+            }
+            let blocked: Vec<&Asset> = subtree.iter()
+                .filter(|a| a.id != asset_id && a.security_classification < target)
+                .collect();
+            if let Some(lowest) = blocked.iter().min_by_key(|a| a.security_classification) {
+                return Err(anyhow::anyhow!(
+                    "Cannot move '{}' into folder '{}' ({}): {} item(s) inside it are classified below {}, including '{}' ({}). Raise them to {} or higher first.",
+                    moved.name, new_parent.name, target, blocked.len(), target, lowest.name, lowest.security_classification, target
+                ));
+            }
+        }
+
         Ok(true)
     }
 
@@ -619,6 +746,89 @@ impl<'a> AssetRepository for SqliteAssetRepository<'a> {
 }
 
 impl<'a> SqliteAssetRepository<'a> {
+    /// The asset and everything below it, in no particular order. UNION rather
+    /// than UNION ALL so a corrupt parent cycle can't recurse forever.
+    fn get_subtree(&self, asset_id: i64) -> Result<Vec<Asset>> {
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE subtree(id) AS (
+                 SELECT id FROM assets WHERE id = ?1
+                 UNION
+                 SELECT a.id FROM assets a JOIN subtree s ON a.parent_id = s.id
+             )
+             SELECT id, name, description, asset_type, parent_id, sort_order, created_by, created_at, updated_at, security_classification
+             FROM assets WHERE id IN (SELECT id FROM subtree)"
+        )?;
+
+        let asset_iter = stmt.query_map([asset_id], Self::row_to_asset)?;
+        let mut assets = Vec::new();
+
+        for asset in asset_iter {
+            assets.push(asset?);
+        }
+
+        Ok(assets)
+    }
+
+    /// Change an asset's classification. It may not go below its parent
+    /// folder's level. Raising a folder also raises every descendant that would
+    /// otherwise sit below it; lowering one leaves its descendants as they are.
+    /// Lowering is refused unless `allow_lowering` (Administrators only).
+    /// All updates happen in one transaction.
+    pub fn update_asset_classification(
+        &self,
+        asset_id: i64,
+        classification: SecurityClassification,
+        allow_lowering: bool,
+    ) -> Result<ClassificationChange> {
+        let asset = self.get_asset_by_id(asset_id)?
+            .ok_or_else(|| anyhow::anyhow!("Asset not found"))?;
+
+        if classification < asset.security_classification && !allow_lowering {
+            return Err(anyhow::anyhow!(
+                "Only Administrators can lower a security classification ('{}' is {})",
+                asset.name, asset.security_classification
+            ));
+        }
+
+        if let Some(parent_id) = asset.parent_id {
+            if let Some(parent) = self.get_asset_by_id(parent_id)? {
+                if classification < parent.security_classification {
+                    return Err(anyhow::anyhow!(
+                        "Cannot set '{}' to {}: its folder '{}' is classified {}. An asset cannot be classified below its folder.",
+                        asset.name, classification, parent.name, parent.security_classification
+                    ));
+                }
+            }
+        }
+
+        let raised: Vec<Asset> = self.get_subtree(asset_id)?
+            .into_iter()
+            .filter(|a| a.id != asset_id && a.security_classification < classification)
+            .collect();
+
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "UPDATE assets SET security_classification = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+            (classification, asset_id),
+        )?;
+        for descendant in &raised {
+            tx.execute(
+                "UPDATE assets SET security_classification = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+                (classification, descendant.id),
+            )?;
+        }
+        tx.commit()?;
+
+        let updated = self.get_asset_by_id(asset_id)?
+            .ok_or_else(|| anyhow::anyhow!("Asset not found"))?;
+
+        Ok(ClassificationChange {
+            previous: asset.security_classification,
+            asset: updated,
+            raised,
+        })
+    }
+
     /// Create asset from workflow data
     pub fn create_asset_from_workflow(&self, user_id: i64, asset_data: crate::workflow::AssetCreationData) -> Result<i64> {
         use crate::assets::AssetType;
@@ -639,6 +849,7 @@ impl<'a> SqliteAssetRepository<'a> {
             asset_type,
             parent_id: asset_data.parent_id,
             created_by: user_id,
+            security_classification: None,
         };
 
         let asset = self.create_asset(request)?;
@@ -748,6 +959,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let asset = repo.create_asset(request).unwrap();
@@ -772,6 +984,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         assert!(repo.create_asset(request).is_err());
 
@@ -782,6 +995,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         assert!(repo.create_asset(request).is_err());
 
@@ -792,6 +1006,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         assert!(repo.create_asset(request).is_err());
     }
@@ -807,6 +1022,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let request2 = CreateAssetRequest {
@@ -815,6 +1031,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         repo.create_asset(request1).unwrap();
@@ -832,6 +1049,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let created_asset = repo.create_asset(request).unwrap();
@@ -853,6 +1071,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let request2 = CreateAssetRequest {
             name: "Asset2".to_string(),
@@ -860,6 +1079,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         repo.create_asset(request1).unwrap();
@@ -880,6 +1100,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         repo.create_asset(request).unwrap();
@@ -900,6 +1121,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let mut asset = repo.create_asset(request).unwrap();
@@ -924,6 +1146,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let asset = repo.create_asset(request).unwrap();
@@ -944,6 +1167,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         assert!(!repo.asset_exists_by_name("Test Asset").unwrap());
@@ -963,6 +1187,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
 
         let asset = repo.create_asset(request).unwrap();
@@ -983,6 +1208,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder = repo.create_asset(folder_request).unwrap();
 
@@ -993,6 +1219,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder.id),
             created_by: 1,
+            security_classification: None,
         };
         let device = repo.create_asset(device_request).unwrap();
 
@@ -1013,6 +1240,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let device = repo.create_asset(device_request).unwrap();
 
@@ -1023,6 +1251,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(device.id),
             created_by: 1,
+            security_classification: None,
         };
         
         let result = repo.create_asset(child_request);
@@ -1042,6 +1271,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder = repo.create_asset(folder_request).unwrap();
 
@@ -1052,6 +1282,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder.id),
             created_by: 1,
+            security_classification: None,
         };
         let device1 = repo.create_asset(device1_request).unwrap();
         assert_eq!(device1.sort_order, 0);
@@ -1063,6 +1294,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder.id),
             created_by: 1,
+            security_classification: None,
         };
         let device2 = repo.create_asset(device2_request).unwrap();
         assert_eq!(device2.sort_order, 1);
@@ -1080,6 +1312,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder = repo.create_asset(folder_request).unwrap();
 
@@ -1090,6 +1323,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder.id),
             created_by: 1,
+            security_classification: None,
         };
         repo.create_asset(device1_request).unwrap();
 
@@ -1099,6 +1333,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder.id),
             created_by: 1,
+            security_classification: None,
         };
         repo.create_asset(device2_request).unwrap();
 
@@ -1126,6 +1361,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder1 = repo.create_asset(folder1_request).unwrap();
 
@@ -1135,6 +1371,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder2 = repo.create_asset(folder2_request).unwrap();
 
@@ -1144,6 +1381,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder1.id),
             created_by: 1,
+            security_classification: None,
         };
         let device = repo.create_asset(device_request).unwrap();
 
@@ -1173,6 +1411,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder1 = repo.create_asset(folder1_request).unwrap();
 
@@ -1182,6 +1421,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: Some(folder1.id),
             created_by: 1,
+            security_classification: None,
         };
         let folder2 = repo.create_asset(folder2_request).unwrap();
 
@@ -1191,6 +1431,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let device = repo.create_asset(device_request).unwrap();
 
@@ -1217,6 +1458,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder1 = repo.create_asset(folder1_request).unwrap();
 
@@ -1226,6 +1468,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: Some(folder1.id),
             created_by: 1,
+            security_classification: None,
         };
         let folder2 = repo.create_asset(folder2_request).unwrap();
 
@@ -1235,6 +1478,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder2.id),
             created_by: 1,
+            security_classification: None,
         };
         let device = repo.create_asset(device_request).unwrap();
 
@@ -1269,6 +1513,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: None,
             created_by: 1,
+            security_classification: None,
         };
         let folder1 = repo.create_asset(folder1_request).unwrap();
 
@@ -1278,6 +1523,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(folder1.id),
             created_by: 1,
+            security_classification: None,
         };
         repo.create_asset(device1_request).unwrap();
 
@@ -1287,6 +1533,7 @@ mod tests {
             asset_type: AssetType::Folder,
             parent_id: Some(folder1.id),
             created_by: 1,
+            security_classification: None,
         };
         let subfolder = repo.create_asset(subfolder_request).unwrap();
 
@@ -1296,6 +1543,7 @@ mod tests {
             asset_type: AssetType::Device,
             parent_id: Some(subfolder.id),
             created_by: 1,
+            security_classification: None,
         };
         repo.create_asset(device2_request).unwrap();
 
@@ -1313,5 +1561,302 @@ mod tests {
             .unwrap();
         assert_eq!(control_room.children.len(), 1); // HMI-001
         assert_eq!(control_room.children[0].name, "HMI-001");
+    }
+
+    // Security classification tests
+
+    fn create_classified(
+        repo: &SqliteAssetRepository,
+        name: &str,
+        asset_type: AssetType,
+        parent_id: Option<i64>,
+        security_classification: Option<SecurityClassification>,
+    ) -> Result<Asset> {
+        repo.create_asset(CreateAssetRequest {
+            name: name.to_string(),
+            description: String::new(),
+            asset_type,
+            parent_id,
+            created_by: 1,
+            security_classification,
+        })
+    }
+
+    fn classification_of(repo: &SqliteAssetRepository, asset_id: i64) -> SecurityClassification {
+        repo.get_asset_by_id(asset_id).unwrap().unwrap().security_classification
+    }
+
+    #[test]
+    fn test_classification_ordering() {
+        use SecurityClassification::*;
+        assert!(Public < Internal && Internal < Confidential && Confidential < Restricted && Restricted < Secret);
+        assert_eq!(SecurityClassification::default(), Internal);
+        assert_eq!(SecurityClassification::from_str("SECRET").unwrap(), Secret);
+        assert!(SecurityClassification::from_str("secret").is_err());
+        assert!(SecurityClassification::from_str("TOP_SECRET").is_err());
+        assert_eq!(serde_json::to_string(&Confidential).unwrap(), "\"CONFIDENTIAL\"");
+    }
+
+    #[test]
+    fn test_initialize_schema_adds_classification_to_existing_assets_table() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let conn = Connection::open(temp_file.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL);
+            INSERT INTO users (id, username, password_hash, role) VALUES (1, 'testuser', 'hash', 'Engineer');
+            -- assets as created by v0.6.0
+            CREATE TABLE assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                asset_type TEXT NOT NULL DEFAULT 'device',
+                parent_id INTEGER,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id),
+                FOREIGN KEY (parent_id) REFERENCES assets(id) ON DELETE CASCADE
+            );
+            INSERT INTO assets (id, name, description, asset_type, parent_id, created_by) VALUES (1, 'Plant', '', 'folder', NULL, 1);
+            INSERT INTO assets (id, name, description, asset_type, parent_id, created_by) VALUES (2, 'PLC-1', '', 'device', 1, 1);
+            "#,
+        ).unwrap();
+
+        let repo = SqliteAssetRepository::new(&conn);
+        repo.initialize_schema().unwrap();
+        // Running it again must be a no-op
+        repo.initialize_schema().unwrap();
+
+        let column_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('assets') WHERE name = 'security_classification'",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert_eq!(column_count, 1);
+        // Legacy rows default to INTERNAL
+        assert_eq!(classification_of(&repo, 1), SecurityClassification::Internal);
+        assert_eq!(classification_of(&repo, 2), SecurityClassification::Internal);
+        let hierarchy = repo.get_asset_hierarchy().unwrap();
+        assert_eq!(hierarchy[0].security_classification, SecurityClassification::Internal);
+        assert_eq!(hierarchy[0].children[0].security_classification, SecurityClassification::Internal);
+    }
+
+    #[test]
+    fn test_inconsistent_legacy_classification_is_left_alone() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+        conn.execute_batch(
+            r#"
+            INSERT INTO assets (id, name, description, asset_type, parent_id, created_by, security_classification) VALUES (1, 'Vault Room', '', 'folder', NULL, 1, 'SECRET');
+            INSERT INTO assets (id, name, description, asset_type, parent_id, created_by, security_classification) VALUES (2, 'Kiosk', '', 'device', 1, 1, 'PUBLIC');
+            "#,
+        ).unwrap();
+
+        // Startup doesn't fail or rewrite the child that sits below its folder
+        repo.initialize_schema().unwrap();
+        assert_eq!(classification_of(&repo, 2), SecurityClassification::Public);
+        assert_eq!(repo.get_all_assets().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_create_without_classification_inherits_from_parent() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let root = create_classified(&repo, "Plant", AssetType::Folder, None, None).unwrap();
+        assert_eq!(root.security_classification, SecurityClassification::Internal);
+
+        let secure = create_classified(&repo, "Secure Zone", AssetType::Folder, None, Some(SecurityClassification::Restricted)).unwrap();
+        let sub = create_classified(&repo, "Cabinet", AssetType::Folder, Some(secure.id), None).unwrap();
+        let device = create_classified(&repo, "PLC-9", AssetType::Device, Some(sub.id), None).unwrap();
+        assert_eq!(sub.security_classification, SecurityClassification::Restricted);
+        assert_eq!(device.security_classification, SecurityClassification::Restricted);
+
+        // get_assets_with_info joins configuration versions
+        conn.execute_batch(
+            "CREATE TABLE configuration_versions (id INTEGER PRIMARY KEY, asset_id INTEGER, version_number TEXT, notes TEXT);",
+        ).unwrap();
+        let info = repo.get_assets_with_info().unwrap();
+        let device_info = info.iter().find(|a| a.id == device.id).unwrap();
+        assert_eq!(device_info.security_classification, SecurityClassification::Restricted);
+    }
+
+    #[test]
+    fn test_create_rejects_classification_below_parent() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let folder = create_classified(&repo, "Secure Zone", AssetType::Folder, None, Some(SecurityClassification::Confidential)).unwrap();
+        for asset_type in [AssetType::Device, AssetType::Folder] {
+            let err = create_classified(&repo, "Too Low", asset_type, Some(folder.id), Some(SecurityClassification::Internal))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("INTERNAL"), "{}", err);
+            assert!(err.contains("CONFIDENTIAL"), "{}", err);
+            assert!(err.contains("Secure Zone"), "{}", err);
+        }
+        assert!(!repo.asset_exists_by_name("Too Low").unwrap());
+    }
+
+    #[test]
+    fn test_create_allows_equal_or_higher_classification() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let folder = create_classified(&repo, "Secure Zone", AssetType::Folder, None, Some(SecurityClassification::Confidential)).unwrap();
+        let same = create_classified(&repo, "PLC-1", AssetType::Device, Some(folder.id), Some(SecurityClassification::Confidential)).unwrap();
+        let higher = create_classified(&repo, "PLC-2", AssetType::Device, Some(folder.id), Some(SecurityClassification::Secret)).unwrap();
+        assert_eq!(same.security_classification, SecurityClassification::Confidential);
+        assert_eq!(higher.security_classification, SecurityClassification::Secret);
+
+        // At the root any level is allowed
+        let public = create_classified(&repo, "Lobby", AssetType::Folder, None, Some(SecurityClassification::Public)).unwrap();
+        assert_eq!(public.security_classification, SecurityClassification::Public);
+    }
+
+    #[test]
+    fn test_move_rejected_when_asset_below_target_folder() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let secret = create_classified(&repo, "Secret Zone", AssetType::Folder, None, Some(SecurityClassification::Secret)).unwrap();
+        let device = create_classified(&repo, "PLC-1", AssetType::Device, None, Some(SecurityClassification::Internal)).unwrap();
+
+        let err = repo.validate_asset_move(device.id, Some(secret.id)).unwrap_err().to_string();
+        assert!(err.contains("PLC-1") && err.contains("INTERNAL") && err.contains("SECRET"), "{}", err);
+
+        let err = repo.move_asset(MoveAssetRequest { asset_id: device.id, new_parent_id: Some(secret.id), new_sort_order: None })
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("SECRET"), "{}", err);
+        // Not moved, and not auto-raised
+        let unchanged = repo.get_asset_by_id(device.id).unwrap().unwrap();
+        assert_eq!(unchanged.parent_id, None);
+        assert_eq!(unchanged.security_classification, SecurityClassification::Internal);
+    }
+
+    #[test]
+    fn test_move_rejected_when_descendant_below_target_folder() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let target = create_classified(&repo, "Restricted Zone", AssetType::Folder, None, Some(SecurityClassification::Restricted)).unwrap();
+        let moving = create_classified(&repo, "Line 1", AssetType::Folder, None, Some(SecurityClassification::Restricted)).unwrap();
+        let sub = create_classified(&repo, "Cell A", AssetType::Folder, Some(moving.id), None).unwrap();
+        // Legacy-style data: a grandchild below its folder
+        conn.execute(
+            "UPDATE assets SET security_classification = 'CONFIDENTIAL' WHERE id = ?1",
+            [sub.id],
+        ).unwrap();
+        create_classified(&repo, "HMI-1", AssetType::Device, Some(sub.id), Some(SecurityClassification::Secret)).unwrap();
+
+        let err = repo.validate_asset_move(moving.id, Some(target.id)).unwrap_err().to_string();
+        assert!(err.contains("Line 1") && err.contains("Cell A") && err.contains("CONFIDENTIAL") && err.contains("RESTRICTED"), "{}", err);
+        assert!(repo.move_asset(MoveAssetRequest { asset_id: moving.id, new_parent_id: Some(target.id), new_sort_order: None }).is_err());
+        assert_eq!(repo.get_asset_by_id(moving.id).unwrap().unwrap().parent_id, None);
+    }
+
+    #[test]
+    fn test_move_allowed_into_equal_or_lower_folder() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let confidential = create_classified(&repo, "Zone C", AssetType::Folder, None, Some(SecurityClassification::Confidential)).unwrap();
+        let public = create_classified(&repo, "Zone P", AssetType::Folder, None, Some(SecurityClassification::Public)).unwrap();
+        let moving = create_classified(&repo, "Line 1", AssetType::Folder, Some(confidential.id), None).unwrap();
+        create_classified(&repo, "PLC-1", AssetType::Device, Some(moving.id), Some(SecurityClassification::Secret)).unwrap();
+
+        assert!(repo.validate_asset_move(moving.id, Some(public.id)).unwrap());
+        repo.move_asset(MoveAssetRequest { asset_id: moving.id, new_parent_id: Some(public.id), new_sort_order: None }).unwrap();
+        assert_eq!(repo.get_asset_by_id(moving.id).unwrap().unwrap().parent_id, Some(public.id));
+
+        repo.move_asset(MoveAssetRequest { asset_id: moving.id, new_parent_id: Some(confidential.id), new_sort_order: None }).unwrap();
+        repo.move_asset(MoveAssetRequest { asset_id: moving.id, new_parent_id: None, new_sort_order: None }).unwrap();
+        // Moves never change classification
+        assert_eq!(classification_of(&repo, moving.id), SecurityClassification::Confidential);
+    }
+
+    #[test]
+    fn test_update_classification_rejects_below_parent() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let folder = create_classified(&repo, "Zone C", AssetType::Folder, None, Some(SecurityClassification::Confidential)).unwrap();
+        let device = create_classified(&repo, "PLC-1", AssetType::Device, Some(folder.id), None).unwrap();
+
+        let err = repo.update_asset_classification(device.id, SecurityClassification::Internal, true).unwrap_err().to_string();
+        assert!(err.contains("INTERNAL") && err.contains("CONFIDENTIAL") && err.contains("Zone C"), "{}", err);
+        assert_eq!(classification_of(&repo, device.id), SecurityClassification::Confidential);
+
+        let change = repo.update_asset_classification(device.id, SecurityClassification::Secret, false).unwrap();
+        assert_eq!(change.previous, SecurityClassification::Confidential);
+        assert_eq!(change.asset.security_classification, SecurityClassification::Secret);
+        assert!(change.raised.is_empty());
+        assert!(repo.update_asset_classification(999, SecurityClassification::Secret, false).is_err());
+    }
+
+    #[test]
+    fn test_update_classification_raise_cascades_to_lower_descendants() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let root = create_classified(&repo, "Plant", AssetType::Folder, None, Some(SecurityClassification::Internal)).unwrap();
+        let low = create_classified(&repo, "PLC-1", AssetType::Device, Some(root.id), None).unwrap();
+        let sub = create_classified(&repo, "Cell A", AssetType::Folder, Some(root.id), Some(SecurityClassification::Confidential)).unwrap();
+        let deep = create_classified(&repo, "PLC-2", AssetType::Device, Some(sub.id), None).unwrap();
+        let high = create_classified(&repo, "PLC-3", AssetType::Device, Some(sub.id), Some(SecurityClassification::Secret)).unwrap();
+        let unrelated = create_classified(&repo, "Office", AssetType::Folder, None, None).unwrap();
+
+        let change = repo.update_asset_classification(root.id, SecurityClassification::Restricted, false).unwrap();
+        assert_eq!(change.previous, SecurityClassification::Internal);
+        let mut raised: Vec<(i64, SecurityClassification)> = change.raised.iter().map(|a| (a.id, a.security_classification)).collect();
+        raised.sort();
+        // Raised items are reported with the level they had before
+        assert_eq!(raised, vec![
+            (low.id, SecurityClassification::Internal),
+            (sub.id, SecurityClassification::Confidential),
+            (deep.id, SecurityClassification::Confidential),
+        ]);
+
+        assert_eq!(classification_of(&repo, root.id), SecurityClassification::Restricted);
+        assert_eq!(classification_of(&repo, low.id), SecurityClassification::Restricted);
+        assert_eq!(classification_of(&repo, sub.id), SecurityClassification::Restricted);
+        assert_eq!(classification_of(&repo, deep.id), SecurityClassification::Restricted);
+        assert_eq!(classification_of(&repo, high.id), SecurityClassification::Secret);
+        assert_eq!(classification_of(&repo, unrelated.id), SecurityClassification::Internal);
+    }
+
+    #[test]
+    fn test_update_classification_lowering_leaves_descendants() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let root = create_classified(&repo, "Plant", AssetType::Folder, None, Some(SecurityClassification::Secret)).unwrap();
+        let child = create_classified(&repo, "PLC-1", AssetType::Device, Some(root.id), None).unwrap();
+
+        let change = repo.update_asset_classification(root.id, SecurityClassification::Public, true).unwrap();
+        assert!(change.raised.is_empty());
+        assert_eq!(classification_of(&repo, root.id), SecurityClassification::Public);
+        assert_eq!(classification_of(&repo, child.id), SecurityClassification::Secret);
+    }
+
+    #[test]
+    fn test_update_classification_lowering_requires_permission() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteAssetRepository::new(&conn);
+
+        let device = create_classified(&repo, "PLC-1", AssetType::Device, None, Some(SecurityClassification::Secret)).unwrap();
+
+        let err = repo.update_asset_classification(device.id, SecurityClassification::Internal, false).unwrap_err().to_string();
+        assert!(err.contains("Only Administrators"), "{}", err);
+        assert_eq!(classification_of(&repo, device.id), SecurityClassification::Secret);
+
+        // Keeping or raising the level needs no permission
+        repo.update_asset_classification(device.id, SecurityClassification::Secret, false).unwrap();
+        let raisable = create_classified(&repo, "PLC-2", AssetType::Device, None, None).unwrap();
+        repo.update_asset_classification(raisable.id, SecurityClassification::Confidential, false).unwrap();
+        assert_eq!(classification_of(&repo, raisable.id), SecurityClassification::Confidential);
     }
 }
