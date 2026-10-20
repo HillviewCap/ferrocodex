@@ -43,6 +43,9 @@ pub struct VaultSecret {
     pub vault_id: i64,
     pub secret_type: SecretType,
     pub label: String,
+    /// Account name the secret belongs to. Stored in plaintext, like the label.
+    #[serde(default)]
+    pub username: Option<String>,
     pub encrypted_value: String,
     pub created_at: String,
     pub updated_at: String,
@@ -187,6 +190,8 @@ pub struct AddSecretRequest {
     pub vault_id: i64,
     pub secret_type: SecretType,
     pub label: String,
+    #[serde(default)]
+    pub username: Option<String>,
     pub value: String,
     pub author_id: i64,
 }
@@ -232,6 +237,9 @@ pub struct UpdateCredentialPasswordRequest {
 pub struct UpdateVaultSecretRequest {
     pub secret_id: i64,
     pub label: Option<String>,
+    /// Absent or null leaves the username unchanged; an empty string clears it.
+    #[serde(default)]
+    pub username: Option<String>,
     pub value: Option<String>,
     pub author_id: i64,
 }
@@ -250,6 +258,9 @@ pub struct StandaloneCredential {
     pub description: String,
     pub credential_type: SecretType,
     pub category_id: Option<i64>,
+    /// Account name the credential belongs to. Stored in plaintext, like the name.
+    #[serde(default)]
+    pub username: Option<String>,
     pub encrypted_data: String,
     pub created_by: i64,
     pub created_at: String,
@@ -323,6 +334,8 @@ pub struct CreateStandaloneCredentialRequest {
     pub description: String,
     pub credential_type: SecretType,
     pub category_id: Option<i64>,
+    #[serde(default)]
+    pub username: Option<String>,
     pub value: String,
     pub tags: Option<Vec<String>>,
     pub created_by: i64,
@@ -334,6 +347,9 @@ pub struct UpdateStandaloneCredentialRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub category_id: Option<i64>,
+    /// Absent or null leaves the username unchanged; an empty string clears it.
+    #[serde(default)]
+    pub username: Option<String>,
     pub value: Option<String>,
     pub author_id: i64,
 }
@@ -623,13 +639,15 @@ pub trait VaultRepository {
     fn cleanup_password_history(&self, secret_id: i64, keep_count: usize) -> Result<()>;
     
     // Vault secret update/delete methods
-    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: &DataKey) -> Result<()>;
+    /// `key` is only needed, and only used, when the request changes the value.
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: Option<&DataKey>) -> Result<()>;
     fn delete_vault_secret(&self, request: DeleteVaultSecretRequest) -> Result<()>;
     
     // Standalone credential methods for Story 4.3
     fn create_standalone_credential(&self, request: CreateStandaloneCredentialRequest, key: &DataKey) -> Result<StandaloneCredential>;
     fn get_standalone_credential(&self, credential_id: i64) -> Result<Option<StandaloneCredentialInfo>>;
-    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()>;
+    /// `key` is only needed, and only used, when the request changes the value.
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: Option<&DataKey>) -> Result<()>;
     fn delete_standalone_credential(&self, credential_id: i64, author_id: i64) -> Result<()>;
     fn search_standalone_credentials(&self, request: SearchCredentialsRequest) -> Result<SearchCredentialsResponse>;
     fn get_standalone_credential_history(&self, credential_id: i64) -> Result<Vec<StandaloneCredentialHistory>>;
@@ -670,6 +688,44 @@ pub trait VaultRepository {
     fn expire_permission_requests(&self) -> Result<u64>;
 }
 
+/// `None` for a username that is empty or only whitespace, which clears it.
+fn non_empty(username: &str) -> Option<String> {
+    let trimmed = username.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// The `SET` clause of a partial `UPDATE`: only the columns a request changes.
+#[derive(Default)]
+struct ColumnUpdates {
+    columns: Vec<&'static str>,
+    values: Vec<Box<dyn rusqlite::ToSql>>,
+}
+
+impl ColumnUpdates {
+    fn set(&mut self, column: &'static str, value: impl rusqlite::ToSql + 'static) {
+        self.columns.push(column);
+        self.values.push(Box::new(value));
+    }
+
+    fn is_empty(&self) -> bool {
+        self.columns.is_empty()
+    }
+
+    /// Updates row `id` of `table`, also setting `updated_at`, and returns the
+    /// number of rows changed. Table and column names are literals in this
+    /// module, never input.
+    fn execute(mut self, conn: &Connection, table: &'static str, id: i64) -> Result<usize> {
+        let assignments: Vec<String> = self.columns.iter().map(|column| format!("{} = ?", column)).collect();
+        let sql = format!(
+            "UPDATE {} SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            table,
+            assignments.join(", ")
+        );
+        self.values.push(Box::new(id));
+        Ok(conn.execute(&sql, rusqlite::params_from_iter(self.values.iter()))?)
+    }
+}
+
 // SQLite implementation
 pub struct SqliteVaultRepository<'a> {
     conn: &'a Connection,
@@ -702,6 +758,7 @@ impl<'a> SqliteVaultRepository<'a> {
             vault_id: row.get("vault_id")?,
             secret_type,
             label: row.get("label")?,
+            username: row.get("username")?,
             encrypted_value: row.get("encrypted_value")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
@@ -754,6 +811,7 @@ impl<'a> SqliteVaultRepository<'a> {
             description: row.get("description")?,
             credential_type,
             category_id: row.get("category_id").ok(),
+            username: row.get("username")?,
             encrypted_data: row.get("encrypted_data")?,
             created_by: row.get("created_by")?,
             created_at: row.get("created_at")?,
@@ -879,6 +937,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 vault_id INTEGER NOT NULL,
                 secret_type TEXT NOT NULL CHECK(secret_type IN ('password', 'ip_address', 'vpn_key', 'license_file')),
                 label TEXT NOT NULL,
+                -- Account name, plaintext like the label
+                username TEXT,
                 encrypted_value TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -962,6 +1022,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                 description TEXT,
                 credential_type TEXT NOT NULL CHECK(credential_type IN ('password', 'ip_address', 'vpn_key', 'license_file')),
                 category_id INTEGER,
+                -- Account name, plaintext like the name
+                username TEXT,
                 encrypted_data TEXT NOT NULL,
                 created_by INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1296,15 +1358,15 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
                request.secret_type.to_string(), request.label, request.vault_id);
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             RETURNING id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+            "INSERT INTO vault_secrets (vault_id, secret_type, label, username, encrypted_value, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             RETURNING id, vault_id, secret_type, label, username, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
                     last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version"
         )?;
 
         let secret = stmt.query_row(
-            (&request.vault_id, &request.secret_type.to_string(), &request.label, &encrypted_value_base64, &key.version()),
+            (&request.vault_id, &request.secret_type.to_string(), &request.label, &request.username, &encrypted_value_base64, &key.version()),
             Self::row_to_secret,
         )?;
 
@@ -1312,6 +1374,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         let mut changes = HashMap::new();
         changes.insert("label".to_string(), request.label.clone());
         changes.insert("secret_type".to_string(), request.secret_type.to_string());
+        if let Some(ref username) = request.username {
+            changes.insert("username".to_string(), username.clone());
+        }
         
         self.add_version_history(
             request.vault_id,
@@ -1328,7 +1393,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_vault_secrets(&self, vault_id: i64) -> Result<Vec<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+            "SELECT id, vault_id, secret_type, label, username, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
                     last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE vault_id = ?1 ORDER BY created_at ASC"
@@ -1346,7 +1411,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn get_secret_by_id(&self, secret_id: i64) -> Result<Option<VaultSecret>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, vault_id, secret_type, label, encrypted_value, created_at, updated_at,
+            "SELECT id, vault_id, secret_type, label, username, encrypted_value, created_at, updated_at,
                     strength_score, last_changed, generation_method, policy_version,
                     last_rotated, rotation_interval_days, next_rotation_due, rotation_policy_id, key_version
              FROM vault_secrets WHERE id = ?1"
@@ -1467,8 +1532,8 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Import all secrets; callers have already re-encrypted them under this install's data key
         for secret in &vault_info.secrets {
             self.conn.execute(
-                "INSERT INTO vault_secrets (vault_id, secret_type, label, encrypted_value, key_version) VALUES (?1, ?2, ?3, ?4, ?5)",
-                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.encrypted_value, &key_version),
+                "INSERT INTO vault_secrets (vault_id, secret_type, label, username, encrypted_value, key_version) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (&imported_vault.id, &secret.secret_type.to_string(), &secret.label, &secret.username, &secret.encrypted_value, &key_version),
             )?;
         }
 
@@ -1608,49 +1673,44 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     }
 
     // Vault secret update/delete implementations
-    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: &DataKey) -> Result<()> {
+    fn update_vault_secret(&self, request: UpdateVaultSecretRequest, key: Option<&DataKey>) -> Result<()> {
         // Get the current secret first
         let secret = self.get_secret_by_id(request.secret_id)?
             .ok_or_else(|| anyhow::anyhow!("Secret not found"))?;
 
-        // Handle different update cases based on what fields are provided
-        if let (Some(ref label), Some(ref value)) = (&request.label, &request.value) {
-            // Both label and value provided
-            crate::keystore::ensure_key_is_current(self.conn, key)?;
-            let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
-            
-            self.conn.execute(
-                "UPDATE vault_secrets SET label = ?1, encrypted_value = ?2, key_version = ?3, updated_at = CURRENT_TIMESTAMP WHERE id = ?4",
-                (label, encrypted_value_base64, key.version(), request.secret_id),
-            )?;
-        } else if let Some(ref label) = request.label {
-            // Only label provided
-            self.conn.execute(
-                "UPDATE vault_secrets SET label = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
-                (label, request.secret_id),
-            )?;
-        } else if let Some(ref value) = request.value {
-            // Only value provided
-            crate::keystore::ensure_key_is_current(self.conn, key)?;
-            let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
-            
-            self.conn.execute(
-                "UPDATE vault_secrets SET encrypted_value = ?1, key_version = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3",
-                (encrypted_value_base64, key.version(), request.secret_id),
-            )?;
-        } else {
-            return Err(anyhow::anyhow!("No fields to update"));
-        }
-        
-        // Add to history
+        let mut columns = ColumnUpdates::default();
         let mut changes = HashMap::new();
+
         if let Some(ref label) = request.label {
+            columns.set("label", label.clone());
             changes.insert("label".to_string(), format!("{} -> {}", secret.label, label));
         }
-        if request.value.is_some() {
+
+        if let Some(ref username) = request.username {
+            let username = non_empty(username);
+            changes.insert("username".to_string(), format!(
+                "{} -> {}",
+                secret.username.as_deref().unwrap_or(""),
+                username.as_deref().unwrap_or(""),
+            ));
+            columns.set("username", username);
+        }
+
+        if let Some(ref value) = request.value {
+            let key = key.ok_or_else(|| anyhow::anyhow!("The data key is required to change a secret value"))?;
+            crate::keystore::ensure_key_is_current(self.conn, key)?;
+            let encrypted_value_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
+
+            columns.set("encrypted_value", encrypted_value_base64);
+            columns.set("key_version", key.version());
             changes.insert("value".to_string(), "updated".to_string());
         }
-        
+
+        if columns.is_empty() {
+            return Err(anyhow::anyhow!("No fields to update"));
+        }
+        columns.execute(self.conn, "vault_secrets", request.secret_id)?;
+
         self.add_version_history(
             secret.vault_id,
             ChangeType::SecretUpdated,
@@ -1713,14 +1773,14 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         debug!("Creating standalone credential '{}' of type {}", request.name, request.credential_type.to_string());
 
         let mut stmt = self.conn.prepare(
-            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, encrypted_data, created_by, key_version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             RETURNING id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed"
+            "INSERT INTO standalone_credentials (name, description, credential_type, category_id, username, encrypted_data, created_by, key_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             RETURNING id, name, description, credential_type, category_id, username, encrypted_data, created_by, created_at, updated_at, last_accessed"
         )?;
 
         let credential = stmt.query_row(
             (&request.name, &request.description, &request.credential_type.to_string(),
-             &request.category_id, &encrypted_data_base64, &request.created_by, &key.version()),
+             &request.category_id, &request.username, &encrypted_data_base64, &request.created_by, &key.version()),
             Self::row_to_standalone_credential,
         )?;
 
@@ -1735,6 +1795,9 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         changes.insert("credential_type".to_string(), request.credential_type.to_string());
         if let Some(category_id) = request.category_id {
             changes.insert("category_id".to_string(), category_id.to_string());
+        }
+        if let Some(ref username) = request.username {
+            changes.insert("username".to_string(), username.clone());
         }
         
         self.add_standalone_history(
@@ -1752,7 +1815,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
     fn get_standalone_credential(&self, credential_id: i64) -> Result<Option<StandaloneCredentialInfo>> {
         // Get the credential
         let mut cred_stmt = self.conn.prepare(
-            "SELECT id, name, description, credential_type, category_id, encrypted_data, created_by, created_at, updated_at, last_accessed 
+            "SELECT id, name, description, credential_type, category_id, username, encrypted_data, created_by, created_at, updated_at, last_accessed
              FROM standalone_credentials WHERE id = ?1"
         )?;
 
@@ -1784,102 +1847,48 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         }))
     }
 
-    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: &DataKey) -> Result<()> {
-        // A version number from our own key, not user input, so it is safe inline
-        let encrypted_data_clause = format!("encrypted_data = ?, key_version = {}", key.version());
-        let mut updates = Vec::new();
+    fn update_standalone_credential(&self, request: UpdateStandaloneCredentialRequest, key: Option<&DataKey>) -> Result<()> {
+        let mut columns = ColumnUpdates::default();
         let mut changes = HashMap::new();
 
-        // Prepare the base query components
-        if request.name.is_some() {
-            updates.push("name = ?");
-            changes.insert("name".to_string(), request.name.as_ref().unwrap().clone());
+        if let Some(ref name) = request.name {
+            columns.set("name", name.clone());
+            changes.insert("name".to_string(), name.clone());
         }
 
-        if request.description.is_some() {
-            updates.push("description = ?");
-            changes.insert("description".to_string(), request.description.as_ref().unwrap().clone());
+        if let Some(ref description) = request.description {
+            columns.set("description", description.clone());
+            changes.insert("description".to_string(), description.clone());
         }
 
-        if request.category_id.is_some() {
-            updates.push("category_id = ?");
-            changes.insert("category_id".to_string(), request.category_id.unwrap().to_string());
+        if let Some(category_id) = request.category_id {
+            columns.set("category_id", category_id);
+            changes.insert("category_id".to_string(), category_id.to_string());
         }
 
-        let encrypted_data_base64 = if let Some(ref value) = request.value {
+        if let Some(ref username) = request.username {
+            let username = non_empty(username);
+            // An empty string records that the username was cleared
+            changes.insert("username".to_string(), username.clone().unwrap_or_default());
+            columns.set("username", username);
+        }
+
+        if let Some(ref value) = request.value {
             // Encrypt the new value
+            let key = key.ok_or_else(|| anyhow::anyhow!("The data key is required to change a credential value"))?;
             crate::keystore::ensure_key_is_current(self.conn, key)?;
             let encrypted_base64 = FileEncryption::new(key).encrypt_to_base64(value.as_bytes())?;
-            
-            updates.push(encrypted_data_clause.as_str());
-            changes.insert("value_updated".to_string(), "true".to_string());
-            Some(encrypted_base64)
-        } else {
-            None
-        };
 
-        if updates.is_empty() {
+            columns.set("encrypted_data", encrypted_base64);
+            columns.set("key_version", key.version());
+            changes.insert("value_updated".to_string(), "true".to_string());
+        }
+
+        if columns.is_empty() {
             return Err(anyhow::anyhow!("No fields to update"));
         }
 
-        updates.push("updated_at = CURRENT_TIMESTAMP");
-
-        let query = format!(
-            "UPDATE standalone_credentials SET {} WHERE id = ?",
-            updates.join(", ")
-        );
-
-        // Build params based on what's being updated
-        let rows_affected = match (&request.name, &request.description, &request.category_id, &encrypted_data_base64) {
-            (Some(name), Some(desc), Some(cat_id), Some(enc_data)) => {
-                self.conn.execute(&query, (name, desc, cat_id, enc_data, request.id))?
-            },
-            (Some(name), Some(desc), Some(cat_id), None) => {
-                self.conn.execute(&query, (name, desc, cat_id, request.id))?
-            },
-            (Some(name), Some(desc), None, Some(enc_data)) => {
-                self.conn.execute(&query, (name, desc, enc_data, request.id))?
-            },
-            (Some(name), Some(desc), None, None) => {
-                self.conn.execute(&query, (name, desc, request.id))?
-            },
-            (Some(name), None, Some(cat_id), Some(enc_data)) => {
-                self.conn.execute(&query, (name, cat_id, enc_data, request.id))?
-            },
-            (Some(name), None, Some(cat_id), None) => {
-                self.conn.execute(&query, (name, cat_id, request.id))?
-            },
-            (Some(name), None, None, Some(enc_data)) => {
-                self.conn.execute(&query, (name, enc_data, request.id))?
-            },
-            (Some(name), None, None, None) => {
-                self.conn.execute(&query, (name, request.id))?
-            },
-            (None, Some(desc), Some(cat_id), Some(enc_data)) => {
-                self.conn.execute(&query, (desc, cat_id, enc_data, request.id))?
-            },
-            (None, Some(desc), Some(cat_id), None) => {
-                self.conn.execute(&query, (desc, cat_id, request.id))?
-            },
-            (None, Some(desc), None, Some(enc_data)) => {
-                self.conn.execute(&query, (desc, enc_data, request.id))?
-            },
-            (None, Some(desc), None, None) => {
-                self.conn.execute(&query, (desc, request.id))?
-            },
-            (None, None, Some(cat_id), Some(enc_data)) => {
-                self.conn.execute(&query, (cat_id, enc_data, request.id))?
-            },
-            (None, None, Some(cat_id), None) => {
-                self.conn.execute(&query, (cat_id, request.id))?
-            },
-            (None, None, None, Some(enc_data)) => {
-                self.conn.execute(&query, (enc_data, request.id))?
-            },
-            (None, None, None, None) => {
-                return Err(anyhow::anyhow!("No fields to update"));
-            }
-        };
+        let rows_affected = columns.execute(self.conn, "standalone_credentials", request.id)?;
 
         if rows_affected == 0 {
             return Err(anyhow::anyhow!("Credential not found"));
@@ -1931,7 +1940,7 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
 
     fn search_standalone_credentials(&self, request: SearchCredentialsRequest) -> Result<SearchCredentialsResponse> {
         let mut query = String::from(
-            "SELECT DISTINCT sc.id, sc.name, sc.description, sc.credential_type, sc.category_id, 
+            "SELECT DISTINCT sc.id, sc.name, sc.description, sc.credential_type, sc.category_id, sc.username,
                     sc.encrypted_data, sc.created_by, sc.created_at, sc.updated_at, sc.last_accessed 
              FROM standalone_credentials sc"
         );
@@ -1950,7 +1959,10 @@ impl<'a> VaultRepository for SqliteVaultRepository<'a> {
         // Build WHERE conditions
         let mut param_index = 1;
         if let Some(ref query_str) = request.query {
-            conditions.push(format!("(sc.name LIKE ?{} OR sc.description LIKE ?{})", param_index, param_index));
+            conditions.push(format!(
+                "(sc.name LIKE ?{0} OR sc.description LIKE ?{0} OR sc.username LIKE ?{0})",
+                param_index
+            ));
             params.push(Box::new(format!("%{}%", query_str)));
             param_index += 1;
         }
@@ -2782,6 +2794,7 @@ mod tests {
             vault_id: vault.id,
             secret_type: SecretType::Password,
             label: "Admin Password".to_string(),
+            username: None,
             value: "super_secret_password".to_string(),
             author_id: 1,
         };
@@ -2822,6 +2835,7 @@ mod tests {
             vault_id: vault.id,
             secret_type: SecretType::Password,
             label: "Admin Password".to_string(),
+            username: None,
             value: "password123".to_string(),
             author_id: 1,
         };
@@ -2831,6 +2845,7 @@ mod tests {
             vault_id: vault.id,
             secret_type: SecretType::IpAddress,
             label: "PLC IP".to_string(),
+            username: None,
             value: "192.168.1.100".to_string(),
             author_id: 1,
         };
@@ -2903,7 +2918,7 @@ mod tests {
         }).unwrap();
         let secret = repo.add_secret(AddSecretRequest {
             vault_id: vault.id, secret_type: SecretType::Password, label: "pw".to_string(),
-            value: "Old-Password-123".to_string(), author_id: 1,
+            username: None, value: "Old-Password-123".to_string(), author_id: 1,
         }, test_key()).unwrap();
         assert!(secret.last_rotated.is_none());
 
@@ -2953,6 +2968,7 @@ mod tests {
             vault_id: vault.id,
             secret_type: SecretType::Password,
             label: "HMI admin".to_string(),
+            username: None,
             value: "Old-Password-123".to_string(),
             author_id: 1,
         }, test_key()).unwrap();
@@ -2974,15 +2990,181 @@ mod tests {
         let plaintext = FileEncryption::new(test_key()).decrypt_from_base64(&rotated.encrypted_value).unwrap();
         assert_eq!(plaintext, b"New-Password-456");
     }
+
+    fn vault_with_secret(repo: &SqliteVaultRepository, username: Option<&str>) -> (IdentityVault, VaultSecret) {
+        let vault = repo.create_vault(CreateVaultRequest {
+            asset_id: 1, name: "PLC Vault".to_string(), description: String::new(), created_by: 1,
+        }).unwrap();
+        let secret = repo.add_secret(AddSecretRequest {
+            vault_id: vault.id, secret_type: SecretType::Password, label: "HMI login".to_string(),
+            username: username.map(String::from), value: "Value-0".to_string(), author_id: 1,
+        }, test_key()).unwrap();
+        (vault, secret)
+    }
+
+    fn update_username(secret_id: i64, username: &str) -> UpdateVaultSecretRequest {
+        UpdateVaultSecretRequest {
+            secret_id, label: None, username: Some(username.to_string()), value: None, author_id: 1,
+        }
+    }
+
+    #[test]
+    fn test_secret_username_is_stored_and_read_back() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteVaultRepository::new(&conn);
+        let (vault, secret) = vault_with_secret(&repo, Some("DOMAIN\\Operator"));
+
+        assert_eq!(secret.username.as_deref(), Some("DOMAIN\\Operator"));
+        assert_eq!(repo.get_secret_by_id(secret.id).unwrap().unwrap().username.as_deref(), Some("DOMAIN\\Operator"));
+        assert_eq!(repo.get_vault_secrets(vault.id).unwrap()[0].username.as_deref(), Some("DOMAIN\\Operator"));
+        let stored: Option<String> = conn.query_row(
+            "SELECT username FROM vault_secrets WHERE id = ?1", [secret.id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(stored.as_deref(), Some("DOMAIN\\Operator"), "usernames are stored in plaintext");
+
+        let without = repo.add_secret(AddSecretRequest {
+            vault_id: vault.id, secret_type: SecretType::IpAddress, label: "PLC IP".to_string(),
+            username: None, value: "10.0.0.5".to_string(), author_id: 1,
+        }, test_key()).unwrap();
+        assert_eq!(without.username, None);
+    }
+
+    #[test]
+    fn test_username_only_update_leaves_ciphertext_alone() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteVaultRepository::new(&conn);
+        let (vault, secret) = vault_with_secret(&repo, Some("operator"));
+        conn.execute("UPDATE vault_secrets SET key_version = 7 WHERE id = ?1", [secret.id]).unwrap();
+
+        // No data key: a username change never touches the ciphertext
+        repo.update_vault_secret(update_username(secret.id, "engineer"), None).unwrap();
+
+        let updated = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+        assert_eq!(updated.username.as_deref(), Some("engineer"));
+        assert_eq!(updated.label, "HMI login");
+        assert_eq!(updated.encrypted_value, secret.encrypted_value);
+        assert_eq!(updated.key_version, 7);
+
+        let history = repo.get_vault_history(vault.id).unwrap();
+        let changes: HashMap<String, String> = history.iter()
+            .find(|v| v.change_type == ChangeType::SecretUpdated)
+            .map(|v| serde_json::from_str(&v.changes_json).unwrap())
+            .unwrap();
+        assert_eq!(changes.get("username").map(String::as_str), Some("operator -> engineer"));
+        assert!(!changes.contains_key("value"));
+
+        // An empty or blank username clears it
+        repo.update_vault_secret(update_username(secret.id, "  "), None).unwrap();
+        assert_eq!(repo.get_secret_by_id(secret.id).unwrap().unwrap().username, None);
+        let stored: Option<String> = conn.query_row(
+            "SELECT username FROM vault_secrets WHERE id = ?1", [secret.id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(stored, None);
+    }
+
+    #[test]
+    fn test_value_update_without_data_key_fails_and_changes_nothing() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteVaultRepository::new(&conn);
+        let (_, secret) = vault_with_secret(&repo, Some("operator"));
+
+        let result = repo.update_vault_secret(UpdateVaultSecretRequest {
+            secret_id: secret.id, label: None, username: Some("engineer".to_string()),
+            value: Some("Value-1".to_string()), author_id: 1,
+        }, None);
+
+        assert!(result.is_err());
+        let unchanged = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+        assert_eq!(unchanged.username.as_deref(), Some("operator"));
+        assert_eq!(unchanged.encrypted_value, secret.encrypted_value);
+    }
+
+    #[test]
+    fn test_secret_update_applies_exactly_the_given_fields() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteVaultRepository::new(&conn);
+        let (_, secret) = vault_with_secret(&repo, Some("user-0"));
+        let key = DataKey::generate_with_version(3);
+
+        // Every combination of label, username and value
+        for mask in 1u8..8 {
+            let before = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+            let request = UpdateVaultSecretRequest {
+                secret_id: secret.id,
+                label: (mask & 1 != 0).then(|| format!("label-{}", mask)),
+                username: (mask & 2 != 0).then(|| format!("user-{}", mask)),
+                value: (mask & 4 != 0).then(|| format!("Value-{}", mask)),
+                author_id: 1,
+            };
+            repo.update_vault_secret(request.clone(), Some(&key)).unwrap();
+
+            let after = repo.get_secret_by_id(secret.id).unwrap().unwrap();
+            assert_eq!(after.label, request.label.unwrap_or(before.label), "mask {}", mask);
+            assert_eq!(after.username, request.username.or(before.username), "mask {}", mask);
+            match request.value {
+                Some(value) => {
+                    let plaintext = FileEncryption::new(&key).decrypt_from_base64(&after.encrypted_value).unwrap();
+                    assert_eq!(plaintext, value.into_bytes(), "mask {}", mask);
+                    assert_eq!(after.key_version, 3, "mask {}", mask);
+                }
+                None => {
+                    assert_eq!(after.encrypted_value, before.encrypted_value, "mask {}", mask);
+                    assert_eq!(after.key_version, before.key_version, "mask {}", mask);
+                }
+            }
+        }
+
+        let empty = UpdateVaultSecretRequest { secret_id: secret.id, label: None, username: None, value: None, author_id: 1 };
+        assert!(repo.update_vault_secret(empty, Some(&key)).is_err());
+    }
+
+    #[test]
+    fn test_import_keeps_secret_usernames() {
+        let (_temp_file, conn) = setup_test_db();
+        let repo = SqliteVaultRepository::new(&conn);
+        let (_, secret) = vault_with_secret(&repo, Some("admin@plc"));
+
+        let mut info = repo.get_vault_by_asset_id(1).unwrap().unwrap();
+        info.vault.name = "Imported Vault".to_string();
+        let imported = repo.import_vault(&info, 1, secret.key_version).unwrap();
+
+        let secrets = repo.get_vault_secrets(imported.id).unwrap();
+        assert_eq!(secrets.len(), 1);
+        assert_eq!(secrets[0].username.as_deref(), Some("admin@plc"));
+    }
+
+    /// The frontend leaves the key out (or sends null) to keep the username,
+    /// and sends an empty string to clear it.
+    #[test]
+    fn test_update_requests_tell_an_unchanged_username_from_a_cleared_one() {
+        let secret = |json: &str| serde_json::from_str::<UpdateVaultSecretRequest>(json).unwrap().username;
+        assert_eq!(secret(r#"{"secret_id": 1, "author_id": 1}"#), None);
+        assert_eq!(secret(r#"{"secret_id": 1, "username": null, "author_id": 1}"#), None);
+        assert_eq!(secret(r#"{"secret_id": 1, "username": "", "author_id": 1}"#), Some(String::new()));
+        assert_eq!(secret(r#"{"secret_id": 1, "username": "op", "author_id": 1}"#), Some("op".to_string()));
+
+        let credential = |json: &str| serde_json::from_str::<UpdateStandaloneCredentialRequest>(json).unwrap().username;
+        assert_eq!(credential(r#"{"id": 1, "author_id": 1}"#), None);
+        assert_eq!(credential(r#"{"id": 1, "username": null, "author_id": 1}"#), None);
+        assert_eq!(credential(r#"{"id": 1, "username": "", "author_id": 1}"#), Some(String::new()));
+
+        // Requests from before usernames existed still parse
+        let add: AddSecretRequest = serde_json::from_str(
+            r#"{"vault_id": 1, "secret_type": "Password", "label": "l", "value": "v", "author_id": 1}"#,
+        ).unwrap();
+        assert_eq!(add.username, None);
+    }
 }
 
-/// Manual Debug impl: secret fields are redacted so the struct can be safely logged.
+/// Manual Debug impls: secret values and usernames are redacted so the structs
+/// can be safely logged.
 impl std::fmt::Debug for AddSecretRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AddSecretRequest")
             .field("vault_id", &self.vault_id)
             .field("secret_type", &self.secret_type)
             .field("label", &self.label)
+            .field("username", &self.username.as_ref().map(|_| "[REDACTED]"))
             .field("value", &"[REDACTED]")
             .field("author_id", &self.author_id)
             .finish()
@@ -3006,6 +3188,7 @@ impl std::fmt::Debug for UpdateVaultSecretRequest {
         f.debug_struct("UpdateVaultSecretRequest")
             .field("secret_id", &self.secret_id)
             .field("label", &self.label)
+            .field("username", &self.username.as_ref().map(|_| "[REDACTED]"))
             .field("value", &"[REDACTED]")
             .field("author_id", &self.author_id)
             .finish()
@@ -3020,6 +3203,7 @@ impl std::fmt::Debug for CreateStandaloneCredentialRequest {
             .field("description", &self.description)
             .field("credential_type", &self.credential_type)
             .field("category_id", &self.category_id)
+            .field("username", &self.username.as_ref().map(|_| "[REDACTED]"))
             .field("value", &"[REDACTED]")
             .field("tags", &self.tags)
             .field("created_by", &self.created_by)
@@ -3035,6 +3219,7 @@ impl std::fmt::Debug for UpdateStandaloneCredentialRequest {
             .field("name", &self.name)
             .field("description", &self.description)
             .field("category_id", &self.category_id)
+            .field("username", &self.username.as_ref().map(|_| "[REDACTED]"))
             .field("value", &"[REDACTED]")
             .field("author_id", &self.author_id)
             .finish()
@@ -3050,7 +3235,7 @@ mod redaction_tests {
         let secret = "sup3r-s3cret-v@lue";
         let add = format!("{:?}", AddSecretRequest {
             vault_id: 1, secret_type: SecretType::Password, label: "l".into(),
-            value: secret.into(), author_id: 1,
+            username: Some("operator".into()), value: secret.into(), author_id: 1,
         });
         assert!(!add.contains(secret));
         assert!(add.contains("[REDACTED]"));
@@ -3059,18 +3244,21 @@ mod redaction_tests {
         });
         assert!(!upd.contains(secret));
         let upd2 = format!("{:?}", UpdateVaultSecretRequest {
-            secret_id: 1, label: None, value: Some(secret.into()), author_id: 1,
+            secret_id: 1, label: None, username: None, value: Some(secret.into()), author_id: 1,
         });
         assert!(!upd2.contains(secret));
         let upd3 = format!("{:?}", UpdateStandaloneCredentialRequest {
-            id: 1, name: None, description: None, category_id: None,
+            id: 1, name: None, description: None, category_id: None, username: None,
             value: Some(secret.into()), author_id: 1,
         });
         assert!(!upd3.contains(secret));
         let create = format!("{:?}", CreateStandaloneCredentialRequest {
             name: "n".into(), description: "d".into(), credential_type: SecretType::Password,
-            category_id: None, value: secret.into(), tags: None, created_by: 1,
+            category_id: None, username: Some("operator".into()), value: secret.into(), tags: None, created_by: 1,
         });
         assert!(!create.contains(secret));
+        // Usernames are not secret, but are kept out of logs all the same
+        assert!(!add.contains("operator"));
+        assert!(!create.contains("operator"));
     }
 }

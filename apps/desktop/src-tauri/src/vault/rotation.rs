@@ -410,7 +410,7 @@ mod tests {
 
     fn add_secret(conn: &Connection, vault_id: i64, ty: SecretType, label: &str) -> i64 {
         SqliteVaultRepository::new(conn).add_secret(AddSecretRequest {
-            vault_id, secret_type: ty, label: label.into(), value: "OldPassword-1234".into(), author_id: 1,
+            vault_id, secret_type: ty, label: label.into(), username: None, value: "OldPassword-1234".into(), author_id: 1,
         }, crate::encryption::test_key()).unwrap().id
     }
 

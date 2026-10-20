@@ -392,6 +392,7 @@ Adding Secrets to the Vault
 3. Enter secret details:
 
    * **Label**: Descriptive name (e.g., "Admin Login", "Maintenance Account")
+   * **Username**: Optional, for passwords and VPN keys: the account the secret belongs to (e.g., ``admin`` or ``DOMAIN\Operator``). It is shown in the secret list with a copy button. Like the label, it is stored unencrypted
    * **Value**: The actual secret information
    * **Notes**: Optional additional information
 
@@ -496,7 +497,7 @@ Store credentials for non-PLC equipment like jump hosts, databases, and network 
 4. Enter credential details:
 
    * Name
-   * Username
+   * Username (optional; stored unencrypted, like the name)
    * Password
    * Host/URL
    * Port
@@ -513,7 +514,7 @@ Store credentials for non-PLC equipment like jump hosts, databases, and network 
 
 **Searching Credentials:**
 
-* Search by credential name or description
+* Search by credential name, username, or description
 * Filter by category
 * Filter by credential type
 
@@ -849,7 +850,7 @@ Finding Assets and Credentials
 ------------------------------
 
 * **Assets**: Use the search box above the asset tree to filter by name or description, and the type filter to show only folders or only devices
-* **Credentials**: Use the search box on the Vault page to find standalone credentials by name or description, and filter by category or type
+* **Credentials**: Use the search box on the Vault page to find standalone credentials by name, username, or description, and filter by category or type
 
 Audit Trail
 -----------
