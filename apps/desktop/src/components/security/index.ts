@@ -15,5 +15,5 @@ export type {
   SecurityClassificationLevel,
   SecurityClassificationUI,
   FileValidationStatus,
-  SecurityMetrics
+  SecurityOverview
 } from '../../types/security';

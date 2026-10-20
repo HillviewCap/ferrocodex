@@ -13,6 +13,7 @@ use std::path::Path;
 // Re-export submodules
 pub mod asset_name_validator;
 pub mod file_security;
+pub mod monitoring;
 pub mod windows_reserved;
 
 pub use asset_name_validator::*;

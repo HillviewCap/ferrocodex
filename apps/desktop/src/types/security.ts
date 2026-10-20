@@ -18,22 +18,6 @@ export interface FileIntegrityResult {
   detectedIssues: string[];
 }
 
-export interface ValidationStats {
-  totalValidations: number;
-  successfulValidations: number;
-  failedValidations: number;
-  blockedAttempts: number;
-  lastValidation?: string;
-}
-
-export interface SecurityHealthReport {
-  overallStatus: string;
-  validationSuccessRate: number;
-  recentThreatsBlocked: number;
-  systemSecurityLevel: string;
-  recommendations: string[];
-}
-
 export interface AuditEvent {
   id: number;
   timestamp: string;
@@ -89,13 +73,80 @@ export interface AuditEventUI {
   details: string;
 }
 
-export interface SecurityMetrics {
+// Security overview returned by get_security_overview (mirrors security_commands.rs).
+// Timestamps are the DB's UTC "YYYY-MM-DD HH:MM:SS" strings with no zone suffix;
+// parse them with utils/utcTimestamp.
+export type SecurityOverviewPeriod = '24h' | '7d' | '30d';
+export type SecurityOverviewStatus = 'ok' | 'warning' | 'critical';
+export type SecuritySeverity = 'critical' | 'warning' | 'info';
+
+export interface AuthenticationStats {
+  successfulLogins: number;
+  failedLogins: number;
+  lockouts: number;
+  distinctFailedUsernames: number;
+  currentlyLockedAccounts: string[];
+}
+
+export interface AccessControlStats {
+  vaultAccessDenied: number;
+  vaultExports: number;
+  secretReads: number;
+  pendingPermissionRequests: number;
+  grantsExpiringSoon: number;
+}
+
+export interface UserStats {
+  activeUsers: number;
+  activeAdministrators: number;
+  inactiveUsers: number;
+  usersPendingKeyUpgrade: number;
+  roleChanges: number;
+}
+
+export interface EncryptionStats {
+  activeKeyVersion: number | null;
+  activeKeyCreatedAt: string | null;
+  activeKeyAgeDays: number | null;
+  rotationInProgress: boolean;
+  lastRotationCompletedAt: string | null;
+  recoveryKeyLastReplacedAt: string | null;
+}
+
+export interface AssetStats {
   totalAssets: number;
-  classificationBreakdown: Record<SecurityClassificationLevel, number>;
-  validationSuccessRate: number;
-  recentValidations: number;
-  securityAlerts: number;
-  complianceScore: number;
+  // Every classification level is present, zero-filled
+  classificationBreakdown: Record<string, number>;
+}
+
+export interface SecurityFinding {
+  id: string;
+  severity: SecuritySeverity;
+  title: string;
+  detail: string;
+}
+
+export interface SecurityEventSummary {
+  id: number;
+  timestamp: string;
+  eventCode: string;
+  category: 'authentication' | 'user' | 'access' | 'encryption';
+  severity: SecuritySeverity;
+  username: string | null;
+  description: string;
+}
+
+export interface SecurityOverview {
+  period: SecurityOverviewPeriod;
+  generatedAt: string;
+  status: SecurityOverviewStatus;
+  authentication: AuthenticationStats;
+  accessControl: AccessControlStats;
+  users: UserStats;
+  encryption: EncryptionStats;
+  assets: AssetStats;
+  findings: SecurityFinding[];
+  recentEvents: SecurityEventSummary[];
 }
 
 export interface SecurityAlert {

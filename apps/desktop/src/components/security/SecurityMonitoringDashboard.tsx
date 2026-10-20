@@ -1,138 +1,152 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Row, 
-  Col, 
-  Statistic, 
-  Progress, 
-  Badge, 
-  List, 
-  Space, 
-  Typography, 
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  App,
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Progress,
+  Badge,
+  Space,
+  Typography,
   Alert,
   Button,
   Select,
-  DatePicker,
-  Spin
+  Spin,
+  Table,
+  Tag,
+  Empty
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
-  SecurityScanOutlined,
   SafetyCertificateOutlined,
-  ExclamationCircleOutlined,
-  TrophyOutlined,
-  BugOutlined,
-  EyeOutlined,
+  LoginOutlined,
+  LockOutlined,
+  TeamOutlined,
+  KeyOutlined,
   ReloadOutlined,
   DownloadOutlined
 } from '@ant-design/icons';
-import { 
-  SecurityMetrics, 
-  SecurityHealthReport, 
-  ValidationStats,
-  SecurityClassificationLevel,
-  SecurityAlert as SecurityAlertType
-} from '../../types/security';
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import dayjs from 'dayjs';
+import {
+  SecurityOverview,
+  SecurityOverviewPeriod,
+  SecurityEventSummary,
+  SecuritySeverity,
+  SecurityClassificationLevel,
+  SECURITY_CLASSIFICATIONS
+} from '../../types/security';
 import useAuthStore from '../../store/auth';
-import useSecurityStore, { useSecurityAlerts, useSecurityHealth } from '../../store/security';
-import ComplianceStatusIndicator from './ComplianceStatusIndicator';
-import { SecurityAlertPanel } from './SecurityAlert';
+import { formatUtcTimestamp, formatUtcDate } from '../../utils/utcTimestamp';
 
 const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
 
 interface SecurityMonitoringDashboardProps {
   refreshInterval?: number; // ms
-  showDetailedMetrics?: boolean;
-  compactView?: boolean;
+  onOpenAuditLog?: () => void;
 }
+
+const PERIOD_LABELS: Record<SecurityOverviewPeriod, string> = {
+  '24h': 'last 24 hours',
+  '7d': 'last 7 days',
+  '30d': 'last 30 days'
+};
+
+const SEVERITY_TAG_COLORS: Record<SecuritySeverity, string> = {
+  critical: 'red',
+  warning: 'orange',
+  info: 'blue'
+};
+
+const CLASSIFICATION_ORDER: SecurityClassificationLevel[] = [
+  SecurityClassificationLevel.PUBLIC,
+  SecurityClassificationLevel.INTERNAL,
+  SecurityClassificationLevel.CONFIDENTIAL,
+  SecurityClassificationLevel.RESTRICTED,
+  SecurityClassificationLevel.SECRET
+];
+
+const SeverityTag: React.FC<{ severity: SecuritySeverity }> = ({ severity }) => (
+  <Tag color={SEVERITY_TAG_COLORS[severity]}>{severity.toUpperCase()}</Tag>
+);
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = ({
   refreshInterval = 30000, // 30 seconds
-  showDetailedMetrics = true,
-  compactView = false
+  onOpenAuditLog
 }) => {
   const { token, user } = useAuthStore();
-  const { 
-    metrics, 
-    healthReport, 
-    validationStats,
-    setMetrics, 
-    setHealthReport, 
-    setValidationStats 
-  } = useSecurityStore();
-  
-  const { alerts, unreadCount, criticalAlerts } = useSecurityAlerts();
-  const { overallStatus } = useSecurityHealth();
-  
+  const { message } = App.useApp();
+  const isAdmin = user?.role === 'Administrator';
+
+  const [period, setPeriod] = useState<SecurityOverviewPeriod>('24h');
+  const [overview, setOverview] = useState<SecurityOverview | null>(null);
   const [loading, setLoading] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [selectedPeriod, setSelectedPeriod] = useState<'24h' | '7d' | '30d'>('24h');
+  const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  // Auto-refresh data
-  useEffect(() => {
-    const fetchData = async () => {
-      if (user?.role !== 'Administrator') return; // Only admins can view detailed metrics
-      
-      try {
-        setLoading(true);
-        
-        // Fetch all security data in parallel
-        const [metricsResult, healthResult, statsResult] = await Promise.all([
-          invoke<SecurityMetrics>('get_security_metrics', { token, period: selectedPeriod }),
-          invoke<SecurityHealthReport>('perform_security_health_check', { token }),
-          invoke<ValidationStats>('get_validation_statistics', { token })
-        ]);
+  // Only the newest request may update state; bumping this discards older responses,
+  // including ones that resolve after unmount
+  const latestRequest = useRef(0);
+  const inFlight = useRef(false);
 
-        setMetrics(metricsResult);
-        setHealthReport(healthResult);
-        setValidationStats(statsResult);
-        setLastRefresh(new Date());
-        
-      } catch (error) {
-        console.error('Failed to fetch security data:', error);
-      } finally {
+  const fetchOverview = useCallback(async (background = false) => {
+    if (!isAdmin || !token) return;
+    // Auto-refresh never stacks on top of a request that is still running
+    if (background && inFlight.current) return;
+
+    const requestId = ++latestRequest.current;
+    inFlight.current = true;
+    setLoading(true);
+    try {
+      const result = await invoke<SecurityOverview>('get_security_overview', { token, period });
+      if (requestId !== latestRequest.current) return;
+      setOverview(result);
+      setError(null);
+    } catch (err) {
+      if (requestId !== latestRequest.current) return;
+      setError(String(err));
+    } finally {
+      if (requestId === latestRequest.current) {
+        inFlight.current = false;
         setLoading(false);
       }
+    }
+  }, [isAdmin, token, period]);
+
+  useEffect(() => {
+    fetchOverview();
+    const interval = setInterval(() => fetchOverview(true), refreshInterval);
+    return () => {
+      clearInterval(interval);
+      latestRequest.current++;
+      inFlight.current = false;
     };
-
-    // Initial fetch
-    fetchData();
-
-    // Set up auto-refresh
-    const interval = setInterval(fetchData, refreshInterval);
-    return () => clearInterval(interval);
-  }, [token, user, selectedPeriod, refreshInterval, setMetrics, setHealthReport, setValidationStats]);
-
-  const handleRefresh = () => {
-    // Trigger immediate refresh by updating lastRefresh
-    setLastRefresh(new Date());
-  };
+  }, [fetchOverview, refreshInterval]);
 
   const handleExportReport = async () => {
+    if (!token) return;
     try {
-      await invoke('export_security_report', { 
-        token, 
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: new Date().toISOString()
+      const filePath = await save({
+        defaultPath: `security-report-${period}-${dayjs().format('YYYYMMDD')}.json`,
+        filters: [{ name: 'JSON files', extensions: ['json'] }]
       });
-    } catch (error) {
-      console.error('Failed to export report:', error);
+      if (!filePath) return;
+
+      setExporting(true);
+      const writtenPath = await invoke<string>('export_security_report', { token, period, filePath });
+      message.success(`Security report exported to ${writtenPath}`);
+    } catch (err) {
+      message.error(`Failed to export security report: ${err}`);
+    } finally {
+      setExporting(false);
     }
   };
 
-  // Get overall system health color
-  const getHealthColor = () => {
-    switch (overallStatus) {
-      case 'excellent': return '#52c41a';
-      case 'good': return '#1890ff';
-      case 'warning': return '#faad14';
-      case 'critical': return '#ff4d4f';
-      default: return '#d9d9d9';
-    }
-  };
-
-  if (user?.role !== 'Administrator') {
+  if (!isAdmin) {
     return (
       <Alert
         title="Administrator Access Required"
@@ -143,288 +157,294 @@ const SecurityMonitoringDashboard: React.FC<SecurityMonitoringDashboardProps> = 
     );
   }
 
-  if (compactView) {
+  const header = (
+    <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+      <Col>
+        <Title level={3} style={{ margin: 0 }}>
+          <Space>
+            <SafetyCertificateOutlined />
+            Security Monitoring Dashboard
+          </Space>
+        </Title>
+      </Col>
+      <Col>
+        <Space>
+          <Select
+            value={period}
+            onChange={setPeriod}
+            style={{ width: 140 }}
+            aria-label="Reporting period"
+            options={[
+              { value: '24h', label: 'Last 24 hours' },
+              { value: '7d', label: 'Last 7 days' },
+              { value: '30d', label: 'Last 30 days' }
+            ]}
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => fetchOverview()} loading={loading}>
+            Refresh
+          </Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExportReport} loading={exporting}>
+            Export Report
+          </Button>
+        </Space>
+      </Col>
+    </Row>
+  );
+
+  const errorAlert = error && (
+    <Alert
+      type={overview ? 'warning' : 'error'}
+      showIcon
+      title={overview ? 'Could not refresh security data' : 'Failed to load security data'}
+      description={overview
+        ? `${error}. Showing data from ${formatUtcTimestamp(overview.generatedAt)}.`
+        : error}
+      action={<Button size="small" onClick={() => fetchOverview()}>Retry</Button>}
+      style={{ marginBottom: 24 }}
+    />
+  );
+
+  if (!overview) {
     return (
-      <Card size="small">
-        <Row gutter={16}>
-          <Col span={8}>
-            <Statistic
-              title="Security Status"
-              value={overallStatus}
-              styles={{ content: { color: getHealthColor(), fontSize: '16px' } }}
-              prefix={<SecurityScanOutlined />}
-            />
-          </Col>
-          <Col span={8}>
-            <Statistic
-              title="Active Alerts"
-              value={unreadCount}
-              styles={{ content: { color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' } }}
-              prefix={<ExclamationCircleOutlined />}
-            />
-          </Col>
-          <Col span={8}>
-            <Statistic
-              title="Success Rate"
-              value={healthReport?.validationSuccessRate || 0}
-              suffix="%"
-              precision={1}
-              styles={{ content: { color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' } }}
-              prefix={<TrophyOutlined />}
-            />
-          </Col>
-        </Row>
-      </Card>
+      <div style={{ padding: 24 }}>
+        {header}
+        {errorAlert}
+        {!error && (
+          <div style={{ textAlign: 'center', padding: 48 }}>
+            <Spin size="large" />
+          </div>
+        )}
+      </div>
     );
   }
 
+  const { authentication, accessControl, users, encryption, assets, findings } = overview;
+  // Label counts with the period the data was computed for, which lags the selector
+  // until a refetch completes
+  const periodLabel = PERIOD_LABELS[overview.period] ?? overview.period;
+
+  const criticalCount = findings.filter(f => f.severity === 'critical').length;
+  const warningCount = findings.filter(f => f.severity === 'warning').length;
+  const infoCount = findings.filter(f => f.severity === 'info').length;
+  const findingSummary = [
+    plural(criticalCount, 'critical issue'),
+    plural(warningCount, 'warning'),
+    plural(infoCount, 'informational note')
+  ].join(' · ');
+
+  const statusBanner = {
+    ok: { type: 'success' as const, title: 'No security issues detected' },
+    warning: { type: 'warning' as const, title: 'Security warnings need attention' },
+    critical: { type: 'error' as const, title: 'Critical security issues need immediate attention' }
+  }[overview.status] ?? { type: 'info' as const, title: `Security status: ${overview.status}` };
+
+  const classificationTotal = Math.max(
+    assets.totalAssets,
+    CLASSIFICATION_ORDER.reduce((sum, level) => sum + (assets.classificationBreakdown[level] ?? 0), 0)
+  );
+
+  const eventColumns: ColumnsType<SecurityEventSummary> = [
+    {
+      title: 'Time',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
+      width: 190,
+      render: (timestamp: string) => <Text style={{ fontSize: 12 }}>{formatUtcTimestamp(timestamp)}</Text>
+    },
+    {
+      title: 'Severity',
+      dataIndex: 'severity',
+      key: 'severity',
+      width: 100,
+      render: (severity: SecuritySeverity) => <SeverityTag severity={severity} />
+    },
+    {
+      title: 'User',
+      dataIndex: 'username',
+      key: 'username',
+      width: 140,
+      render: (username: string | null) => username ?? <Text type="secondary">System</Text>
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description'
+    }
+  ];
+
   return (
-    <div>
-      {/* Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Col>
-          <Title level={3}>
-            <Space>
-              <SafetyCertificateOutlined />
-              Security Monitoring Dashboard
+    <div style={{ padding: 24 }}>
+      {header}
+      {errorAlert}
+
+      <Alert
+        type={statusBanner.type}
+        showIcon
+        title={statusBanner.title}
+        description={findingSummary}
+        style={{ marginBottom: 24 }}
+      />
+
+      {/* Key metrics */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title={`Failed logins (${periodLabel})`}
+              value={authentication.failedLogins}
+              styles={{ content: { color: authentication.failedLogins > 0 ? '#fa8c16' : undefined } }}
+              prefix={<LoginOutlined />}
+            />
+            <Space orientation="vertical" size={0}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {plural(authentication.lockouts, 'lockout')} · {authentication.successfulLogins} successful
+              </Text>
+              <Text type={authentication.currentlyLockedAccounts.length > 0 ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+                {authentication.currentlyLockedAccounts.length > 0
+                  ? `Locked now: ${authentication.currentlyLockedAccounts.join(', ')}`
+                  : 'No accounts locked'}
+              </Text>
             </Space>
-          </Title>
+          </Card>
         </Col>
-        <Col>
-          <Space>
-            <Select
-              value={selectedPeriod}
-              onChange={setSelectedPeriod}
-              style={{ width: 120 }}
-            >
-              <Select.Option value="24h">Last 24h</Select.Option>
-              <Select.Option value="7d">Last 7 days</Select.Option>
-              <Select.Option value="30d">Last 30 days</Select.Option>
-            </Select>
-            <Button 
-              icon={<ReloadOutlined />} 
-              onClick={handleRefresh}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-            <Button 
-              icon={<DownloadOutlined />} 
-              onClick={handleExportReport}
-            >
-              Export Report
-            </Button>
-            <SecurityAlertPanel />
-          </Space>
+
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title={`Vault access denied (${periodLabel})`}
+              value={accessControl.vaultAccessDenied}
+              styles={{ content: { color: accessControl.vaultAccessDenied > 0 ? '#fa8c16' : undefined } }}
+              prefix={<LockOutlined />}
+            />
+            <Space orientation="vertical" size={0}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {plural(accessControl.pendingPermissionRequests, 'pending access request')}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {plural(accessControl.vaultExports, 'vault export')} · {plural(accessControl.secretReads, 'secret read')}
+              </Text>
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Active users"
+              value={users.activeUsers}
+              prefix={<TeamOutlined />}
+            />
+            <Space orientation="vertical" size={0}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {plural(users.activeAdministrators, 'administrator')} · {users.inactiveUsers} inactive
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {plural(users.roleChanges, 'role change')} ({periodLabel})
+              </Text>
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Encryption key"
+              value={encryption.activeKeyVersion != null ? `v${encryption.activeKeyVersion}` : 'None'}
+              styles={{ content: { color: encryption.rotationInProgress ? '#ff4d4f' : undefined } }}
+              prefix={<KeyOutlined />}
+            />
+            <Space orientation="vertical" size={0}>
+              {encryption.rotationInProgress ? (
+                <Text type="danger" style={{ fontSize: 12 }}>Rotation in progress</Text>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {encryption.activeKeyAgeDays != null
+                    ? `${plural(encryption.activeKeyAgeDays, 'day')} old`
+                    : 'Key age unknown'}
+                </Text>
+              )}
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {encryption.lastRotationCompletedAt
+                  ? `Last rotation: ${formatUtcDate(encryption.lastRotationCompletedAt)}`
+                  : 'Never rotated'}
+              </Text>
+            </Space>
+          </Card>
         </Col>
       </Row>
 
-      {/* Critical Alerts Banner */}
-      {criticalAlerts.length > 0 && (
-        <Alert
-          title={`${criticalAlerts.length} Critical Security Alert${criticalAlerts.length > 1 ? 's' : ''}`}
-          description="Immediate attention required. Click the alerts button to review."
-          type="error"
-          showIcon
-          style={{ marginBottom: 24 }}
-          action={
-            <Button size="small" danger>
-              View Alerts
-            </Button>
-          }
-        />
-      )}
-
-      <Spin spinning={loading}>
-        {/* Key Metrics Row */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} sm={12} lg={6}>
-            <Card>
-              <Statistic
-                title="Overall Security Status"
-                value={overallStatus.toUpperCase()}
-                styles={{ content: { color: getHealthColor() } }}
-                prefix={<SecurityScanOutlined />}
-              />
-              <Progress
-                percent={healthReport?.validationSuccessRate || 0}
-                strokeColor={getHealthColor()}
-                size="small"
-                showInfo={false}
-                style={{ marginTop: 8 }}
-              />
-            </Card>
-          </Col>
-
-          <Col xs={24} sm={12} lg={6}>
-            <Card>
-              <Statistic
-                title="Total Assets"
-                value={metrics?.totalAssets || 0}
-                prefix={<EyeOutlined />}
-              />
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                Under security management
-              </Text>
-            </Card>
-          </Col>
-
-          <Col xs={24} sm={12} lg={6}>
-            <Card>
-              <Statistic
-                title="Validation Success Rate"
-                value={healthReport?.validationSuccessRate || 0}
-                suffix="%"
-                precision={1}
-                styles={{ content: { color: (healthReport?.validationSuccessRate || 0) > 90 ? '#52c41a' : '#faad14' } }}
-                prefix={<TrophyOutlined />}
-              />
-            </Card>
-          </Col>
-
-          <Col xs={24} sm={12} lg={6}>
-            <Card>
-              <Statistic
-                title="Security Alerts"
-                value={unreadCount}
-                styles={{ content: { color: unreadCount > 0 ? '#ff4d4f' : '#52c41a' } }}
-                prefix={<ExclamationCircleOutlined />}
-              />
-              <Badge status={criticalAlerts.length > 0 ? 'error' : 'success'} 
-                     text={`${criticalAlerts.length} critical`} 
-                     style={{ fontSize: '12px' }} />
-            </Card>
-          </Col>
-        </Row>
-
-        {/* Detailed Metrics Row */}
-        {showDetailedMetrics && (
-          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-            {/* Classification Breakdown */}
-            <Col xs={24} lg={12}>
-              <Card title="Security Classification Distribution" size="small">
-                {metrics?.classificationBreakdown ? (
-                  <div>
-                    {Object.entries(metrics.classificationBreakdown).map(([level, count]) => (
-                      <div key={level} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <Badge 
-                          color={level === SecurityClassificationLevel.SECRET ? '#f5222d' : 
-                                level === SecurityClassificationLevel.RESTRICTED ? '#ff7a45' :
-                                level === SecurityClassificationLevel.CONFIDENTIAL ? '#faad14' :
-                                level === SecurityClassificationLevel.INTERNAL ? '#1890ff' : '#52c41a'} 
-                          text={level} 
-                        />
-                        <Text strong>{count}</Text>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Text type="secondary">No classification data available</Text>
-                )}
-              </Card>
-            </Col>
-
-            {/* Validation Statistics */}
-            <Col xs={24} lg={12}>
-              <Card title="Validation Statistics" size="small">
-                {validationStats ? (
-                  <Space orientation="vertical" style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Text>Total Validations:</Text>
-                      <Text strong>{validationStats.totalValidations}</Text>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Text>Successful:</Text>
-                      <Text strong style={{ color: '#52c41a' }}>{validationStats.successfulValidations}</Text>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Text>Failed:</Text>
-                      <Text strong style={{ color: '#ff4d4f' }}>{validationStats.failedValidations}</Text>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Text>Blocked:</Text>
-                      <Text strong style={{ color: '#faad14' }}>{validationStats.blockedAttempts}</Text>
-                    </div>
-                  </Space>
-                ) : (
-                  <Text type="secondary">No validation statistics available</Text>
-                )}
-              </Card>
-            </Col>
-        </Row>
-        )}
-
-        {/* Health Report and Recommendations */}
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={16}>
-            <Card title="Security Health Report" size="small">
-              {healthReport ? (
-                <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-                  <ComplianceStatusIndicator
-                    status={{
-                      level: healthReport.systemSecurityLevel === 'High' ? 'excellent' :
-                            healthReport.systemSecurityLevel === 'Medium' ? 'good' : 'needs-attention',
-                      score: healthReport.validationSuccessRate,
-                      issues: healthReport.validationSuccessRate < 90 ? ['Validation success rate below 90%'] : [],
-                      recommendations: healthReport.recommendations
-                    }}
-                    showScore={true}
-                    showProgress={true}
-                    showDetails={true}
-                  />
-
-                  {healthReport.recommendations.length > 0 && (
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} lg={14}>
+          <Card title="Findings" size="small" style={{ height: '100%' }}>
+            {findings.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No issues found" />
+            ) : (
+              <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                {findings.map(finding => (
+                  <div key={finding.id} data-testid={`finding-${finding.id}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <SeverityTag severity={finding.severity} />
                     <div>
-                      <Title level={5}>Recommendations</Title>
-                      <List
-                        dataSource={healthReport.recommendations}
-                        renderItem={(item) => (
-                          <List.Item>
-                            <Text>{item}</Text>
-                          </List.Item>
-                        )}
-                        size="small"
-                      />
+                      <Text strong>{finding.title}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>{finding.detail}</Text>
                     </div>
-                  )}
-                </Space>
-              ) : (
-                <Text type="secondary">Health report not available</Text>
-              )}
-            </Card>
-          </Col>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </Card>
+        </Col>
 
-          <Col xs={24} lg={8}>
-            <Card title="Recent Security Events" size="small">
-              <List
-                dataSource={alerts.slice(0, 5)}
-                renderItem={(alert) => (
-                  <List.Item>
-                    <Space>
-                      <Badge status={alert.severity === 'critical' ? 'error' : 
-                                   alert.severity === 'warning' ? 'warning' : 'processing'} />
-                      <div>
-                        <Text strong style={{ fontSize: '12px' }}>{alert.title}</Text>
-                        <br />
-                        <Text type="secondary" style={{ fontSize: '11px' }}>
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </Text>
-                      </div>
-                    </Space>
-                  </List.Item>
-                )}
-                size="small"
-              />
-              {alerts.length === 0 && (
-                <Text type="secondary">No recent security events</Text>
-              )}
-            </Card>
-          </Col>
-        </Row>
-      </Spin>
+        <Col xs={24} lg={10}>
+          <Card
+            title="Security Classification Distribution"
+            size="small"
+            extra={<Text type="secondary">{plural(assets.totalAssets, 'asset')}</Text>}
+            style={{ height: '100%' }}
+          >
+            {CLASSIFICATION_ORDER.map(level => {
+              const { displayName, color } = SECURITY_CLASSIFICATIONS[level];
+              const count = assets.classificationBreakdown[level] ?? 0;
+              return (
+                <div key={level} data-testid={`classification-${level}`} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Badge color={color} text={displayName} />
+                    <Text strong>{count}</Text>
+                  </div>
+                  <Progress
+                    percent={classificationTotal > 0 ? (count / classificationTotal) * 100 : 0}
+                    strokeColor={color}
+                    size="small"
+                    showInfo={false}
+                  />
+                </div>
+              );
+            })}
+          </Card>
+        </Col>
+      </Row>
+
+      <Card
+        title={`Recent Security Events (${periodLabel})`}
+        size="small"
+        extra={onOpenAuditLog && (
+          <Button type="link" size="small" onClick={onOpenAuditLog}>
+            Open audit log
+          </Button>
+        )}
+      >
+        <Table
+          columns={eventColumns}
+          dataSource={overview.recentEvents}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          locale={{ emptyText: 'No security events in this period' }}
+        />
+      </Card>
 
       <div style={{ textAlign: 'right', marginTop: 16, fontSize: '12px', color: '#666' }}>
-        Last updated: {lastRefresh.toLocaleString()}
+        Last updated: {formatUtcTimestamp(overview.generatedAt)}
       </div>
     </div>
   );
